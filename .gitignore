@@ -22,7 +22,3 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
-
-# Package lock 
-package-lock.json
-yarn.lock
