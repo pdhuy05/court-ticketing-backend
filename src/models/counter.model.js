@@ -17,14 +17,8 @@ const CounterSchema = new mongoose.Schema({
   number: {                    
     type: Number, 
     required: true, 
-    unique: true, 
+    unique: true,   
     min: 1 
-  },
-  serviceId: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'Service',
-    required: true,
-    index: true
   },
   isActive: { 
     type: Boolean, 
@@ -45,11 +39,15 @@ const CounterSchema = new mongoose.Schema({
     default: '' 
   }
 }, {
-  timestamps: true  
+  timestamps: true
 });
 
-CounterSchema.index({ serviceId: 1, number: 1 }, { unique: true }); 
-CounterSchema.index({ serviceId: 1, code: 1 }, { unique: true }); 
-CounterSchema.index({ isActive: 1, serviceId: 1 });
+CounterSchema.virtual('services', {
+  ref: 'ServiceCounter',
+  localField: '_id',
+  foreignField: 'counterId'
+});
+
+CounterSchema.index({ isActive: 1 });
 
 module.exports = mongoose.model('Counter', CounterSchema);

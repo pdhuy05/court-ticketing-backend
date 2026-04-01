@@ -1,19 +1,73 @@
 const Service = require('../models/service.model');
+const ServiceCounter = require('../models/serviceCounter.model');
+const Counter = require('../models/counter.model');
 
 exports.getAll = async () => {
-  return Service.find().sort({ displayOrder: 1 });
+  const services = await Service.find().sort({ displayOrder: 1 });
+  
+  const servicesWithCounters = await Promise.all(
+    services.map(async (service) => {
+      const counterRelations = await ServiceCounter.find({ 
+        serviceId: service._id, 
+        isActive: true 
+      }).populate('counterId', 'code name number');
+      
+      const serviceObj = service.toObject();
+      serviceObj.counters = counterRelations.map(rel => rel.counterId);
+      
+      return serviceObj;
+    })
+  );
+  
+  return servicesWithCounters;
 };
 
 exports.getActive = async () => {
-  return Service.find({ isActive: true })
+  const services = await Service.find({ isActive: true })
     .sort({ displayOrder: 1 })
-    .select("code name description displayOrder");
+    .select("code name description displayOrder icon");
+  
+  const servicesWithCounters = await Promise.all(
+    services.map(async (service) => {
+      const counterRelations = await ServiceCounter.find({ 
+        serviceId: service._id, 
+        isActive: true 
+      }).populate('counterId', 'code name number');
+      
+      const serviceObj = service.toObject();
+      serviceObj.counters = counterRelations.map(rel => rel.counterId);
+      
+      return serviceObj;
+    })
+  );
+  
+  return servicesWithCounters;
+};
+
+exports.getById = async (id) => {
+  const service = await Service.findById(id);
+  
+  if (!service) {
+    const error = new Error('Không tìm thấy dịch vụ');
+    error.statusCode = 404;
+    throw error;
+  }
+  
+  const counterRelations = await ServiceCounter.find({ 
+    serviceId: service._id, 
+    isActive: true 
+  }).populate('counterId', 'code name number');
+  
+  const serviceObj = service.toObject();
+  serviceObj.counters = counterRelations.map(rel => rel.counterId);
+  
+  return serviceObj;
 };
 
 exports.create = async (data) => {
   const { code } = data;
 
-  const existing = await Service.findOne({ code });
+  const existing = await Service.findOne({ code: code.toUpperCase() });
 
   if (existing) {
     const error = new Error('Mã dịch vụ đã tồn tại');
@@ -21,15 +75,23 @@ exports.create = async (data) => {
     throw error;
   }
 
-  return Service.create({
+  const service = await Service.create({
     ...data,
     code: code.toUpperCase()
   });
+  
+  return service;
 };
 
 exports.update = async (id, body) => {
-  const service = await Service.findByIdAndUpdate(id, body, {
-    new: true,
+  const { code, ...updateData } = body;
+  
+  if (code) {
+    updateData.code = code.toUpperCase();
+  }
+  
+  const service = await Service.findByIdAndUpdate(id, updateData, {
+    returnDocument: 'after',
     runValidators: true,
   });
 
@@ -43,13 +105,108 @@ exports.update = async (id, body) => {
 };
 
 exports.remove = async (id) => {
-  const service = await Service.findByIdAndDelete(id);
-
+  const service = await Service.findById(id);
+  
   if (!service) {
     const error = new Error("Không tìm thấy dịch vụ");
     error.statusCode = 404;
     throw error;
   }
-
+  
+  const counterRelations = await ServiceCounter.find({ serviceId: service._id });
+  
+  if (counterRelations.length > 0) {
+    const error = new Error(`Không thể xóa dịch vụ vì đang được sử dụng bởi ${counterRelations.length} quầy. Vui lòng xóa quan hệ trước.`);
+    error.statusCode = 400;
+    throw error;
+  }
+  
+  await service.deleteOne();
+  
   return service;
+};
+
+exports.addCounters = async (id, counterIds) => {
+  const service = await Service.findById(id);
+  
+  if (!service) {
+    const error = new Error("Không tìm thấy dịch vụ");
+    error.statusCode = 404;
+    throw error;
+  }
+  
+  const addedCounters = [];
+  
+  for (const counterId of counterIds) {
+    const counter = await Counter.findById(counterId);
+    if (!counter) {
+      continue;
+    }
+    
+    const existing = await ServiceCounter.findOne({
+      serviceId: service._id,
+      counterId
+    });
+    
+    if (!existing) {
+      const relation = await ServiceCounter.create({
+        serviceId: service._id,
+        counterId,
+        isActive: true,
+        note: 'Thêm quầy vào dịch vụ'
+      });
+      addedCounters.push(relation);
+    }
+  }
+  
+  return {
+    service,
+    addedCounters: addedCounters.length
+  };
+};
+
+exports.removeCounter = async (id, counterId) => {
+  const service = await Service.findById(id);
+  
+  if (!service) {
+    const error = new Error("Không tìm thấy dịch vụ");
+    error.statusCode = 404;
+    throw error;
+  }
+  
+  const deleted = await ServiceCounter.findOneAndDelete({
+    serviceId: service._id,
+    counterId
+  });
+  
+  if (!deleted) {
+    const error = new Error("Không tìm thấy mối quan hệ giữa dịch vụ và quầy");
+    error.statusCode = 404;
+    throw error;
+  }
+  
+  return {
+    service,
+    removed: true
+  };
+};
+
+exports.getCounters = async (id) => {
+  const service = await Service.findById(id);
+  
+  if (!service) {
+    const error = new Error("Không tìm thấy dịch vụ");
+    error.statusCode = 404;
+    throw error;
+  }
+  
+  const counterRelations = await ServiceCounter.find({ 
+    serviceId: service._id, 
+    isActive: true 
+  }).populate('counterId', 'code name number isActive');
+  
+  return {
+    service,
+    counters: counterRelations.map(rel => rel.counterId)
+  };
 };

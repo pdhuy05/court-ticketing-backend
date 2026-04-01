@@ -23,21 +23,22 @@ const ServiceName = {
   KH: 'Khác'
 };
 
-const Gender = {
-  MALE: 'MALE',
-  FEMALE: 'FEMALE',
-  OTHER: 'OTHER'
-};
-
 const ActiveStatus = {
   ACTIVE: true,
   INACTIVE: false
 };
 
+const ConnectPrint = {
+  USB: 'usb',           
+  NETWORK: 'network',   
+  BLUETOOTH: 'bluetooth' 
+};
+
+
 module.exports = {
   TicketStatus,
   ServiceCode,
   ServiceName,
-  Gender,
-  ActiveStatus
+  ActiveStatus,
+  ConnectPrint
 };

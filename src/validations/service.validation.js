@@ -23,4 +23,17 @@ const updateServiceSchema = Joi.object({
     isActive: Joi.boolean().optional()
 }).min(1);
 
-module.exports = { createServiceSchema, updateServiceSchema };
+const addCountersSchema = Joi.object({
+    counterIds: Joi.array()
+        .items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/))
+        .min(1)
+        .required()
+        .messages({
+            'array.min': 'Phải chọn ít nhất một quầy',
+            'array.base': 'counterIds phải là một mảng',
+            'any.required': 'Danh sách quầy là bắt buộc',
+            'string.pattern.base': 'ID quầy không hợp lệ'
+        })
+});
+
+module.exports = { createServiceSchema, updateServiceSchema, addCountersSchema };

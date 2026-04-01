@@ -12,14 +12,18 @@
   "type": "commonjs",
   "dependencies": {
     "bcryptjs": "^3.0.3",
+    "canvas": "^3.2.3",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
     "express-list-endpoints": "^7.1.1",
+    "iconv-lite": "^0.7.2",
     "joi": "^18.1.1",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.3.2",
-    "socket.io": "^4.8.3"
+    "qr-image": "^3.2.0",
+    "qrcode": "^1.5.4",
+    "sharp": "^0.34.5"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

@@ -2,6 +2,12 @@ const mongoose = require('mongoose');
 const { TicketStatus, Gender } = require('../constants/enums'); 
 
 const TicketSchema = new mongoose.Schema({
+   number: {          
+    type: Number,
+    required: true,
+    index: true
+  },
+
   ticketNumber: {          
     type: String,
     required: true,
@@ -22,24 +28,24 @@ const TicketSchema = new mongoose.Schema({
     index: true
   },
 
+  serviceCounterId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'ServiceCounter',
+    default: null,
+    index: true
+  },
+
   name: {
     type: String,
     required: true,
     trim: true
   },
 
-  gender: {
-    type: String,
-    enum: Object.values(Gender),
-    default: Gender.OTHER,
-    required: true
-  },
-
   phone: {
     type: String,
     required: true,
     trim: true,
-    match: [/^0[0-9]{9,10}$/, 'Số điện thoại không hợp lệ'],   
+    match: [/^(03|05|07|08|09|01[2|6|8|9])[0-9]{7,8}$/, 'Số điện thoại không hợp lệ (VD: 0912345678)'],
     minlength: 10,
     maxlength: 11
   },
@@ -67,6 +73,7 @@ const TicketSchema = new mongoose.Schema({
 // Indexes
 TicketSchema.index({ status: 1, createdAt: 1 });        
 TicketSchema.index({ serviceId: 1, status: 1 });       
-TicketSchema.index({ counterId: 1, status: 1 });        
+TicketSchema.index({ counterId: 1, status: 1 });
+TicketSchema.index({ serviceId: 1, number: 1 }, { unique: true }); 
 
 module.exports = mongoose.model('Ticket', TicketSchema);
