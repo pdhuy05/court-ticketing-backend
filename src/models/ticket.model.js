@@ -11,7 +11,6 @@ const TicketSchema = new mongoose.Schema({
   ticketNumber: {          
     type: String,
     required: true,
-    unique: true
   },
   
   serviceId: {
@@ -70,10 +69,10 @@ const TicketSchema = new mongoose.Schema({
   timestamps: true 
 });
 
-// Indexes
 TicketSchema.index({ status: 1, createdAt: 1 });        
 TicketSchema.index({ serviceId: 1, status: 1 });       
 TicketSchema.index({ counterId: 1, status: 1 });
 TicketSchema.index({ serviceId: 1, number: 1 }, { unique: true }); 
+TicketSchema.index({ serviceId: 1, ticketNumber: 1 }, { unique: true });
 
 module.exports = mongoose.model('Ticket', TicketSchema);

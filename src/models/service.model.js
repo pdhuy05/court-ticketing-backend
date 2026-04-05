@@ -8,7 +8,7 @@ const ServiceSchema = new mongoose.Schema({
     unique: true,  
     uppercase: true, 
     trim: true, 
-    enum: Object.values(ServiceCode)
+    match: [/^[A-Z]{2,5}$/, 'Mã dịch vụ phải gồm 2-5 chữ cái in hoa']
   },
   name: { 
     type: String, 

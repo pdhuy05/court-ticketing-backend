@@ -2,7 +2,8 @@ const TicketStatus = {
   WAITING: 'waiting',
   CALLED: 'called',
   PROCESSING: 'processing',
-  DONE: 'done'
+  COMPLETED: 'completed',
+  SKIPPED: 'skipped'
 };
 
 const ServiceCode = {

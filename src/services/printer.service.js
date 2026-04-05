@@ -1,7 +1,7 @@
 const net = require('net');
 const sharp = require('sharp');
-const { createCanvas, loadImage } = require('canvas');
-const path = require('path');
+const QRCode = require('qrcode');
+const logger = require('../utils/logger');
 
 const { ConnectPrint } = require('../constants/enums');
 
@@ -10,7 +10,7 @@ class PrinterService {
     this.printers = new Map();
   }
 
-  // ==================== ADD PRINTER ====================
+  // ================= PRINTER =================
   addNetworkPrinter(printerId, host, port = 9100) {
     this.printers.set(printerId, {
       type: ConnectPrint.NETWORK,
@@ -18,189 +18,117 @@ class PrinterService {
       port,
     });
 
-    console.log(
-      `✅ Đã thêm máy in NETWORK: ${printerId} (${host}:${port})`
-    );
+    logger.success(`Đã thêm máy in NETWORK: ${printerId} (${host}:${port})`);
   }
 
   hasPrinter(printerId) {
     return this.printers.has(printerId);
   }
 
-  // ==================== TẠO ẢNH TICKET ====================
-  async createTicketImage(ticket, service) {
+  getPrinters() {
+    return Array.from(this.printers.entries()).map(([id, printer]) => ({
+      id,
+      type: printer.type,
+      host: printer.host,
+      port: printer.port,
+    }));
+  }
+
+  // ================= QR =================
+  async generateQRCode(ticket, service) {
+    const qrText = `
+SỐ THỨ TỰ: ${ticket.ticketNumber}
+DỊCH VỤ: ${service?.name || ''}
+ĐƯƠNG SỰ: ${ticket.name || ''}
+ĐIỆN THOẠI: ${ticket.phone || ''}
+THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString('vi-VN')}
+    `.trim();
+
+    return QRCode.toBuffer(qrText, {
+      errorCorrectionLevel: 'H',
+      margin: 1,
+      width: 250,
+    });
+  }
+
+  // ================= TẠO SVG LAYOUT =================
+  generateSVG(ticket, service, qrBuffer) {
     const width = 384;
-    const height = 820;
-
-    const canvas = createCanvas(width, height);
-    const ctx = canvas.getContext('2d');
-
-    // ===== BACKGROUND =====
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(0, 0, width, height);
-
-    ctx.fillStyle = '#000000';
-
-    let y = 20;
-
-    // ===== HEADER =====
-    ctx.textAlign = 'center';
-    ctx.font = 'bold 20px Arial';
-
-    ctx.fillText('TÒA ÁN NHÂN DÂN KHU VỰC 1', width / 2, y);
-    ctx.fillText('THÀNH PHỐ HỒ CHÍ MINH', width / 2, y + 26);
-
-    y += 60;
-
-    // ===== TIME =====
-    const now = new Date();
-    const timeStr = now.toLocaleString('vi-VN', {
+    const height = 800;
+    const timeStr = new Date().toLocaleString('vi-VN', {
+      hour: '2-digit',
+      minute: '2-digit',
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
     });
 
-    ctx.font = '20px Arial';
-    ctx.fillText(timeStr, width / 2, y);
+    const qrBase64 = qrBuffer ? `data:image/png;base64,${qrBuffer.toString('base64')}` : '';
 
-    y += 110;
-
-    // ===== TICKET NUMBER =====
-    ctx.font = 'bold 75px Arial';
-    ctx.fillText(ticket.ticketNumber || 'A001', width / 2, y);
-
-    y += 70;
-
-    // ===== SERVICE NAME =====
-    const serviceName = service?.name || 'Dịch vụ';
-
-    ctx.font = 'bold 42px Arial';
-
-    this.drawMultilineText(
-      ctx,
-      `- ${serviceName} -`,
-      width / 2,
-      y,
-      320,
-      46
-    );
-
-    y += 70;
-
-    // ===== LINE 1 =====
-    this.drawDashedLine(ctx, 35, y, width - 35);
-
-    y += 40;
-
-    // ===== QR CODE =====
-    try {
-      const qrPath = path.join(
-        __dirname,
-        '../public/images/qr-code.png'
-      );
-
-      const qrImage = await loadImage(qrPath);
-
-      const qrSize = 145;
-      const qrX = (width - qrSize) / 2;
-
-      ctx.drawImage(qrImage, qrX, y, qrSize, qrSize);
-
-      ctx.font = '16px Arial';
-      ctx.fillText(
-        'Thông tin của đương sự',
-        width / 2,
-        y + qrSize + 20
-      );
-
-      ctx.font = '14px Arial';
-      ctx.fillText(
-        'Quét mã QR để biết thêm thông tin',
-        width / 2,
-        y + qrSize + 40
-      );
-    } catch (err) {
-      console.error('❌ Không load được QR Code:', err.message);
-
-      ctx.font = 'bold 18px Arial';
-      ctx.fillText('[ QR CODE ]', width / 2, y + 80);
-    }
-
-    y += 200;
-
-    // ===== LINE 2 =====
-    this.drawDashedLine(ctx, 35, y, width - 35);
-
-    y += 50;
-
-    // ===== FOOTER =====
-    ctx.font = 'bold 19px Arial';
-    ctx.fillText('CẢM ƠN QUÝ ÔNG BÀ!', width / 2, y);
-
-    y += 35;
-
-    ctx.font = '17px Arial';
-    ctx.fillText('Vui lòng chờ đến lượt', width / 2, y);
-
-    y += 35;
-
-    const buffer = canvas.toBuffer('image/png');
-    return this.convertToEscPos(buffer, width);
+    return `
+      <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+        <rect width="100%" height="100%" fill="white"/>
+        
+        <!-- Header -->
+        <text x="50%" y="30" text-anchor="middle" font-size="14" font-weight="bold" fill="black">TÒA ÁN NHÂN DÂN KHU VỰC 1</text>
+        <text x="50%" y="52" text-anchor="middle" font-size="12" fill="black">TP. HỒ CHÍ MINH</text>
+        
+        <!-- Time -->
+        <text x="50%" y="80" text-anchor="middle" font-size="11" fill="black">${timeStr}</text>
+        
+        <!-- Ticket Number -->
+        <text x="50%" y="200" text-anchor="middle" font-size="55" font-weight="bold" fill="black">${ticket.ticketNumber || '001'}</text>
+        
+        <!-- Service Name -->
+        <text x="50%" y="240" text-anchor="middle" font-size="16" font-weight="bold" fill="black">- ${service?.name || 'Dịch vụ'} -</text>
+        
+        <!-- Line 1 -->
+        <line x1="20" y1="260" x2="${width - 20}" y2="260" stroke="black" stroke-width="1" stroke-dasharray="4,3"/>
+        
+        <!-- QR Title -->
+        <text x="50%" y="290" text-anchor="middle" font-size="13" font-weight="bold" fill="black">THÔNG TIN ĐƯƠNG SỰ</text>
+        
+        <!-- QR Code -->
+        <image x="${(width - 120) / 2}" y="305" width="120" height="120" href="${qrBase64}"/>
+        
+        <!-- Customer Name -->
+        <text x="50%" y="450" text-anchor="middle" font-size="13" font-weight="bold" fill="black">${ticket.name || 'Đương sự'}</text>
+        
+        <!-- Customer Phone -->
+        <text x="50%" y="475" text-anchor="middle" font-size="11" fill="black">${ticket.phone || ''}</text>
+        
+        <!-- Scan instruction -->
+        <text x="50%" y="500" text-anchor="middle" font-size="10" fill="gray">Quét mã để xem chi tiết</text>
+        
+        <!-- Line 2 -->
+        <line x1="20" y1="530" x2="${width - 20}" y2="530" stroke="black" stroke-width="1" stroke-dasharray="4,3"/>
+        
+        <!-- Footer -->
+        <text x="50%" y="570" text-anchor="middle" font-size="14" font-weight="bold" fill="black">CẢM ƠN QUÝ ÔNG BÀ</text>
+        <text x="50%" y="600" text-anchor="middle" font-size="12" fill="black">Vui lòng chờ đến lượt</text>
+      </svg>
+    `;
   }
 
-  // ==================== HELPER ====================
-  drawDashedLine(ctx, x1, y, x2) {
-    ctx.beginPath();
-    ctx.setLineDash([4, 3]);
-    ctx.moveTo(x1, y);
-    ctx.lineTo(x2, y);
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-    ctx.setLineDash([]);
-  }
+  // ================= CONVERT SVG TO ESC/POS =================
+  async convertToEscPos(svgBuffer, printWidth) {
+    const pngBuffer = await sharp(svgBuffer)
+      .png()
+      .toBuffer();
 
-  drawMultilineText(ctx, text, x, y, maxWidth, lineHeight) {
-    const words = text.split(' ');
-    let line = '';
-    let offsetY = 0;
-
-    for (let i = 0; i < words.length; i++) {
-      const testLine = line + words[i] + ' ';
-      const { width } = ctx.measureText(testLine);
-
-      if (width > maxWidth && i > 0) {
-        ctx.fillText(line, x, y + offsetY);
-        line = words[i] + ' ';
-        offsetY += lineHeight;
-      } else {
-        line = testLine;
-      }
-    }
-
-    ctx.fillText(line, x, y + offsetY);
-  }
-
-  // ==================== ESC/POS ====================
-  async convertToEscPos(imageBuffer, printWidth) {
-    const { data, info } = await sharp(imageBuffer)
-      .resize(printWidth, null, { fit: 'contain' })
+    const { data, info } = await sharp(pngBuffer)
+      .resize({ width: printWidth, withoutEnlargement: true })
       .grayscale()
-      .trim()
-      .threshold(118)
+      .normalize()
+      .threshold(128)
       .raw()
       .toBuffer({ resolveWithObject: true });
 
-    const width = info.width;
-    const height = info.height;
+    const { width, height } = info;
     const bytesPerLine = Math.ceil(width / 8);
 
     const header = Buffer.from([
-      0x1d,
-      0x76,
-      0x30,
-      0x00,
+      0x1d, 0x76, 0x30, 0x00,
       bytesPerLine & 0xff,
       (bytesPerLine >> 8) & 0xff,
       height & 0xff,
@@ -213,19 +141,14 @@ class PrinterService {
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < bytesPerLine; x++) {
         let byte = 0;
-
         for (let bit = 0; bit < 8; bit++) {
           const px = x * 8 + bit;
-
-          if (px < width) {
-            const idx = y * width + px;
-
-            if (data[idx] < 128) {
-              byte |= 1 << (7 - bit);
-            }
+          if (px >= width) continue;
+          const idx = y * width + px;
+          if (data[idx] < 128) {
+            byte |= 1 << (7 - bit);
           }
         }
-
         imageData[pos++] = byte;
       }
     }
@@ -233,18 +156,16 @@ class PrinterService {
     return Buffer.concat([header, imageData]);
   }
 
-  // ==================== PRINT ====================
+  // ================= PRINT =================
   async printTicket(printerId, ticket, service) {
     const printer = this.printers.get(printerId);
-
     if (!printer) {
       throw new Error(`Máy in ${printerId} chưa được cấu hình`);
     }
 
-    const imageBuffer = await this.createTicketImage(
-      ticket,
-      service
-    );
+    const qrBuffer = await this.generateQRCode(ticket, service);
+    const svg = this.generateSVG(ticket, service, qrBuffer);
+    const imageBuffer = await this.convertToEscPos(Buffer.from(svg), 384);
 
     return this.printNetwork(printer, imageBuffer);
   }
@@ -253,53 +174,36 @@ class PrinterService {
     return this.printTicket(
       printerId,
       {
-        ticketNumber: 'A001',
+        ticketNumber: '001',
         name: 'Nguyễn Văn A',
-        gender: 'male',
+        phone: '0912345678',
+        createdAt: new Date(),
+        status: 'waiting',
       },
-      { name: 'Nhận đơn ly hôn' }
+      {
+        name: 'NỘP ĐƠN',
+        code: 'ND',
+      }
     );
   }
 
   printNetwork(printer, imageBuffer) {
     return new Promise((resolve, reject) => {
       const client = net.createConnection(
-        {
-          host: printer.host,
-          port: printer.port,
-        },
+        { host: printer.host, port: printer.port },
         () => {
-          // ===== INIT =====
-          const init = Buffer.from([
-            0x1b,
-            0x40,
-            0x1b,
-            0x33,
-            0x00,
-          ]);
-
+          const init = Buffer.from([0x1b, 0x40, 0x1b, 0x33, 0x00]);
           const center = Buffer.from([0x1b, 0x61, 0x01]);
-
           const feed = Buffer.from([0x0a, 0x0a, 0x0a]);
+          const cut = Buffer.from([0x1d, 0x56, 0x42, 0x00]);
 
-          const cut = Buffer.from([
-            0x1d,
-            0x56,
-            0x42,
-            0x00,
-          ]);
-
-          // ===== SEND DATA =====
           client.write(init);
           client.write(center);
-
           client.write(imageBuffer, () => {
             client.write(feed);
             client.write(cut);
-
             setTimeout(() => {
               client.end();
-
               resolve({
                 success: true,
                 message: 'In ticket thành công',
@@ -309,28 +213,15 @@ class PrinterService {
         }
       );
 
-      // ===== ERROR =====
       client.on('error', (err) => {
         reject(new Error(`Kết nối thất bại: ${err.message}`));
       });
 
-      // ===== TIMEOUT =====
       client.setTimeout(10000, () => {
         client.destroy();
         reject(new Error('Timeout khi kết nối máy in'));
       });
     });
-  }
-
-  getPrinters() {
-    return Array.from(this.printers.entries()).map(
-      ([id, p]) => ({
-        id,
-        type: p.type,
-        host: p.host,
-        port: p.port,
-      })
-    );
   }
 }
 
