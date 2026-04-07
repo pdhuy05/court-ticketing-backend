@@ -46,15 +46,16 @@ THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString('vi-VN')}
 
     return QRCode.toBuffer(qrText, {
       errorCorrectionLevel: 'H',
-      margin: 1,
-      width: 250,
+      margin: 2,
+      width: 300,
     });
   }
 
   // ================= TẠO SVG LAYOUT =================
   generateSVG(ticket, service, qrBuffer) {
-    const width = 384;
-    const height = 800;
+    const width = 576;
+    const height = 1080;
+
     const timeStr = new Date().toLocaleString('vi-VN', {
       hour: '2-digit',
       minute: '2-digit',
@@ -63,49 +64,54 @@ THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString('vi-VN')}
       year: 'numeric',
     });
 
-    const qrBase64 = qrBuffer ? `data:image/png;base64,${qrBuffer.toString('base64')}` : '';
+    const qrBase64 = qrBuffer 
+      ? `data:image/png;base64,${qrBuffer.toString('base64')}` 
+      : '';
 
     return `
       <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
         <rect width="100%" height="100%" fill="white"/>
         
-        <!-- Header -->
-        <text x="50%" y="30" text-anchor="middle" font-size="14" font-weight="bold" fill="black">TÒA ÁN NHÂN DÂN KHU VỰC 1</text>
-        <text x="50%" y="52" text-anchor="middle" font-size="12" fill="black">TP. HỒ CHÍ MINH</text>
-        
-        <!-- Time -->
-        <text x="50%" y="80" text-anchor="middle" font-size="11" fill="black">${timeStr}</text>
-        
-        <!-- Ticket Number -->
-        <text x="50%" y="200" text-anchor="middle" font-size="55" font-weight="bold" fill="black">${ticket.ticketNumber || '001'}</text>
-        
-        <!-- Service Name -->
-        <text x="50%" y="240" text-anchor="middle" font-size="16" font-weight="bold" fill="black">- ${service?.name || 'Dịch vụ'} -</text>
-        
-        <!-- Line 1 -->
-        <line x1="20" y1="260" x2="${width - 20}" y2="260" stroke="black" stroke-width="1" stroke-dasharray="4,3"/>
-        
-        <!-- QR Title -->
-        <text x="50%" y="290" text-anchor="middle" font-size="13" font-weight="bold" fill="black">THÔNG TIN ĐƯƠNG SỰ</text>
-        
-        <!-- QR Code -->
-        <image x="${(width - 120) / 2}" y="305" width="120" height="120" href="${qrBase64}"/>
-        
-        <!-- Customer Name -->
-        <text x="50%" y="450" text-anchor="middle" font-size="13" font-weight="bold" fill="black">${ticket.name || 'Đương sự'}</text>
-        
-        <!-- Customer Phone -->
-        <text x="50%" y="475" text-anchor="middle" font-size="11" fill="black">${ticket.phone || ''}</text>
-        
-        <!-- Scan instruction -->
-        <text x="50%" y="500" text-anchor="middle" font-size="10" fill="gray">Quét mã để xem chi tiết</text>
-        
-        <!-- Line 2 -->
-        <line x1="20" y1="530" x2="${width - 20}" y2="530" stroke="black" stroke-width="1" stroke-dasharray="4,3"/>
-        
-        <!-- Footer -->
-        <text x="50%" y="570" text-anchor="middle" font-size="14" font-weight="bold" fill="black">CẢM ƠN QUÝ ÔNG BÀ</text>
-        <text x="50%" y="600" text-anchor="middle" font-size="12" fill="black">Vui lòng chờ đến lượt</text>
+        <!-- HEADER -->
+        <text x="50%" y="45" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="26" font-weight="bold" fill="black">TÒA ÁN NHÂN DÂN KHU VỰC 1</text>
+        <text x="50%" y="78" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="22" fill="black">TP. HỒ CHÍ MINH</text>
+
+        <!-- TIME -->
+        <text x="50%" y="130" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="22" fill="black">${timeStr}</text>
+
+        <!-- TICKET NUMBER -->
+        <text x="50%" y="320" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="200" font-weight="bold" fill="black">${ticket.ticketNumber || '001'}</text>
+
+        <!-- SERVICE NAME -->
+        <text x="50%" y="410" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="28" font-weight="bold" fill="black">- ${service?.name || 'Dịch vụ'} -</text>
+
+        <!-- Dashed Line 1 -->
+        <line x1="60" y1="450" x2="${width - 60}" y2="450" stroke="black" stroke-width="2" stroke-dasharray="6,4"/>
+
+        <!-- QR TITLE -->
+        <text x="50%" y="505" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="24" font-weight="bold" fill="black">THÔNG TIN ĐƯƠNG SỰ</text>
+
+        <!-- QR CODE -->
+        <image 
+          x="${(width - 260) / 2}" 
+          y="535" 
+          width="260" 
+          height="260" 
+          href="${qrBase64}"
+        />
+
+        <!-- CUSTOMER NAME -->
+        <text x="50%" y="835" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="24" font-weight="bold" fill="black">${ticket.name || 'Đương sự'}</text>
+
+        <!-- SCAN INSTRUCTION -->
+        <text x="50%" y="870" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="20" fill="black">Quét mã để xem chi tiết</text>
+
+        <!-- Dashed Line 2 -->
+        <line x1="60" y1="910" x2="${width - 60}" y2="910" stroke="black" stroke-width="2" stroke-dasharray="6,4"/>
+
+        <!-- FOOTER -->
+        <text x="50%" y="970" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="26" font-weight="bold" fill="black">CẢM ƠN QUÝ ÔNG BÀ</text>
+        <text x="50%" y="1010" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="22" fill="black">Vui lòng chờ đến lượt</text>
       </svg>
     `;
   }
@@ -120,7 +126,8 @@ THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString('vi-VN')}
       .resize({ width: printWidth, withoutEnlargement: true })
       .grayscale()
       .normalize()
-      .threshold(128)
+      .threshold(135)
+      .sharpen()
       .raw()
       .toBuffer({ resolveWithObject: true });
 
@@ -165,7 +172,7 @@ THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString('vi-VN')}
 
     const qrBuffer = await this.generateQRCode(ticket, service);
     const svg = this.generateSVG(ticket, service, qrBuffer);
-    const imageBuffer = await this.convertToEscPos(Buffer.from(svg), 384);
+    const imageBuffer = await this.convertToEscPos(Buffer.from(svg), 576);
 
     return this.printNetwork(printer, imageBuffer);
   }

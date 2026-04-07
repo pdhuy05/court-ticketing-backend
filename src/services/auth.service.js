@@ -13,10 +13,17 @@ const login = async (username, password) => {
   user.lastLoginAt = new Date();
   await user.save();
 
+  let expiresIn;
+  if (user.role === 'admin') {
+    expiresIn = '1h';     
+  } else {
+    expiresIn = '8h';     
+  }
+
   const token = jwt.sign(
     { id: user._id, role: user.role, username: user.username },
     process.env.JWT_SECRET,
-    { expiresIn: '8h' }
+    { expiresIn }
   );
 
   return {

@@ -65,7 +65,7 @@ exports.getById = async (id) => {
 };
 
 exports.create = async (data) => {
-  const { code } = data;
+  const { code, displayOrder } = data;
 
   const existing = await Service.findOne({ code: code.toUpperCase() });
 
@@ -73,6 +73,15 @@ exports.create = async (data) => {
     const error = new Error('Mã dịch vụ đã tồn tại');
     error.statusCode = 400;
     throw error;
+  }
+
+  if (displayOrder !== undefined && displayOrder !== null) {
+    const existingOrder = await Service.findOne({ displayOrder });
+    if (existingOrder) {
+      const error = new Error(`Thứ tự hiển thị ${displayOrder} đã được sử dụng`);
+      error.statusCode = 400;
+      throw error;
+    }
   }
 
   const service = await Service.create({
@@ -88,6 +97,19 @@ exports.update = async (id, body) => {
   
   if (code) {
     updateData.code = code.toUpperCase();
+  }
+
+  if (displayOrder !== undefined && displayOrder !== null) {
+    const existingOrder = await Service.findOne({ 
+      displayOrder, 
+      _id: { $ne: id } 
+    });
+    if (existingOrder) {
+      const error = new Error(`Thứ tự hiển thị ${displayOrder} đã được sử dụng bởi dịch vụ khác`);
+      error.statusCode = 400;
+      throw error;
+    }
+    updateData.displayOrder = displayOrder;
   }
   
   const service = await Service.findByIdAndUpdate(id, updateData, {

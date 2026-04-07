@@ -21,14 +21,12 @@ const createTicketSchema = Joi.object({
         }),
     phone: Joi.string()
         .required()
-        .pattern(/^(03|05|07|08|09|01[2|6|8|9])[0-9]{7,8}$/)
         .min(10)
-        .max(11)
+        .max(10)
         .messages({
             'any.required': 'Số điện thoại là bắt buộc',
-            'string.pattern.base': 'Số điện thoại không hợp lệ (VD: 0912345678)',
-            'string.min': 'Số điện thoại phải có 10-11 số',
-            'string.max': 'Số điện thoại phải có 10-11 số'
+            'string.min': 'Số điện thoại phải có 10 số',
+            'string.max': 'Số điện thoại phải có 10 số'
         }),
     autoPrint: Joi.boolean().default(true)
 });

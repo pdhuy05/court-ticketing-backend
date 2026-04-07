@@ -114,8 +114,6 @@ exports.callNext = async (req, res) => {
 exports.complete = async (req, res) => {
     const ticket = await ticketService.completeTicket(req.params.id);
 
-    logger.success(`Hoàn thành số ${ticket.formattedNumber}`);
-
     res.json({
         success: true,
         data: ticket,
@@ -124,14 +122,14 @@ exports.complete = async (req, res) => {
 };
 
 exports.skip = async (req, res) => {
-    const { reason } = req.body;
+    const { reason } = req.body || {};
 
     const ticket = await ticketService.skipTicket(
         req.params.id,
         reason
     );
 
-    logger.warning(`Đã bỏ qua số ${ticket.formattedNumber} - Lý do: ${reason || 'Không có lý do'}`);
+    logger.warning(`Đã bỏ qua số ${ticket.formattedNumber} - Lý do: ${reason || 'Khách vắng mặt '}`);
 
     res.json({
         success: true,

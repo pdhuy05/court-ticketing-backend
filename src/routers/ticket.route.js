@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+
 const validate = require('../middlewares/validate.middleware');
 const { authMiddleware, staffOnly } = require('../middlewares/auth.middleware');
 const { createTicketSchema, callNextSchema } = require('../validations/ticket.validation');
@@ -15,10 +16,10 @@ router.get("/counters/:counterId/display", TicketController.getCounterDisplay);
 // ====================================
 // STAFF ROUTES 
 // ====================================
-router.use(authMiddleware, staffOnly);
+router.post("/call-next", authMiddleware, staffOnly, validate(callNextSchema), TicketController.callNext);
 
-router.post("/call-next", validate(callNextSchema), TicketController.callNext);
-router.patch("/:id/complete", TicketController.complete);
-router.patch("/:id/skip", TicketController.skip);
+router.patch("/:id/complete", authMiddleware, staffOnly, TicketController.complete);
+
+router.patch("/:id/skip", authMiddleware, staffOnly, TicketController.skip);    
 
 module.exports = router;

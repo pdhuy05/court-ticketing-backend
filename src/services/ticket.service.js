@@ -4,8 +4,8 @@ const Counter = require('../models/counter.model');
 const ServiceCounter = require('../models/serviceCounter.model');
 const { TicketStatus } = require('../constants/enums');
 const ApiError = require('../utils/ApiError');
+const QRCode = require('qrcode');
 
-// CREATE
 const createTicket = async ({ serviceId, name, phone }) => {
     const service = await Service.findById(serviceId);
     if (!service) throw new ApiError(404, 'Không tìm thấy dịch vụ');
@@ -19,16 +19,77 @@ const createTicket = async ({ serviceId, name, phone }) => {
     const nextNumber = lastTicket ? lastTicket.number + 1 : 1;
     const formattedNumber = nextNumber.toString().padStart(3, '0');
 
+    const qrData = {
+        ticketId: null,
+        ticketNumber: formattedNumber,
+        serviceName: service.name,
+        customerName: name,
+        customerPhone: phone,
+        createdAt: new Date().toISOString()
+    };
+
+    let qrCode = null;
+    try {
+        qrCode = await QRCode.toDataURL(JSON.stringify(qrData), {
+            errorCorrectionLevel: 'H',
+            margin: 1,
+            width: 200
+        });
+    } catch (err) {
+        console.error('Lỗi tạo QR:', err.message);
+    }
+
     const ticket = await Ticket.create({
         number: nextNumber,
         ticketNumber: formattedNumber,
         serviceId,
         name,
         phone,
-        status: TicketStatus.WAITING
+        status: TicketStatus.WAITING,
+        qrCode: qrCode
     });
 
+    if (qrCode) {
+        const finalQrData = {
+            ticketId: ticket._id.toString(),
+            ticketNumber: formattedNumber,
+            serviceName: service.name,
+            customerName: name,
+            customerPhone: phone,
+            createdAt: ticket.createdAt.toISOString()
+        };
+        
+        const finalQrCode = await QRCode.toDataURL(JSON.stringify(finalQrData), {
+            errorCorrectionLevel: 'H',
+            margin: 1,
+            width: 200
+        });
+        
+        ticket.qrCode = finalQrCode;
+        await ticket.save();
+    }
+
     await ticket.populate('serviceId', 'name code');
+
+    if (global.io) {
+        const waitingCount = await Ticket.countDocuments({ status: TicketStatus.WAITING });
+        
+        global.io.to('waiting-room').emit('new-ticket', {
+            ticket: {
+                id: ticket._id,
+                number: ticket.number,
+                formattedNumber: formattedNumber,
+                customerName: ticket.name,
+                phone: ticket.phone,
+                serviceName: service.name,
+                status: ticket.status,
+                qrCode: ticket.qrCode
+            },
+            totalWaiting: waitingCount
+        });
+        
+        console.log(`\x1b[36m Đã phát hành vé mới: ${formattedNumber} - ${service.name}\x1b[0m`);
+    }
 
     return {
         ticket,
@@ -36,15 +97,15 @@ const createTicket = async ({ serviceId, name, phone }) => {
         ticketNumberDisplay: formattedNumber,
         ticketNumberRaw: nextNumber,
         ticketNumberFormatted: formattedNumber,
-        availableCounters: availableCounters.map(ac => ac.counterId)
+        availableCounters: availableCounters.map(ac => ac.counterId),
+        qrCode: ticket.qrCode
     };
 };
 
-// GET ALL WAITING
 const getAllWaiting = async () => {
     const tickets = await Ticket.find({ status: TicketStatus.WAITING })
         .populate('serviceId', 'name code')
-        .sort({ number: 1 });
+        .sort({ weight: -1, number: 1 });
 
     return tickets.map(ticket => ({
         ...ticket.toObject(),
@@ -52,7 +113,6 @@ const getAllWaiting = async () => {
     }));
 };
 
-// CALL NEXT
 const callNext = async (counterId) => {
     const counter = await Counter.findById(counterId);
     if (!counter?.isActive) throw new ApiError(400, 'Quầy không tồn tại hoặc không hoạt động');
@@ -74,9 +134,17 @@ const callNext = async (counterId) => {
     }
 
     const nextTicket = await Ticket.findOneAndUpdate(
-        { serviceId: { $in: serviceIds }, status: TicketStatus.WAITING, counterId: null },
-        { status: TicketStatus.PROCESSING, counterId, processingAt: new Date() },
-        { sort: { number: 1 }, returnDocument: 'after' }
+        { 
+            serviceId: { $in: serviceIds }, 
+            status: TicketStatus.WAITING, 
+            counterId: null 
+        },
+        { 
+            status: TicketStatus.PROCESSING, 
+            counterId, 
+            processingAt: new Date() 
+        },
+        { sort: { weight: -1, number: 1 }, returnDocument: 'after' } 
     ).populate('serviceId', 'name code');
 
     if (!nextTicket) {
@@ -95,18 +163,45 @@ const callNext = async (counterId) => {
     counter.currentTicketId = nextTicket._id;
     await counter.save();
 
-    const formatTicket = (ticket) => ({
-        ...ticket.toObject(),
-        formattedNumber: String(ticket.number).padStart(3, '0')
-    });
+    if (global.io) {
+        const formattedNumberCall = String(nextTicket.number).padStart(3, '0');
+        
+        global.io.to('waiting-room').emit('ticket-called', {
+            ticket: {
+                id: nextTicket._id,
+                number: nextTicket.number,
+                formattedNumber: formattedNumberCall,
+                customerName: nextTicket.name,
+                serviceName: nextTicket.serviceId.name
+            },
+            counterName: counter.name,
+            counterId: counter._id,
+            calledAt: new Date()
+        });
+        
+        global.io.to(`counter-${counterId}`).emit('new-current-ticket', {
+            currentTicket: {
+                id: nextTicket._id,
+                number: nextTicket.number,
+                formattedNumber: formattedNumberCall,
+                customerName: nextTicket.name,
+                phone: nextTicket.phone,
+                serviceName: nextTicket.serviceId.name,
+                status: 'processing'
+            }
+        });
+        
+    }
 
     return {
-        nextTicket: formatTicket(nextTicket),
+        nextTicket: {
+            ...nextTicket.toObject(),
+            formattedNumber: String(nextTicket.number).padStart(3, '0')
+        },
         counter
     };
 };
 
-// COMPLETE
 const completeTicket = async (id) => {
     const ticket = await Ticket.findById(id).populate('serviceId', 'name code');
     if (!ticket) throw new ApiError(404, 'Không tìm thấy ticket');
@@ -114,7 +209,29 @@ const completeTicket = async (id) => {
 
     ticket.status = TicketStatus.COMPLETED;
     ticket.completedAt = new Date();
+    ticket.qrCode = null;
     await ticket.save();
+
+    if (global.io) {
+        const formattedNumberComplete = String(ticket.number).padStart(3, '0');
+        
+        global.io.to('waiting-room').emit('ticket-completed', {
+            ticketId: ticket._id,
+            number: ticket.number,
+            formattedNumber: formattedNumberComplete,
+            customerName: ticket.name,
+            completedAt: new Date()
+        });
+        
+        if (ticket.counterId) {
+            global.io.to(`counter-${ticket.counterId}`).emit('ticket-finished', {
+            ticketId: ticket._id,
+            formattedNumber: formattedNumberComplete
+            });
+        }
+        
+        console.log(`\x1b[32m Vé đã được phát hành - hoàn tất: ${formattedNumberComplete}\x1b[0m`);
+    }
 
     if (ticket.counterId) {
         await Counter.findByIdAndUpdate(ticket.counterId, {
@@ -129,7 +246,6 @@ const completeTicket = async (id) => {
     };
 };
 
-// SKIP TICKET
 const skipTicket = async (id, reason = '') => {
     const ticket = await Ticket.findById(id).populate('serviceId', 'name code');
     if (!ticket) throw new ApiError(404, 'Không tìm thấy ticket');
@@ -137,14 +253,46 @@ const skipTicket = async (id, reason = '') => {
         throw new ApiError(400, 'Chỉ có thể bỏ qua ticket đang xử lý');
     }
 
-    ticket.status = TicketStatus.SKIPPED;
-    ticket.note = reason;
+    ticket.skipCount = (ticket.skipCount || 0) + 1;
+    ticket.weight = -10 * ticket.skipCount;  
+    
+    if (ticket.skipCount >= 3) {
+        ticket.status = TicketStatus.SKIPPED;
+        ticket.qrCode = null;
+    } else {
+        ticket.status = TicketStatus.WAITING;
+        ticket.counterId = null;
+        ticket.serviceCounterId = null;
+        ticket.processingAt = null;
+    }
+    
+    if (reason) {
+        ticket.note = reason;
+    }
     await ticket.save();
 
     if (ticket.counterId) {
-        await Counter.findByIdAndUpdate(ticket.counterId, {
-            currentTicketId: null
+        await Counter.findByIdAndUpdate(ticket.counterId, { currentTicketId: null });
+    }
+
+    if (global.io) {
+        const formattedNumberSkip = String(ticket.number).padStart(3, '0');
+        
+        global.io.to('waiting-room').emit('ticket-skipped', {
+            ticketId: ticket._id,
+            number: ticket.number,
+            formattedNumber: formattedNumberSkip,
+            customerName: ticket.name,
+            skipCount: ticket.skipCount,
+            weight: ticket.weight
         });
+        
+        if (ticket.counterId) {
+            global.io.to(`counter-${ticket.counterId}`).emit('ticket-skipped', {
+                ticketId: ticket._id,
+                formattedNumber: formattedNumberSkip
+            });
+        }
     }
 
     return {
@@ -153,7 +301,6 @@ const skipTicket = async (id, reason = '') => {
     };
 };
 
-// GET COUNTER DISPLAY
 const getCounterDisplay = async (counterId) => {
     const counter = await Counter.findById(counterId);
     if (!counter) throw new ApiError(404, 'Không tìm thấy quầy');

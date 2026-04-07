@@ -1,7 +1,11 @@
 const express = require("express");
 const router = express.Router();
+
 const validate = require('../middlewares/validate.middleware');
+const { authMiddleware, adminOnly } = require('../middlewares/auth.middleware');
+
 const { createServiceSchema, updateServiceSchema, addCountersSchema } = require('../validations/service.validation');
+
 const ServiceController = require("../controllers/service.controller");
 
 // ====================================
@@ -11,17 +15,16 @@ router.get("/", ServiceController.getAllService);
 router.get("/active", ServiceController.getActiveService);
 router.get("/:id", ServiceController.getServiceById);
 
+
 // ====================================
 // ADMIN ROUTES
 // ====================================
+router.post("/", authMiddleware, adminOnly, validate(createServiceSchema), ServiceController.createService);
+router.put("/:id", authMiddleware, adminOnly, validate(updateServiceSchema), ServiceController.updateService);
+router.delete("/:id", authMiddleware, adminOnly, ServiceController.deleteService);
 
-// CRUD cơ bản
-router.post("/", validate(createServiceSchema), ServiceController.createService);  
-router.put("/:id", validate(updateServiceSchema), ServiceController.updateService);  
-router.delete("/:id", ServiceController.deleteService);
-
-router.get("/:id/counters", ServiceController.getCountersByService);
-router.post("/:id/counters", validate(addCountersSchema), ServiceController.addCounters);
-router.delete("/:id/counters/:counterId", ServiceController.removeCounter);
+router.get("/:id/counters", authMiddleware, adminOnly, ServiceController.getCountersByService);
+router.post("/:id/counters", authMiddleware, adminOnly, validate(addCountersSchema), ServiceController.addCounters);
+router.delete("/:id/counters/:counterId", authMiddleware, adminOnly, ServiceController.removeCounter);
 
 module.exports = router;

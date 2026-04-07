@@ -1,6 +1,5 @@
 const TicketStatus = {
   WAITING: 'waiting',
-  CALLED: 'called',
   PROCESSING: 'processing',
   COMPLETED: 'completed',
   SKIPPED: 'skipped'

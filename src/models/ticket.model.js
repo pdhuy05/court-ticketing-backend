@@ -44,7 +44,6 @@ const TicketSchema = new mongoose.Schema({
     type: String,
     required: true,
     trim: true,
-    match: [/^(03|05|07|08|09|01[2|6|8|9])[0-9]{7,8}$/, 'Số điện thoại không hợp lệ (VD: 0912345678)'],
     minlength: 10,
     maxlength: 11
   },
@@ -64,6 +63,21 @@ const TicketSchema = new mongoose.Schema({
   completedAt: {
     type: Date,
     default: null
+  },
+
+  qrCode: { 
+    type: String, 
+    default: null 
+  },
+
+  weight: {
+    type: Number, 
+    default: 0 
+  },
+
+  skipCount: { 
+    type: Number, 
+    default: 0 
   }
 }, {
   timestamps: true 
