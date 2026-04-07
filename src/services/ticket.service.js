@@ -19,21 +19,18 @@ const createTicket = async ({ serviceId, name, phone }) => {
     const nextNumber = lastTicket ? lastTicket.number + 1 : 1;
     const formattedNumber = nextNumber.toString().padStart(3, '0');
 
-    const qrData = {
-        ticketId: null,
-        ticketNumber: formattedNumber,
-        serviceName: service.name,
-        customerName: name,
-        customerPhone: phone,
-        createdAt: new Date().toISOString()
-    };
+    const qrText = `SỐ: ${formattedNumber}
+DỊCH VỤ: ${service.name}
+KHÁCH: ${name}
+ĐT: ${phone}
+THỜI GIAN: ${new Date().toLocaleString('vi-VN')}`;
 
     let qrCode = null;
     try {
-        qrCode = await QRCode.toDataURL(JSON.stringify(qrData), {
+        qrCode = await QRCode.toDataURL(qrText, {
             errorCorrectionLevel: 'H',
             margin: 1,
-            width: 200
+            width: 250
         });
     } catch (err) {
         console.error('Lỗi tạo QR:', err.message);
@@ -50,19 +47,16 @@ const createTicket = async ({ serviceId, name, phone }) => {
     });
 
     if (qrCode) {
-        const finalQrData = {
-            ticketId: ticket._id.toString(),
-            ticketNumber: formattedNumber,
-            serviceName: service.name,
-            customerName: name,
-            customerPhone: phone,
-            createdAt: ticket.createdAt.toISOString()
-        };
+        const finalQrText = `SỐ THỨ TỰ: ${formattedNumber}
+DỊCH VỤ: ${service.name}
+KHÁCH HÀNG: ${name}
+ĐIỆN THOẠI: ${phone}
+THỜI GIAN: ${new Date().toLocaleString('vi-VN')}`;
         
-        const finalQrCode = await QRCode.toDataURL(JSON.stringify(finalQrData), {
+        const finalQrCode = await QRCode.toDataURL(finalQrText, {
             errorCorrectionLevel: 'H',
             margin: 1,
-            width: 200
+            width: 250
         });
         
         ticket.qrCode = finalQrCode;
