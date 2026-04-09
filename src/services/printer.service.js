@@ -38,7 +38,7 @@ class PrinterService {
   async generateQRCode(ticket, service) {
     const qrText = `
 SỐ THỨ TỰ: ${ticket.ticketNumber}
-DỊCH VỤ: ${service?.name || ''}
+YÊU CẦU: ${service?.name || ''}
 ĐƯƠNG SỰ: ${ticket.name || ''}
 ĐIỆN THOẠI: ${ticket.phone || ''}
 THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString('vi-VN')}

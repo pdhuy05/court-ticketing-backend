@@ -33,7 +33,7 @@ const createTicket = async ({ serviceId, name, phone }) => {
     });
 
     const qrText = `SỐ THỨ TỰ: ${formattedNumber}
-DỊCH VỤ: ${service.name}
+YÊU CẦU: ${service.name}
 ĐƯƠNG SỰ: ${name}
 ĐIỆN THOẠI: ${phone}
 THỜI GIAN: ${new Date().toLocaleString('vi-VN')}`;
@@ -302,7 +302,7 @@ const getCounterDisplay = async (counterId) => {
         status: TicketStatus.WAITING
     })
     .populate('serviceId', 'name code')
-    .sort({ number: 1 })
+    .sort({ weight: -1, createdAt: 1, number: 1 })
     .limit(10);
 
     let currentTicket = null;
