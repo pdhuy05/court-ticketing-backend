@@ -10,7 +10,10 @@ const createTicket = async ({ serviceId, name, phone }) => {
     const service = await Service.findById(serviceId);
     if (!service) throw new ApiError(404, 'Không tìm thấy dịch vụ');
 
-    const availableCounters = await ServiceCounter.find({ serviceId, isActive: true }).populate('counterId');
+    const availableCounters = await ServiceCounter
+        .find({ serviceId, isActive: true })
+        .populate('counterId');
+
     if (availableCounters.length === 0) {
         throw new ApiError(400, 'Dịch vụ này hiện chưa có quầy phục vụ.');
     }
@@ -19,22 +22,7 @@ const createTicket = async ({ serviceId, name, phone }) => {
     const nextNumber = lastTicket ? lastTicket.number + 1 : 1;
     const formattedNumber = nextNumber.toString().padStart(3, '0');
 
-    const qrText = `SỐ: ${formattedNumber}
-DỊCH VỤ: ${service.name}
-KHÁCH: ${name}
-ĐT: ${phone}
-THỜI GIAN: ${new Date().toLocaleString('vi-VN')}`;
-
-    let qrCode = null;
-    try {
-        qrCode = await QRCode.toDataURL(qrText, {
-            errorCorrectionLevel: 'H',
-            margin: 1,
-            width: 250
-        });
-    } catch (err) {
-        console.error('Lỗi tạo QR:', err.message);
-    }
+    const qrData = `STT:${formattedNumber}|DV:${service.name}|KH:${name}|SDT:${phone}|TG:${Date.now()}`;
 
     const ticket = await Ticket.create({
         number: nextNumber,
@@ -43,46 +31,27 @@ THỜI GIAN: ${new Date().toLocaleString('vi-VN')}`;
         name,
         phone,
         status: TicketStatus.WAITING,
-        qrCode: qrCode
+        qrCode: null
     });
-
-    if (qrCode) {
-        const finalQrText = `SỐ THỨ TỰ: ${formattedNumber}
-DỊCH VỤ: ${service.name}
-KHÁCH HÀNG: ${name}
-ĐIỆN THOẠI: ${phone}
-THỜI GIAN: ${new Date().toLocaleString('vi-VN')}`;
-        
-        const finalQrCode = await QRCode.toDataURL(finalQrText, {
-            errorCorrectionLevel: 'H',
-            margin: 1,
-            width: 250
-        });
-        
-        ticket.qrCode = finalQrCode;
-        await ticket.save();
-    }
 
     await ticket.populate('serviceId', 'name code');
 
     if (global.io) {
         const waitingCount = await Ticket.countDocuments({ status: TicketStatus.WAITING });
-        
+
         global.io.to('waiting-room').emit('new-ticket', {
             ticket: {
                 id: ticket._id,
                 number: ticket.number,
-                formattedNumber: formattedNumber,
+                formattedNumber,
                 customerName: ticket.name,
                 phone: ticket.phone,
                 serviceName: service.name,
                 status: ticket.status,
-                qrCode: ticket.qrCode
+                qrData // 👉 gửi cho FE
             },
             totalWaiting: waitingCount
         });
-        
-        console.log(`\x1b[36m Đã phát hành vé mới: ${formattedNumber} - ${service.name}\x1b[0m`);
     }
 
     return {
@@ -92,7 +61,7 @@ THỜI GIAN: ${new Date().toLocaleString('vi-VN')}`;
         ticketNumberRaw: nextNumber,
         ticketNumberFormatted: formattedNumber,
         availableCounters: availableCounters.map(ac => ac.counterId),
-        qrCode: ticket.qrCode
+        qrData // 👉 trả cho FE
     };
 };
 

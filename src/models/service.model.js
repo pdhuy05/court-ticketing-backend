@@ -17,6 +17,9 @@ const ServiceSchema = new mongoose.Schema({
   icon: { 
     type: String
   },
+  backgroundColor: {
+    type: String
+  },
   isActive: { 
     type: Boolean, 
     default: ActiveStatus.ACTIVE 

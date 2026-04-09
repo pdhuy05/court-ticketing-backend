@@ -66,7 +66,7 @@ exports.getById = async (id) => {
 };
 
 exports.create = async (data) => {
-  const { code, displayOrder } = data;
+  const { code, displayOrder, backgroundColor } = data;
 
   const existing = await Service.findOne({ code: code.toUpperCase() });
 
