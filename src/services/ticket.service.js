@@ -340,6 +340,103 @@ const getCounterDisplay = async (counterId) => {
     };
 };
 
+const getMyCounter = async (counterId) => {
+    const counter = await Counter.findById(counterId);
+    if (!counter) {
+        throw new ApiError(404, 'Không tìm thấy quầy của bạn');
+    }
+
+    const serviceRelations = await ServiceCounter.find({ 
+        counterId, 
+        isActive: true 
+    }).populate('serviceId', 'name code');
+
+    let currentTicket = null;
+    if (counter.currentTicketId) {
+        currentTicket = await Ticket.findById(counter.currentTicketId)
+            .populate('serviceId', 'name code');
+    }
+
+    return {
+        counter: {
+            id: counter._id,
+            name: counter.name,
+            number: counter.number,
+            processedCount: counter.processedCount,
+            isActive: counter.isActive
+        },
+        services: serviceRelations.map(rel => ({
+            id: rel.serviceId._id,
+            name: rel.serviceId.name,
+            code: rel.serviceId.code
+        })),
+        currentTicket: currentTicket ? {
+            id: currentTicket._id,
+            number: currentTicket.number,
+            formattedNumber: currentTicket.number.toString().padStart(3, '0'),
+            customerName: currentTicket.name,
+            phone: currentTicket.phone,
+            serviceName: currentTicket.serviceId?.name,
+            status: currentTicket.status
+        } : null
+    };
+};
+
+const getStaffDisplay = async (counterId) => {
+    const counter = await Counter.findById(counterId);
+    if (!counter) throw new ApiError(404, 'Không tìm thấy quầy');
+
+    const serviceRelations = await ServiceCounter.find({ 
+        counterId, 
+        isActive: true 
+    }).populate('serviceId', 'name code');
+
+    const serviceIds = serviceRelations.map(rel => rel.serviceId._id);
+
+    const waitingTickets = await Ticket.find({
+        serviceId: { $in: serviceIds },
+        status: TicketStatus.WAITING
+    })
+    .populate('serviceId', 'name code')
+    .sort({ weight: -1, createdAt: 1, number: 1 })
+    .limit(10);
+
+    let currentTicket = null;
+    if (counter.currentTicketId) {
+        currentTicket = await Ticket.findById(counter.currentTicketId)
+            .populate('serviceId', 'name code');
+    }
+
+    const formatTicket = (ticket) => ({
+        id: ticket._id,
+        number: ticket.number,
+        formattedNumber: String(ticket.number).padStart(3, '0'),
+        customerName: ticket.name,
+        phone: ticket.phone,
+        status: ticket.status,
+        serviceName: ticket.serviceId?.name,
+        createdAt: ticket.createdAt
+    });
+
+    return {
+        counter: {
+            id: counter._id,
+            name: counter.name,
+            number: counter.number,
+            isActive: counter.isActive,
+            processedCount: counter.processedCount
+        },
+        services: serviceRelations.map(rel => ({
+            id: rel.serviceId._id,
+            name: rel.serviceId.name,
+            code: rel.serviceId.code
+        })),
+        currentTicket: currentTicket ? formatTicket(currentTicket) : null,
+        waitingTickets: waitingTickets.map(formatTicket),
+        totalWaiting: waitingTickets.length
+    };
+};
+
 module.exports = {
     createTicket,
     getAllWaiting,
@@ -347,4 +444,6 @@ module.exports = {
     completeTicket,
     skipTicket,
     getCounterDisplay,
+    getMyCounter,
+    getStaffDisplay,
 };

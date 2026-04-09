@@ -170,3 +170,47 @@ exports.getCounterDisplay = async (req, res) => {
         data
     });
 };
+
+exports.getMyCounter = async (req, res, next) => {
+    const counterId = req.user.counterId;
+    
+    if (!counterId) {
+        return res.status(400).json({
+            success: false,
+            message: 'Tài khoản chưa được gán quầy'
+        });
+    }
+    
+    const data = await ticketService.getMyCounter(counterId);
+    
+    res.json({
+        success: true,
+        data: {
+            ...data,
+            staffName: req.user.fullName,
+            staffId: req.user._id
+        }
+    });
+};
+
+exports.getStaffDisplay = async (req, res, next) => {
+    const counterId = req.user.counterId;
+    
+    if (!counterId) {
+        return res.status(400).json({
+            success: false,
+            message: 'Tài khoản chưa được gán quầy'
+        });
+    }
+    
+    const data = await ticketService.getStaffDisplay(counterId);
+    
+    res.json({
+        success: true,
+        data: {
+            ...data,
+            staffName: req.user.fullName,
+            staffId: req.user._id
+        }
+    });
+};
