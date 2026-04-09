@@ -27,4 +27,9 @@ router.get("/:id/counters", authMiddleware, adminOnly, ServiceController.getCoun
 router.post("/:id/counters", authMiddleware, adminOnly, validate(addCountersSchema), ServiceController.addCounters);
 router.delete("/:id/counters/:counterId", authMiddleware, adminOnly, ServiceController.removeCounter);
 
+// ====================================
+// THỐNG KÊ
+// ====================================
+router.get("/:id/stats",  authMiddleware, adminOnly, ServiceController.getStats);
+
 module.exports = router;

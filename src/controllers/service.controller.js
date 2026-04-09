@@ -31,6 +31,7 @@ exports.getServiceById = async (req, res) => {
 
 exports.createService = async (req, res) => {
     const service = await Service.create(req.body);
+
     res.status(201).json({
       success: true,
       data: service,
@@ -92,5 +93,13 @@ exports.getCountersByService = async (req, res) => {
     res.json({
       success: true,
       data: result
+    });
+};
+
+exports.getStats = async (req, res) => {
+    const stats = await Service.getStats(req.params.id);
+    res.json({
+      success: true,
+      data: stats
     });
 };

@@ -1,6 +1,7 @@
 const Service = require('../models/service.model');
 const ServiceCounter = require('../models/serviceCounter.model');
 const Counter = require('../models/counter.model');
+const Ticket = require('../models/ticket.model');
 
 exports.getAll = async () => {
   const services = await Service.find().sort({ displayOrder: 1 });
@@ -25,7 +26,7 @@ exports.getAll = async () => {
 exports.getActive = async () => {
   const services = await Service.find({ isActive: true })
     .sort({ displayOrder: 1 })
-    .select("code name description displayOrder icon");
+    .select("code name description displayOrder icon backgroundColor");
   
   const servicesWithCounters = await Promise.all(
     services.map(async (service) => {
@@ -93,7 +94,7 @@ exports.create = async (data) => {
 };
 
 exports.update = async (id, body) => {
-  const { code, ...updateData } = body;
+  const { code, displayOrder, backgroundColor, ...updateData } = body;
   
   if (code) {
     updateData.code = code.toUpperCase();
@@ -230,5 +231,28 @@ exports.getCounters = async (id) => {
   return {
     service,
     counters: counterRelations.map(rel => rel.counterId)
+  };
+};
+
+exports.getStats = async (id) => {
+  const service = await Service.findById(id);
+  if (!service) throw new Error('Không tìm thấy dịch vụ');
+
+  const waiting = await Ticket.countDocuments({ serviceId: id, status: 'waiting' });
+  const processing = await Ticket.countDocuments({ serviceId: id, status: 'processing' });
+  const completed = await Ticket.countDocuments({ serviceId: id, status: 'completed' });
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayCount = await Ticket.countDocuments({ 
+    serviceId: id, 
+    createdAt: { $gte: today } 
+  });
+
+  return {
+    service: service.name,
+    waiting,
+    processing,
+    completed,
+    today: todayCount
   };
 };

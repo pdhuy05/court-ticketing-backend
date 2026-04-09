@@ -115,3 +115,40 @@ exports.updateCurrentTicket = async (req, res) => {
     message: 'Cập nhật ticket hiện tại thành công'
   });
 };
+
+exports.getAllStats = async () => {
+  const counters = await Counter.find({ isActive: true }).sort({ number: 1 });
+  
+  const stats = await Promise.all(
+    counters.map(async (counter) => {
+      const totalProcessed = counter.processedCount || 0;
+      
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const completedToday = await Ticket.countDocuments({
+        counterId: counter._id,
+        status: 'completed',
+        completedAt: { $gte: today }
+      });
+
+      const processing = await Ticket.countDocuments({
+        counterId: counter._id,
+        status: 'processing'
+      });
+
+      return {
+        counter: {
+          id: counter._id,
+          name: counter.name,
+          number: counter.number
+        },
+        totalProcessed,
+        completedToday,
+        processing
+      };
+    })
+  );
+
+  return stats.sort((a, b) => b.totalProcessed - a.totalProcessed);
+};

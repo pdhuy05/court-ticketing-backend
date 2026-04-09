@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { ServiceCode, ActiveStatus, ServiceName } = require('../constants/enums');
+const { ActiveStatus } = require('../constants/enums');
 
 const ServiceSchema = new mongoose.Schema({
   code: { 
@@ -8,17 +8,14 @@ const ServiceSchema = new mongoose.Schema({
     unique: true,  
     uppercase: true, 
     trim: true, 
-    match: [/^[A-Z]{2,5}$/, 'Mã dịch vụ phải gồm 2-5 chữ cái in hoa']
   },
   name: { 
     type: String, 
     required: true,
     trim: true
   },
-  
   icon: { 
-    type: String, 
-    default: 'fa-solid fa-scale-unbalanced-flip' 
+    type: String
   },
   isActive: { 
     type: Boolean, 

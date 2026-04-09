@@ -30,4 +30,9 @@ router.get("/:id/services", authMiddleware, adminOnly, CounterController.getServ
 router.post("/:id/services", authMiddleware, adminOnly, validate(addServicesSchema), CounterController.addServices);
 router.delete("/:id/services/:serviceId", authMiddleware, adminOnly, CounterController.removeService);
 
+// ====================================
+// THỐNG KÊ COUNTERS
+// ====================================
+router.get("/stats", CounterController.getAllStats);
+
 module.exports = router;

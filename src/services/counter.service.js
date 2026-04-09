@@ -302,3 +302,12 @@ exports.getServices = async (id) => {
     services: serviceRelations.map(rel => rel.serviceId)
   };
 };
+
+exports.getAllStats = async (req, res, next) => {
+  const stats = await counterService.getAllStats();
+  res.json({
+    success: true,
+    data: stats,
+    count: stats.length
+  });
+};
