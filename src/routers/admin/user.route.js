@@ -12,6 +12,7 @@ router.get('/staff/:id', authMiddleware, adminOnly, UserAdminController.getStaff
 router.post('/staff', authMiddleware, adminOnly, UserAdminController.createStaff);
 router.put('/staff/:id', authMiddleware, adminOnly, UserAdminController.updateStaff);
 router.delete('/staff/:id', authMiddleware, adminOnly, UserAdminController.deleteStaff);
+router.patch('/staff/:id/remove-counter', authMiddleware, adminOnly, UserAdminController.removeCounter);
 
 // ====================================
 // STAFF ACTIONS

@@ -76,6 +76,21 @@ const toggleActive = async (id) => {
   return staff;
 };
 
+const removeCounter = async (id) => {
+  const staff = await User.findOneAndUpdate(
+    { _id: id, role: 'staff' },
+    { counterId: null },
+    { new: true, runValidators: true }
+  );
+  
+  if (!staff) {
+    throw new ApiError(404, 'Không tìm thấy nhân viên');
+  }
+  
+  return staff;
+};
+
+
 module.exports = {
   getAllStaff,
   getStaffById,
@@ -83,5 +98,6 @@ module.exports = {
   updateStaff,
   deleteStaff,
   assignCounter,
-  toggleActive
+  toggleActive,
+  removeCounter
 };
