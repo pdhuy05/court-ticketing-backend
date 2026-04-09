@@ -62,14 +62,36 @@ exports.create = async (req, res) => {
         }
     }
 
+    const ticketData = {
+        _id: result.ticket._id,
+        number: result.ticket.number,
+        ticketNumber: result.ticket.ticketNumber,
+        formattedNumber: result.ticketNumberFormatted,
+        name: result.ticket.name,
+        phone: result.ticket.phone,
+        status: result.ticket.status,
+        qrCode: result.ticket.qrCode,
+        createdAt: result.ticket.createdAt
+    };
+
+    const serviceData = {
+        _id: result.service._id,
+        code: result.service.code,
+        name: result.service.name
+    };
+
+    const availableCountersData = result.availableCounters.map(counter => ({
+        _id: counter._id,
+        code: counter.code,
+        name: counter.name,
+        number: counter.number
+    }));
+
     res.status(201).json({
         success: true,
-        data: {
-            ...result.ticket.toObject(),
-            formattedNumber: result.ticketNumberFormatted,
-            availableCounters: result.availableCounters
-        },
-        service: result.service,
+        data: ticketData,
+        service: serviceData,
+        availableCounters: availableCountersData,
         printed: printResult.success,
         printMessage: printResult.message,
         message: `Đã cấp số ${result.ticketNumberDisplay} cho dịch vụ ${result.service.name}`

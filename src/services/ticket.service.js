@@ -22,8 +22,6 @@ const createTicket = async ({ serviceId, name, phone }) => {
     const nextNumber = lastTicket ? lastTicket.number + 1 : 1;
     const formattedNumber = nextNumber.toString().padStart(3, '0');
 
-    const qrData = `STT:${formattedNumber}|DV:${service.name}|KH:${name}|SDT:${phone}|TG:${Date.now()}`;
-
     const ticket = await Ticket.create({
         number: nextNumber,
         ticketNumber: formattedNumber,
@@ -33,6 +31,28 @@ const createTicket = async ({ serviceId, name, phone }) => {
         status: TicketStatus.WAITING,
         qrCode: null
     });
+
+    const qrText = `SỐ THỨ TỰ: ${formattedNumber}
+DỊCH VỤ: ${service.name}
+ĐƯƠNG SỰ: ${name}
+ĐIỆN THOẠI: ${phone}
+THỜI GIAN: ${new Date().toLocaleString('vi-VN')}`;
+    
+    let qrCode = null;
+    try {
+        qrCode = await QRCode.toDataURL(qrText, {
+            errorCorrectionLevel: 'L',
+            margin: 0,
+            width: 100
+        });
+    } catch (err) {
+        console.error('Lỗi tạo QR:', err.message);
+    }
+
+    if (qrCode) {
+        ticket.qrCode = qrCode;
+        await ticket.save();
+    }
 
     await ticket.populate('serviceId', 'name code');
 
@@ -48,10 +68,12 @@ const createTicket = async ({ serviceId, name, phone }) => {
                 phone: ticket.phone,
                 serviceName: service.name,
                 status: ticket.status,
-                qrData // 👉 gửi cho FE
+                qrCode: ticket.qrCode
             },
             totalWaiting: waitingCount
         });
+
+        console.log(`\x1b[36m Đã phát hành vé mới: ${formattedNumber} - ${service.name}\x1b[0m`);
     }
 
     return {
@@ -61,7 +83,7 @@ const createTicket = async ({ serviceId, name, phone }) => {
         ticketNumberRaw: nextNumber,
         ticketNumberFormatted: formattedNumber,
         availableCounters: availableCounters.map(ac => ac.counterId),
-        qrData // 👉 trả cho FE
+        qrCode: ticket.qrCode
     };
 };
 
