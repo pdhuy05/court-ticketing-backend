@@ -88,67 +88,11 @@ exports.getServices = async (req, res) => {
   });
 };
 
-exports.getStatistics = async (req, res) => {
-  const statistics = await CounterService.getStatistics(req.params.id);
+exports.getAllStats = async (req, res) => {
+  const stats = await CounterService.getAllStats();
   res.json({
     success: true,
-    data: statistics
+    data: stats,
+    count: stats.length
   });
-};
-
-exports.updateProcessedCount = async (req, res) => {
-  const { increment } = req.body;
-  const counter = await CounterService.updateProcessedCount(req.params.id, increment || 1);
-  res.json({
-    success: true,
-    data: counter,
-    message: 'Cập nhật số lượng xử lý thành công'
-  });
-};
-
-exports.updateCurrentTicket = async (req, res) => {
-  const { ticketId } = req.body;
-  const counter = await CounterService.updateCurrentTicket(req.params.id, ticketId);
-  res.json({
-    success: true,
-    data: counter,
-    message: 'Cập nhật ticket hiện tại thành công'
-  });
-};
-
-exports.getAllStats = async () => {
-  const counters = await Counter.find({ isActive: true }).sort({ number: 1 });
-  
-  const stats = await Promise.all(
-    counters.map(async (counter) => {
-      const totalProcessed = counter.processedCount || 0;
-      
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      const completedToday = await Ticket.countDocuments({
-        counterId: counter._id,
-        status: 'completed',
-        completedAt: { $gte: today }
-      });
-
-      const processing = await Ticket.countDocuments({
-        counterId: counter._id,
-        status: 'processing'
-      });
-
-      return {
-        counter: {
-          id: counter._id,
-          name: counter.name,
-          number: counter.number
-        },
-        totalProcessed,
-        completedToday,
-        processing
-      };
-    })
-  );
-
-  return stats.sort((a, b) => b.totalProcessed - a.totalProcessed);
 };

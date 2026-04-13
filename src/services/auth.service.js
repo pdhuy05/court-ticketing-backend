@@ -1,14 +1,15 @@
 const User = require('../models/user.model');
 const jwt = require('jsonwebtoken');
+const ApiError = require('../utils/ApiError');
 
 const login = async (username, password) => {
   const user = await User.findOne({ username });
-  if (!user) throw new Error('Tên đăng nhập không tồn tại');
+  if (!user) throw new ApiError(401, 'Tên đăng nhập không tồn tại');
 
   const isMatch = await user.comparePassword(password);
-  if (!isMatch) throw new Error('Mật khẩu không đúng');
+  if (!isMatch) throw new ApiError(401, 'Mật khẩu không đúng');
 
-  if (!user.isActive) throw new Error('Tài khoản đã bị khóa');
+  if (!user.isActive) throw new ApiError(403, 'Tài khoản đã bị khóa');
 
   user.lastLoginAt = new Date();
   await user.save();

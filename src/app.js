@@ -6,6 +6,8 @@ const TicketsRoute = require("./routers/ticket.route");
 const PrintersRoute = require("./routers/printer.route");
 const AuthRoute = require("./routers/auth.route");
 const AdminUserRoute = require("./routers/admin/user.route");
+const AdminDashboardRoute = require("./routers/admin/dashboard.route");
+const AdminTicketRoute = require("./routers/admin/ticket.route");
 
 
 const app = express();
@@ -20,6 +22,8 @@ app.use("/api/tickets", TicketsRoute);
 app.use("/api/printers", PrintersRoute)
 app.use("/api/auth", AuthRoute)
 app.use("/api/admin/users", AdminUserRoute);  
+app.use("/api/admin/dashboard", AdminDashboardRoute);
+app.use("/api/admin/tickets", AdminTicketRoute);
 
 app.use((err, req, res, next) => {
   res.status(err.statusCode || 500).json({

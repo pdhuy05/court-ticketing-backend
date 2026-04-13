@@ -1,7 +1,7 @@
 const net = require('net');
 const sharp = require('sharp');
 const QRCode = require('qrcode');
-const logger = require('../utils/logger');
+const logger = require('../utils/Logger');
 
 const { ConnectPrint } = require('../constants/enums');
 

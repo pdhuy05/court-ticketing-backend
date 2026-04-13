@@ -2,7 +2,6 @@
 const Printer = require('../models/printer.model');
 const printerService = require('../services/printer.service');
 const Ticket = require('../models/ticket.model');
-const Service = require('../models/service.model');
 
 // GET: Lấy danh sách tất cả máy in
 exports.getAll = async (req, res, next) => {

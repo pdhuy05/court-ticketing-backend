@@ -1,4 +1,5 @@
 const Joi = require('joi');
+const { idParamSchema, objectId } = require('./common.validation');
 
 const createCounterSchema = Joi.object({
   code: Joi.string()
@@ -29,7 +30,7 @@ const createCounterSchema = Joi.object({
       'number.min': 'Số quầy phải lớn hơn 0'
     }),
   serviceIds: Joi.array()
-    .items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/))
+    .items(objectId)
     .min(1)
     .required()
     .unique()
@@ -54,7 +55,7 @@ const updateCounterSchema = Joi.object({
 
 const addServicesSchema = Joi.object({
   serviceIds: Joi.array()
-    .items(Joi.string().pattern(/^[0-9a-fA-F]{24}$/))
+    .items(objectId)
     .min(1)
     .required()
     .messages({
@@ -65,6 +66,15 @@ const addServicesSchema = Joi.object({
 });
 
 module.exports = {
+  counterIdParamSchema: idParamSchema,
+  counterServiceParamsSchema: Joi.object({
+    id: objectId.required().messages({
+      'any.required': 'ID quầy là bắt buộc'
+    }),
+    serviceId: objectId.required().messages({
+      'any.required': 'ID dịch vụ là bắt buộc'
+    })
+  }),
   createCounterSchema,
   updateCounterSchema,
   addServicesSchema

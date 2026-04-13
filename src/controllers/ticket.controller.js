@@ -1,7 +1,7 @@
 const ticketService = require('../services/ticket.service');
 const printerService = require('../services/printer.service');
 const Printer = require('../models/printer.model');
-const logger = require('../utils/logger');
+const logger = require('../utils/Logger');
 
 exports.create = async (req, res) => {
     const result = await ticketService.createTicket(req.body);
@@ -110,6 +110,13 @@ exports.getAllWaiting = async (req, res) => {
 
 exports.callNext = async (req, res) => {
     try {
+        if (req.user?.counterId && String(req.user.counterId) !== req.body.counterId) {
+            return res.status(403).json({
+                success: false,
+                message: 'Bạn chỉ được phép gọi số cho quầy được gán'
+            });
+        }
+
         const { nextTicket, counter } = await ticketService.callNext(
             req.body.counterId
         );

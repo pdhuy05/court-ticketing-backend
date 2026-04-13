@@ -29,6 +29,11 @@ io.on('connection', (socket) => {
     console.log(`\x1b[42m\x1b[30m \x1b[0m \x1b[36mSocket\x1b[0m: Client \x1b[33m${socket.id}\x1b[0m joined \x1b[35mcounter ${counterId}\x1b[0m`);
   });
 
+  socket.on('join-admin-dashboard', () => {
+    socket.join('admin-dashboard');
+    console.log(`\x1b[45m\x1b[37m \x1b[0m \x1b[36mSocket\x1b[0m: Client \x1b[33m${socket.id}\x1b[0m joined \x1b[35madmin-dashboard\x1b[0m`);
+  });
+
   socket.on('disconnect', () => {
     console.log(`\x1b[41m\x1b[37m \x1b[0m \x1b[36mSocket\x1b[0m: Client disconnected - ID: \x1b[33m${socket.id}\x1b[0m`);
   });

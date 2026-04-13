@@ -1,6 +1,9 @@
 const Counter = require('../models/counter.model');
 const ServiceCounter = require('../models/serviceCounter.model');
 const Service = require('../models/service.model');
+const Ticket = require('../models/ticket.model');
+const { TicketStatus } = require('../constants/enums');
+const { emitDashboardUpdateSafe } = require('./dashboard.service');
 
 exports.getAll = async () => {
   const counters = await Counter.find().sort({ code: 1 });
@@ -39,6 +42,8 @@ exports.getById = async (id) => {
   const counterObj = counter.toObject();
   counterObj.services = serviceRelations.map(rel => rel.serviceId);
   
+  await emitDashboardUpdateSafe('counter-created');
+
   return counterObj;
 };
 
@@ -105,8 +110,7 @@ exports.create = async (data) => {
     const relation = await ServiceCounter.create({
       serviceId,
       counterId: counter._id,
-      isActive: true,
-      note: 'Gán từ lúc tạo quầy'
+      isActive: true
     });
     serviceRelations.push(relation);
   }
@@ -117,6 +121,8 @@ exports.create = async (data) => {
   const counterObj = counter.toObject();
   counterObj.services = populatedServices.map(rel => rel.serviceId);
   
+  await emitDashboardUpdateSafe('counter-updated');
+
   return counterObj;
 };
 
@@ -161,6 +167,8 @@ exports.update = async (id, data) => {
   const counterObj = counter.toObject();
   counterObj.services = serviceRelations.map(rel => rel.serviceId);
   
+  await emitDashboardUpdateSafe('counter-services-added');
+
   return counterObj;
 };
 
@@ -197,8 +205,7 @@ exports.addServices = async (id, serviceIds) => {
       const relation = await ServiceCounter.create({
         serviceId,
         counterId: counter._id,
-        isActive: true,
-        note: 'Thêm dịch vụ sau khi tạo quầy'
+        isActive: true
       });
       addedServices.push(relation);
     }
@@ -213,6 +220,8 @@ exports.addServices = async (id, serviceIds) => {
   counterObj.services = serviceRelations.map(rel => rel.serviceId);
   counterObj.addedCount = addedServices.length;
   
+  await emitDashboardUpdateSafe('counter-service-removed');
+
   return counterObj;
 };
 
@@ -259,6 +268,8 @@ exports.delete = async (id) => {
   await ServiceCounter.deleteMany({ counterId: counter._id });
   
   await counter.deleteOne();
+
+  await emitDashboardUpdateSafe('counter-deleted');
   
   return counter;
 };
@@ -279,6 +290,8 @@ exports.toggleActive = async (id) => {
     { counterId: counter._id },
     { isActive: counter.isActive }
   );
+
+  await emitDashboardUpdateSafe('counter-toggled');
   
   return counter;
 };
@@ -303,11 +316,37 @@ exports.getServices = async (id) => {
   };
 };
 
-exports.getAllStats = async (req, res, next) => {
-  const stats = await counterService.getAllStats();
-  res.json({
-    success: true,
-    data: stats,
-    count: stats.length
-  });
+exports.getAllStats = async () => {
+  const counters = await Counter.find({ isActive: true }).sort({ number: 1 });
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const stats = await Promise.all(
+    counters.map(async (counter) => {
+      const [completedToday, processing] = await Promise.all([
+        Ticket.countDocuments({
+          counterId: counter._id,
+          status: TicketStatus.COMPLETED,
+          completedAt: { $gte: today }
+        }),
+        Ticket.countDocuments({
+          counterId: counter._id,
+          status: TicketStatus.PROCESSING
+        })
+      ]);
+
+      return {
+        counter: {
+          id: counter._id,
+          name: counter.name,
+          number: counter.number
+        },
+        totalProcessed: counter.processedCount || 0,
+        completedToday,
+        processing
+      };
+    })
+  );
+
+  return stats.sort((a, b) => b.totalProcessed - a.totalProcessed);
 };

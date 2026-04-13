@@ -2,24 +2,25 @@ const Service = require('../models/service.model');
 const ServiceCounter = require('../models/serviceCounter.model');
 const Counter = require('../models/counter.model');
 const Ticket = require('../models/ticket.model');
+const { emitDashboardUpdateSafe } = require('./dashboard.service');
 
 exports.getAll = async () => {
   const services = await Service.find().sort({ displayOrder: 1 });
-  
+
   const servicesWithCounters = await Promise.all(
     services.map(async (service) => {
-      const counterRelations = await ServiceCounter.find({ 
-        serviceId: service._id, 
-        isActive: true 
+      const counterRelations = await ServiceCounter.find({
+        serviceId: service._id,
+        isActive: true
       }).populate('counterId', 'code name number');
-      
+
       const serviceObj = service.toObject();
       serviceObj.counters = counterRelations.map(rel => rel.counterId);
-      
+
       return serviceObj;
     })
   );
-  
+
   return servicesWithCounters;
 };
 
@@ -27,21 +28,22 @@ exports.getActive = async () => {
   const services = await Service.find({ isActive: true })
     .sort({ displayOrder: 1 })
     .select("code name description displayOrder icon backgroundColor");
-  
-  const servicesWithCounters = await Promise.all(
-    services.map(async (service) => {
-      const counterRelations = await ServiceCounter.find({ 
-        serviceId: service._id, 
-        isActive: true 
-      }).populate('counterId', 'code name number');
-      
+
+  const servicesWithCounters = [];
+
+  for (const service of services) {
+    const counterRelations = await ServiceCounter.find({
+      serviceId: service._id,
+      isActive: true
+    }).populate('counterId', 'code name number');
+
+    if (counterRelations.length > 0) {
       const serviceObj = service.toObject();
       serviceObj.counters = counterRelations.map(rel => rel.counterId);
-      
-      return serviceObj;
-    })
-  );
-  
+      servicesWithCounters.push(serviceObj);
+    }
+  }
+
   return servicesWithCounters;
 };
 
@@ -54,19 +56,19 @@ exports.getById = async (id) => {
     throw error;
   }
   
-  const counterRelations = await ServiceCounter.find({ 
-    serviceId: service._id, 
-    isActive: true 
+  const counterRelations = await ServiceCounter.find({
+    serviceId: service._id,
+    isActive: true
   }).populate('counterId', 'code name number');
-  
+
   const serviceObj = service.toObject();
   serviceObj.counters = counterRelations.map(rel => rel.counterId);
-  
+
   return serviceObj;
 };
 
 exports.create = async (data) => {
-  const { code, displayOrder, backgroundColor } = data;
+  const { code, name, displayOrder } = data;
 
   const existing = await Service.findOne({ code: code.toUpperCase() });
 
@@ -87,23 +89,30 @@ exports.create = async (data) => {
 
   const service = await Service.create({
     ...data,
-    code: code.toUpperCase()
+    code: code.toUpperCase(),
+    name: name.toUpperCase()
   });
-  
+
+  await emitDashboardUpdateSafe('service-created');
+
   return service;
 };
 
 exports.update = async (id, body) => {
-  const { code, displayOrder, backgroundColor, ...updateData } = body;
-  
+  const { code, name, displayOrder, backgroundColor, ...updateData } = body;
+
   if (code) {
     updateData.code = code.toUpperCase();
   }
 
+  if (name) {
+    updateData.name = name.toUpperCase();
+  }
+
   if (displayOrder !== undefined && displayOrder !== null) {
-    const existingOrder = await Service.findOne({ 
-      displayOrder, 
-      _id: { $ne: id } 
+    const existingOrder = await Service.findOne({
+      displayOrder,
+      _id: { $ne: id }
     });
     if (existingOrder) {
       const error = new Error(`Thứ tự hiển thị ${displayOrder} đã được sử dụng bởi dịch vụ khác`);
@@ -115,14 +124,16 @@ exports.update = async (id, body) => {
   
   const service = await Service.findByIdAndUpdate(id, updateData, {
     returnDocument: 'after',
-    runValidators: true,
+    runValidators: true
   });
 
   if (!service) {
-    const error = new Error("Không tìm thấy dịch vụ");
+    const error = new Error('Không tìm thấy dịch vụ');
     error.statusCode = 404;
     throw error;
   }
+
+  await emitDashboardUpdateSafe('service-updated');
 
   return service;
 };
@@ -145,6 +156,8 @@ exports.remove = async (id) => {
   }
   
   await service.deleteOne();
+
+  await emitDashboardUpdateSafe('service-deleted');
   
   return service;
 };
@@ -175,17 +188,20 @@ exports.addCounters = async (id, counterIds) => {
       const relation = await ServiceCounter.create({
         serviceId: service._id,
         counterId,
-        isActive: true,
-        note: 'Thêm quầy vào dịch vụ'
+        isActive: true
       });
       addedCounters.push(relation);
     }
   }
   
-  return {
+  const result = {
     service,
     addedCounters: addedCounters.length
   };
+
+  await emitDashboardUpdateSafe('service-counters-added');
+
+  return result;
 };
 
 exports.removeCounter = async (id, counterId) => {
@@ -208,10 +224,14 @@ exports.removeCounter = async (id, counterId) => {
     throw error;
   }
   
-  return {
+  const result = {
     service,
     removed: true
   };
+
+  await emitDashboardUpdateSafe('service-counter-removed');
+
+  return result;
 };
 
 exports.getCounters = async (id) => {

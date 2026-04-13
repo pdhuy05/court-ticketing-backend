@@ -1,7 +1,9 @@
 const Joi = require('joi');
+const { idParamSchema, objectId } = require('./common.validation');
 
 const createTicketSchema = Joi.object({
     serviceId: Joi.string()
+        .trim()
         .pattern(/^[0-9a-fA-F]{24}$/)
         .required()
         .messages({
@@ -21,12 +23,12 @@ const createTicketSchema = Joi.object({
         }),
     phone: Joi.string()
         .required()
-        .min(10)
-        .max(10)
+        .trim()
+        .pattern(/^[0-9]{10}$/)
         .messages({
             'any.required': 'Số điện thoại là bắt buộc',
-            'string.min': 'Số điện thoại phải có 10 số',
-            'string.max': 'Số điện thoại phải có 10 số'
+            'string.empty': 'Số điện thoại không được để trống',
+            'string.pattern.base': 'Số điện thoại phải gồm đúng 10 chữ số'
         }),
     autoPrint: Joi.boolean().default(true)
 });
@@ -52,6 +54,12 @@ const skipTicketSchema = Joi.object({
 });
 
 module.exports = {
+    ticketIdParamSchema: idParamSchema,
+    counterDisplayParamsSchema: Joi.object({
+        counterId: objectId.required().messages({
+            'any.required': 'ID quầy là bắt buộc'
+        })
+    }),
     createTicketSchema,
     callNextSchema,
     completeTicketSchema,

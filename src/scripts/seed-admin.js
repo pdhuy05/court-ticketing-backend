@@ -1,7 +1,7 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
 const User = require('../models/user.model');
-const logger = require('../utils/logger');  // Đảm bảo đường dẫn đúng
+const logger = require('../utils/Logger');
 
 const seedAdmin = async () => {
   try {

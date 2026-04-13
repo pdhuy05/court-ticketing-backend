@@ -1,5 +1,6 @@
 const User = require('../models/user.model');
 const ApiError = require('../utils/ApiError');
+const { emitDashboardUpdateSafe } = require('./dashboard.service');
 
 const getAllStaff = async () => {
   const staffs = await User.find({ role: 'staff' }).populate('counterId', 'name number');
@@ -15,7 +16,7 @@ const getStaffById = async (id) => {
 };
 
 const createStaff = async (data) => {
-  const { username, password, fullName, email, phone, counterId } = data;
+  const { username, password, fullName, counterId } = data;
 
   const existing = await User.findOne({ username });
   if (existing) {
@@ -31,6 +32,8 @@ const createStaff = async (data) => {
     isActive: true
   });
 
+  await emitDashboardUpdateSafe('staff-created');
+
   return staff;
 };
 
@@ -43,6 +46,9 @@ const updateStaff = async (id, data) => {
   if (!staff) {
     throw new ApiError(404, 'Không tìm thấy nhân viên');
   }
+
+  await emitDashboardUpdateSafe('staff-updated');
+
   return staff;
 };
 
@@ -51,6 +57,9 @@ const deleteStaff = async (id) => {
   if (!staff) {
     throw new ApiError(404, 'Không tìm thấy nhân viên');
   }
+
+  await emitDashboardUpdateSafe('staff-deleted');
+
   return staff;
 };
 
@@ -63,6 +72,9 @@ const assignCounter = async (id, counterId) => {
   if (!staff) {
     throw new ApiError(404, 'Không tìm thấy nhân viên');
   }
+
+  await emitDashboardUpdateSafe('staff-counter-assigned');
+
   return staff;
 };
 
@@ -73,6 +85,9 @@ const toggleActive = async (id) => {
   }
   staff.isActive = !staff.isActive;
   await staff.save();
+
+  await emitDashboardUpdateSafe('staff-toggled');
+
   return staff;
 };
 
@@ -86,10 +101,11 @@ const removeCounter = async (id) => {
   if (!staff) {
     throw new ApiError(404, 'Không tìm thấy nhân viên');
   }
-  
+
+  await emitDashboardUpdateSafe('staff-counter-removed');
+
   return staff;
 };
-
 
 module.exports = {
   getAllStaff,

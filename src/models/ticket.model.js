@@ -1,18 +1,18 @@
 const mongoose = require('mongoose');
-const { TicketStatus, Gender } = require('../constants/enums'); 
+const { TicketStatus } = require('../constants/enums');
 
 const TicketSchema = new mongoose.Schema({
-   number: {          
+  number: {
     type: Number,
     required: true,
     index: true
   },
 
-  ticketNumber: {          
+  ticketNumber: {
     type: String,
     required: true,
   },
-  
+
   serviceId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Service',
@@ -47,7 +47,7 @@ const TicketSchema = new mongoose.Schema({
     minlength: 10,
     maxlength: 11
   },
-  
+
   status: {
     type: String,
     enum: Object.values(TicketStatus),
@@ -80,13 +80,13 @@ const TicketSchema = new mongoose.Schema({
     default: 0 
   }
 }, {
-  timestamps: true 
+  timestamps: true
 });
 
-TicketSchema.index({ status: 1, createdAt: 1 });        
-TicketSchema.index({ serviceId: 1, status: 1 });       
+TicketSchema.index({ status: 1, createdAt: 1 });
+TicketSchema.index({ serviceId: 1, status: 1 });
 TicketSchema.index({ counterId: 1, status: 1 });
-TicketSchema.index({ serviceId: 1, number: 1 }, { unique: true }); 
+TicketSchema.index({ serviceId: 1, number: 1 }, { unique: true });
 TicketSchema.index({ serviceId: 1, ticketNumber: 1 }, { unique: true });
 
 module.exports = mongoose.model('Ticket', TicketSchema);

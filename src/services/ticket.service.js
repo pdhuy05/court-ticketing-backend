@@ -5,6 +5,33 @@ const ServiceCounter = require('../models/serviceCounter.model');
 const { TicketStatus } = require('../constants/enums');
 const ApiError = require('../utils/ApiError');
 const QRCode = require('qrcode');
+const { emitDashboardUpdateSafe } = require('./dashboard.service');
+
+const parseTargetDate = (dateString) => {
+    if (!dateString) {
+        return new Date();
+    }
+
+    const [year, month, day] = dateString.split('-').map(Number);
+    return new Date(year, month - 1, day);
+};
+
+const getDateRange = (dateString) => {
+    const targetDate = parseTargetDate(dateString);
+    const start = new Date(targetDate);
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+
+    const formattedDate = [
+        start.getFullYear(),
+        String(start.getMonth() + 1).padStart(2, '0'),
+        String(start.getDate()).padStart(2, '0')
+    ].join('-');
+
+    return { start, end, formattedDate };
+};
 
 const createTicket = async ({ serviceId, name, phone }) => {
     const service = await Service.findById(serviceId);
@@ -76,6 +103,8 @@ THỜI GIAN: ${new Date().toLocaleString('vi-VN')}`;
         console.log(`\x1b[36m Đã phát hành vé mới: ${formattedNumber} - ${service.name}\x1b[0m`);
     }
 
+    await emitDashboardUpdateSafe('ticket-created');
+
     return {
         ticket,
         service,
@@ -96,6 +125,85 @@ const getAllWaiting = async () => {
         ...ticket.toObject(),
         formattedNumber: ticket.number.toString().padStart(3, '0')
     }));
+};
+
+const resetTicketsByDate = async (dateString) => {
+    const { start, end, formattedDate } = getDateRange(dateString);
+
+    const tickets = await Ticket.find({
+        createdAt: { $gte: start, $lt: end }
+    }).select('_id counterId');
+
+    if (tickets.length === 0) {
+        return {
+            date: formattedDate,
+            deletedCount: 0,
+            counterCount: 0
+        };
+    }
+
+    const ticketIds = tickets.map(ticket => ticket._id);
+    const counterIds = [
+        ...new Set(
+            tickets
+                .filter(ticket => ticket.counterId)
+                .map(ticket => String(ticket.counterId))
+        )
+    ];
+
+    await Counter.updateMany(
+        { currentTicketId: { $in: ticketIds } },
+        { currentTicketId: null }
+    );
+
+    await Ticket.deleteMany({
+        _id: { $in: ticketIds }
+    });
+
+    if (global.io) {
+        global.io.to('waiting-room').emit('tickets-reset-day', {
+            date: formattedDate,
+            deletedCount: ticketIds.length
+        });
+
+        counterIds.forEach((counterId) => {
+            global.io.to(`counter-${counterId}`).emit('counter-reset', {
+                counterId,
+                date: formattedDate
+            });
+        });
+    }
+
+    await emitDashboardUpdateSafe('tickets-reset-day');
+
+    return {
+        date: formattedDate,
+        deletedCount: ticketIds.length,
+        counterCount: counterIds.length
+    };
+};
+
+const resetAllTickets = async () => {
+    const deletedCount = await Ticket.countDocuments();
+
+    await Counter.updateMany({}, { currentTicketId: null });
+    await Ticket.deleteMany({});
+
+    if (global.io) {
+        global.io.to('waiting-room').emit('tickets-reset-all', {
+            deletedCount
+        });
+
+        global.io.emit('tickets-reset-all', {
+            deletedCount
+        });
+    }
+
+    await emitDashboardUpdateSafe('tickets-reset-all');
+
+    return {
+        deletedCount
+    };
 };
 
 const callNext = async (counterId) => {
@@ -178,6 +286,8 @@ const callNext = async (counterId) => {
         
     }
 
+    await emitDashboardUpdateSafe('ticket-called');
+
     return {
         nextTicket: {
             ...nextTicket.toObject(),
@@ -225,6 +335,8 @@ const completeTicket = async (id) => {
         });
     }
 
+    await emitDashboardUpdateSafe('ticket-completed');
+
     return {
         ...ticket.toObject(),
         formattedNumber: ticket.number.toString().padStart(3, '0')
@@ -237,6 +349,8 @@ const skipTicket = async (id, reason = '') => {
     if (ticket.status !== TicketStatus.PROCESSING) {
         throw new ApiError(400, 'Chỉ có thể bỏ qua ticket đang xử lý');
     }
+
+    const currentCounterId = ticket.counterId;
 
     ticket.skipCount = (ticket.skipCount || 0) + 1;
     ticket.weight = -10 * ticket.skipCount;  
@@ -256,8 +370,8 @@ const skipTicket = async (id, reason = '') => {
     }
     await ticket.save();
 
-    if (ticket.counterId) {
-        await Counter.findByIdAndUpdate(ticket.counterId, { currentTicketId: null });
+    if (currentCounterId) {
+        await Counter.findByIdAndUpdate(currentCounterId, { currentTicketId: null });
     }
 
     if (global.io) {
@@ -272,13 +386,15 @@ const skipTicket = async (id, reason = '') => {
             weight: ticket.weight
         });
         
-        if (ticket.counterId) {
-            global.io.to(`counter-${ticket.counterId}`).emit('ticket-skipped', {
+        if (currentCounterId) {
+            global.io.to(`counter-${currentCounterId}`).emit('ticket-skipped', {
                 ticketId: ticket._id,
                 formattedNumber: formattedNumberSkip
             });
         }
     }
+
+    await emitDashboardUpdateSafe('ticket-skipped');
 
     return {
         ...ticket.toObject(),
@@ -440,6 +556,8 @@ const getStaffDisplay = async (counterId) => {
 module.exports = {
     createTicket,
     getAllWaiting,
+    resetTicketsByDate,
+    resetAllTickets,
     callNext,
     completeTicket,
     skipTicket,
