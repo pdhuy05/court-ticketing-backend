@@ -2,6 +2,7 @@ const ticketService = require('../services/ticket.service');
 const printerService = require('../services/printer.service');
 const Printer = require('../models/printer.model');
 const logger = require('../utils/Logger');
+const { emitAdminNotificationSafe } = require('../services/admin-notification.service');
 
 exports.create = async (req, res) => {
     const result = await ticketService.createTicket(req.body);
@@ -54,6 +55,18 @@ exports.create = async (req, res) => {
             }
         } catch (printError) {
             logger.error(`Lỗi in ticket: ${printError.message}`);
+            emitAdminNotificationSafe({
+                type: 'printer-error',
+                severity: 'warning',
+                title: 'Lỗi in ticket',
+                message: printError.message,
+                source: 'ticket.controller.create',
+                meta: {
+                    printer: 'default',
+                    serviceId: result.service?._id,
+                    ticketId: result.ticket?._id
+                }
+            });
 
             printResult = {
                 success: false,

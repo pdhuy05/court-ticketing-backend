@@ -6,6 +6,7 @@ const { TicketStatus } = require('../constants/enums');
 const ApiError = require('../utils/ApiError');
 const QRCode = require('qrcode');
 const { emitDashboardUpdateSafe } = require('./dashboard.service');
+const { writeBackup } = require('./ticket-backup.service');
 
 const parseTargetDate = (dateString) => {
     if (!dateString) {
@@ -31,6 +32,32 @@ const getDateRange = (dateString) => {
     ].join('-');
 
     return { start, end, formattedDate };
+};
+
+const emitStaffDisplayUpdateForCounters = async (counterIds, reason, extra = {}) => {
+    if (!global.io || !counterIds?.length) {
+        return;
+    }
+
+    const uniqueCounterIds = [...new Set(counterIds.map((counterId) => String(counterId)))];
+
+    await Promise.all(
+        uniqueCounterIds.map(async (counterId) => {
+            try {
+                const data = await getStaffDisplay(counterId);
+
+                global.io.to(`counter-${counterId}`).emit('staff-display-updated', {
+                    reason,
+                    counterId,
+                    updatedAt: new Date().toISOString(),
+                    data,
+                    ...extra
+                });
+            } catch (error) {
+                console.error(`Không thể cập nhật staff display cho quầy ${counterId}: ${error.message}`);
+            }
+        })
+    );
 };
 
 const createTicket = async ({ serviceId, name, phone }) => {
@@ -103,6 +130,15 @@ THỜI GIAN: ${new Date().toLocaleString('vi-VN')}`;
         console.log(`\x1b[36m Đã phát hành vé mới: ${formattedNumber} - ${service.name}\x1b[0m`);
     }
 
+    await emitStaffDisplayUpdateForCounters(
+        availableCounters.map((counter) => counter._id),
+        'ticket-created',
+        {
+            ticketId: ticket._id,
+            serviceId: service._id
+        }
+    );
+
     await emitDashboardUpdateSafe('ticket-created');
 
     return {
@@ -127,18 +163,53 @@ const getAllWaiting = async () => {
     }));
 };
 
-const resetTicketsByDate = async (dateString) => {
+const buildResetBackupPayload = async ({ type, label, tickets, counterIds, actor, criteria }) => {
+    const [affectedCounters, services] = await Promise.all([
+        counterIds.length
+            ? Counter.find({ _id: { $in: counterIds } })
+                .select('code name number isActive processedCount currentTicketId')
+                .lean()
+            : [],
+        Service.find().select('code name isActive displayOrder').lean()
+    ]);
+
+    return writeBackup({
+        type,
+        label,
+        payload: {
+            criteria,
+            actor: actor
+                ? {
+                    id: actor._id,
+                    username: actor.username,
+                    role: actor.role,
+                    fullName: actor.fullName
+                }
+                : null,
+            totals: {
+                ticketCount: tickets.length,
+                counterCount: counterIds.length
+            },
+            affectedCounters,
+            services,
+            tickets
+        }
+    });
+};
+
+const resetTicketsByDate = async (dateString, actor) => {
     const { start, end, formattedDate } = getDateRange(dateString);
 
     const tickets = await Ticket.find({
         createdAt: { $gte: start, $lt: end }
-    }).select('_id counterId');
+    }).lean();
 
     if (tickets.length === 0) {
         return {
             date: formattedDate,
             deletedCount: 0,
-            counterCount: 0
+            counterCount: 0,
+            backup: null
         };
     }
 
@@ -150,6 +221,32 @@ const resetTicketsByDate = async (dateString) => {
                 .map(ticket => String(ticket.counterId))
         )
     ];
+    const serviceIds = [
+        ...new Set(
+            tickets
+                .filter(ticket => ticket.serviceId)
+                .map(ticket => String(ticket.serviceId))
+        )
+    ];
+    const relatedCounterIds = serviceIds.length
+        ? await ServiceCounter.find({
+            serviceId: { $in: serviceIds },
+            isActive: true
+        }).distinct('counterId')
+        : [];
+    const affectedCounterIds = [...new Set([...counterIds, ...relatedCounterIds.map(String)])];
+    const backup = await buildResetBackupPayload({
+        type: 'reset-day',
+        label: formattedDate,
+        tickets,
+        counterIds: affectedCounterIds,
+        actor,
+        criteria: {
+            date: formattedDate,
+            start,
+            end
+        }
+    });
 
     await Counter.updateMany(
         { currentTicketId: { $in: ticketIds } },
@@ -174,17 +271,44 @@ const resetTicketsByDate = async (dateString) => {
         });
     }
 
+    await emitStaffDisplayUpdateForCounters(affectedCounterIds, 'tickets-reset-day', {
+        date: formattedDate
+    });
+
     await emitDashboardUpdateSafe('tickets-reset-day');
 
     return {
         date: formattedDate,
         deletedCount: ticketIds.length,
-        counterCount: counterIds.length
+        counterCount: affectedCounterIds.length,
+        backup
     };
 };
 
-const resetAllTickets = async () => {
-    const deletedCount = await Ticket.countDocuments();
+const resetAllTickets = async (actor) => {
+    const tickets = await Ticket.find({}).lean();
+    const deletedCount = tickets.length;
+    const counterIds = [
+        ...new Set(
+            tickets
+                .filter(ticket => ticket.counterId)
+                .map(ticket => String(ticket.counterId))
+        )
+    ];
+    const relatedCounterIds = await ServiceCounter.find({ isActive: true }).distinct('counterId');
+    const affectedCounterIds = [...new Set([...counterIds, ...relatedCounterIds.map(String)])];
+    const backup = deletedCount
+        ? await buildResetBackupPayload({
+            type: 'reset-all',
+            label: 'all-tickets',
+            tickets,
+            counterIds: affectedCounterIds,
+            actor,
+            criteria: {
+                resetScope: 'all'
+            }
+        })
+        : null;
 
     await Counter.updateMany({}, { currentTicketId: null });
     await Ticket.deleteMany({});
@@ -199,10 +323,15 @@ const resetAllTickets = async () => {
         });
     }
 
+    await emitStaffDisplayUpdateForCounters(affectedCounterIds, 'tickets-reset-all', {
+        deletedCount
+    });
+
     await emitDashboardUpdateSafe('tickets-reset-all');
 
     return {
-        deletedCount
+        deletedCount,
+        backup
     };
 };
 
@@ -286,6 +415,10 @@ const callNext = async (counterId) => {
         
     }
 
+    await emitStaffDisplayUpdateForCounters([counterId], 'ticket-called', {
+        ticketId: nextTicket._id
+    });
+
     await emitDashboardUpdateSafe('ticket-called');
 
     return {
@@ -332,6 +465,10 @@ const completeTicket = async (id) => {
         await Counter.findByIdAndUpdate(ticket.counterId, {
             currentTicketId: null,
             $inc: { processedCount: 1 }
+        });
+
+        await emitStaffDisplayUpdateForCounters([ticket.counterId], 'ticket-completed', {
+            ticketId: ticket._id
         });
     }
 
@@ -393,6 +530,21 @@ const skipTicket = async (id, reason = '') => {
             });
         }
     }
+
+    const relatedCounterIds = await ServiceCounter.find({
+        serviceId: ticket.serviceId._id,
+        isActive: true
+    }).distinct('counterId');
+
+    await emitStaffDisplayUpdateForCounters(
+        currentCounterId
+            ? [...new Set([String(currentCounterId), ...relatedCounterIds.map(String)])]
+            : relatedCounterIds,
+        'ticket-skipped',
+        {
+            ticketId: ticket._id
+        }
+    );
 
     await emitDashboardUpdateSafe('ticket-skipped');
 

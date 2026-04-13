@@ -6,7 +6,7 @@
  */
 const validate = (schema, property = 'body') => {
   return (req, res, next) => {
-    const data = req[property];
+    const data = req[property] ?? {};
     
     const { error, value } = schema.validate(data, {
       abortEarly: false, 

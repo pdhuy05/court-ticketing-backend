@@ -1,7 +1,7 @@
 const ticketService = require('../../services/ticket.service');
 
 exports.resetTicketsByDate = async (req, res) => {
-  const result = await ticketService.resetTicketsByDate(req.body.date);
+  const result = await ticketService.resetTicketsByDate(req.body?.date, req.user);
 
   res.json({
     success: true,
@@ -11,7 +11,7 @@ exports.resetTicketsByDate = async (req, res) => {
 };
 
 exports.resetAllTickets = async (req, res) => {
-  const result = await ticketService.resetAllTickets();
+  const result = await ticketService.resetAllTickets(req.user);
 
   res.json({
     success: true,

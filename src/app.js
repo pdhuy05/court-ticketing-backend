@@ -8,6 +8,7 @@ const AuthRoute = require("./routers/auth.route");
 const AdminUserRoute = require("./routers/admin/user.route");
 const AdminDashboardRoute = require("./routers/admin/dashboard.route");
 const AdminTicketRoute = require("./routers/admin/ticket.route");
+const { notifySystemError } = require("./services/admin-notification.service");
 
 
 const app = express();
@@ -26,6 +27,15 @@ app.use("/api/admin/dashboard", AdminDashboardRoute);
 app.use("/api/admin/tickets", AdminTicketRoute);
 
 app.use((err, req, res, next) => {
+  notifySystemError({
+    title: 'API lỗi',
+    message: err.message || 'Internal Server Error',
+    source: `${req.method} ${req.originalUrl}`,
+    meta: {
+      statusCode: err.statusCode || 500
+    }
+  });
+
   res.status(err.statusCode || 500).json({
     success: false,
     message: err.message || 'Internal Server Error',
