@@ -3,6 +3,7 @@ const socketIo = require("socket.io");
 const config = require("./src/config/env");
 const app = require("./src/app");
 const database = require("./src/config/database");
+const ticketService = require("./src/services/ticket.service");
 
 database();
 
@@ -18,15 +19,50 @@ const io = socketIo(server, {
 io.on('connection', (socket) => {
   console.log(`\x1b[44m\x1b[37m \x1b[0m \x1b[36mSocket\x1b[0m: Client connected - ID: \x1b[33m${socket.id}\x1b[0m`);
 
+  const joinCounterRoom = (counterId) => {
+    if (!counterId) {
+      socket.emit('socket-error', {
+        message: 'Thiếu counterId để join room staff'
+      });
+      return;
+    }
+
+    const room = `counter-${counterId}`;
+    socket.join(room);
+    socket.emit('joined-counter-room', {
+      counterId: String(counterId),
+      room
+    });
+    console.log(`\x1b[42m\x1b[30m \x1b[0m \x1b[36mSocket\x1b[0m: Client \x1b[33m${socket.id}\x1b[0m joined \x1b[35mcounter ${counterId}\x1b[0m`);
+
+    ticketService.getStaffDisplay(counterId)
+      .then((data) => {
+        socket.emit('staff-display-updated', {
+          reason: 'joined-counter-room',
+          counterId: String(counterId),
+          updatedAt: new Date().toISOString(),
+          data
+        });
+      })
+      .catch((error) => {
+        socket.emit('socket-error', {
+          message: error.message || 'Không thể tải dữ liệu staff display',
+          counterId: String(counterId)
+        });
+      });
+  };
+
   socket.on('join-waiting-room', () => {
     socket.join('waiting-room');
     console.log(`\x1b[43m\x1b[30m \x1b[0m \x1b[36mSocket\x1b[0m: Client \x1b[33m${socket.id}\x1b[0m joined \x1b[35mwaiting-room\x1b[0m`);
   });
 
   socket.on('join-counter', (counterId) => {
-    const room = `counter-${counterId}`;
-    socket.join(room);
-    console.log(`\x1b[42m\x1b[30m \x1b[0m \x1b[36mSocket\x1b[0m: Client \x1b[33m${socket.id}\x1b[0m joined \x1b[35mcounter ${counterId}\x1b[0m`);
+    joinCounterRoom(counterId);
+  });
+
+  socket.on('join-staff-display', (payload) => {
+    joinCounterRoom(payload?.counterId || payload);
   });
 
   socket.on('join-admin-dashboard', () => {

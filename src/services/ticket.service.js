@@ -34,6 +34,28 @@ const getDateRange = (dateString) => {
     return { start, end, formattedDate };
 };
 
+const normalizeCounterId = (value) => {
+    if (!value) {
+        return null;
+    }
+
+    if (typeof value === 'string') {
+        return value;
+    }
+
+    if (value._id) {
+        return String(value._id);
+    }
+
+    return String(value);
+};
+
+const extractCounterIdsFromRelations = (relations = []) => {
+    return relations
+        .map((relation) => normalizeCounterId(relation.counterId))
+        .filter(Boolean);
+};
+
 const emitStaffDisplayUpdateForCounters = async (counterIds, reason, extra = {}) => {
     if (!global.io || !counterIds?.length) {
         return;
@@ -131,7 +153,7 @@ THỜI GIAN: ${new Date().toLocaleString('vi-VN')}`;
     }
 
     await emitStaffDisplayUpdateForCounters(
-        availableCounters.map((counter) => counter._id),
+        extractCounterIdsFromRelations(availableCounters),
         'ticket-created',
         {
             ticketId: ticket._id,

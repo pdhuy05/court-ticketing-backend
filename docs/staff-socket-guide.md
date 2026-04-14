@@ -1,41 +1,116 @@
 # Staff Socket Guide
 
-Tai lieu nay huong dan frontend ket noi socket de cap nhat realtime cho man hinh staff.
+Tai lieu nay huong dan frontend ket noi socket de hien thi man hinh staff theo thoi gian thuc.
 
 ## 1. Muc dich
 
-Khi co thay doi lien quan den quay cua staff, backend se day du lieu moi nhat cho frontend ma khong can refresh trang.
+Khi frontend staff ket noi dung room cua quay, backend se:
 
-Cac truong hop se duoc cap nhat realtime:
+- tra ngay snapshot staff display moi nhat
+- tiep tuc day realtime moi khi co thay doi
 
-- Tao ticket moi
-- Goi so tiep theo
-- Hoan thanh ticket
-- Skip ticket
-- Reset ticket theo ngay
-- Reset toan bo ticket
+Frontend khong can refresh tay de cap nhat danh sach cho.
 
-## 2. Dieu kien de su dung
+## 2. Backend da ho tro nhung gi
 
-Frontend staff can co:
+Backend hien tai da co:
 
-- `staff_token`
-- `counterId` cua quay duoc gan cho staff
+- room socket theo quay
+- event xac nhan join room thanh cong
+- event loi socket neu join sai du lieu
+- event snapshot tong cho man hinh staff
 
-## 3. API lay du lieu ban dau
+## 3. Event socket staff can biet
 
-Truoc khi nghe socket, frontend nen goi API:
+### Event frontend gui len
 
-```http
-GET /api/tickets/staff/display
-Authorization: Bearer <staff_token>
+#### Cach khuyen nghi
+
+```text
+join-staff-display
 ```
 
-Response API nay duoc dung de render giao dien lan dau.
+Payload:
 
-## 4. Ket noi socket
+```json
+{
+  "counterId": "67fa8c9f4d2a9e0012345672"
+}
+```
 
-### Ket noi toi server
+#### Cach cu van dung duoc
+
+```text
+join-counter
+```
+
+Payload:
+
+```json
+"67fa8c9f4d2a9e0012345672"
+```
+
+hoac:
+
+```json
+{
+  "counterId": "67fa8c9f4d2a9e0012345672"
+}
+```
+
+## 4. Event backend gui xuong
+
+### `joined-counter-room`
+
+Backend gui event nay ngay sau khi join room thanh cong.
+
+Payload:
+
+```json
+{
+  "counterId": "67fa8c9f4d2a9e0012345672",
+  "room": "counter-67fa8c9f4d2a9e0012345672"
+}
+```
+
+### `staff-display-updated`
+
+Day la event chinh de frontend render giao dien.
+
+Backend se gui:
+
+- ngay sau khi join room thanh cong
+- khi ticket moi duoc tao
+- khi goi so
+- khi hoan thanh ticket
+- khi skip ticket
+- khi reset theo ngay
+- khi reset toan bo
+
+### `socket-error`
+
+Event nay duoc gui neu thieu `counterId` hoac khong tai duoc du lieu staff display.
+
+Payload mau:
+
+```json
+{
+  "message": "Thiếu counterId để join room staff"
+}
+```
+
+## 5. Luong ket noi chuan cho FE
+
+### Buoc 1
+
+Login staff va lay:
+
+- `token`
+- `counterId`
+
+### Buoc 2
+
+Ket noi socket:
 
 ```js
 import { io } from 'socket.io-client';
@@ -45,52 +120,59 @@ const socket = io('http://localhost:3000', {
 });
 ```
 
-### Join room cua quay
+### Buoc 3
 
-Sau khi co `counterId`, frontend can join room:
-
-```js
-socket.emit('join-counter', counterId);
-```
-
-Vi du:
+Join room staff:
 
 ```js
-socket.emit('join-counter', '67fa8c9f4d2a9e0012345672');
-```
-
-Backend se dua socket vao room:
-
-```text
-counter-67fa8c9f4d2a9e0012345672
-```
-
-## 5. Event can nghe
-
-Frontend staff can nghe event:
-
-```text
-staff-display-updated
-```
-
-Vi du:
-
-```js
-socket.on('staff-display-updated', (payload) => {
-  console.log(payload);
-  setStaffDisplay(payload.data);
+socket.emit('join-staff-display', {
+  counterId: '67fa8c9f4d2a9e0012345672'
 });
 ```
 
-## 6. Cau truc payload
+### Buoc 4
+
+Nghe event:
+
+```js
+socket.on('joined-counter-room', (payload) => {
+  console.log('Joined:', payload);
+});
+
+socket.on('staff-display-updated', (payload) => {
+  console.log('Reason:', payload.reason);
+  setStaffDisplay(payload.data);
+});
+
+socket.on('socket-error', (payload) => {
+  console.error(payload);
+});
+```
+
+## 6. Co can goi API ban dau khong
+
+Khong bat buoc.
+
+Vi hien tai backend se gui ngay 1 snapshot `staff-display-updated` sau khi frontend join room thanh cong.
+
+Tuy nhien, neu frontend muon an toan hon, van co the goi:
+
+```http
+GET /api/tickets/staff/display
+Authorization: Bearer <staff_token>
+```
+
+Nhung voi flow moi, chi can socket cung da du dung.
+
+## 7. Payload cua `staff-display-updated`
 
 Payload tong quat:
 
 ```json
 {
-  "reason": "ticket-created",
+  "reason": "joined-counter-room",
   "counterId": "67fa8c9f4d2a9e0012345672",
-  "updatedAt": "2026-04-13T08:30:00.000Z",
+  "updatedAt": "2026-04-14T08:30:00.000Z",
   "data": {
     "counter": {
       "id": "67fa8c9f4d2a9e0012345672",
@@ -114,7 +196,7 @@ Payload tong quat:
       "phone": "0912345678",
       "status": "processing",
       "serviceName": "NOP DON",
-      "createdAt": "2026-04-13T08:29:00.000Z"
+      "createdAt": "2026-04-14T08:29:00.000Z"
     },
     "waitingTickets": [
       {
@@ -125,7 +207,7 @@ Payload tong quat:
         "phone": "0987654321",
         "status": "waiting",
         "serviceName": "NOP DON",
-        "createdAt": "2026-04-13T08:31:00.000Z"
+        "createdAt": "2026-04-14T08:31:00.000Z"
       }
     ],
     "totalWaiting": 1
@@ -135,14 +217,14 @@ Payload tong quat:
 }
 ```
 
-## 7. Y nghia tung field
+## 8. Y nghia tung field
 
 ### Root level
 
 - `reason`: ly do backend phat event
-- `counterId`: quay dang duoc cap nhat
-- `updatedAt`: thoi gian backend tao snapshot moi
-- `data`: snapshot moi nhat cua staff display
+- `counterId`: quay dang nhan du lieu
+- `updatedAt`: thoi diem tao snapshot moi
+- `data`: du lieu moi nhat de render
 - `ticketId`: co trong mot so event lien quan den ticket
 - `serviceId`: co trong event tao ticket moi
 
@@ -158,13 +240,13 @@ Thong tin quay hien tai:
 
 ### `data.services`
 
-Danh sach dich vu ma quay nay dang phuc vu.
+Danh sach dich vu ma quay dang phuc vu.
 
 ### `data.currentTicket`
 
 Ticket dang duoc xu ly tai quay.
 
-Neu chua co ticket dang xu ly thi gia tri se la:
+Neu chua co ticket dang xu ly thi:
 
 ```json
 null
@@ -172,16 +254,17 @@ null
 
 ### `data.waitingTickets`
 
-Danh sach ticket dang cho lien quan den cac dich vu ma quay co the xu ly.
+Danh sach ticket dang cho ma quay co the xu ly.
 
 ### `data.totalWaiting`
 
-Tong so ticket dang cho trong `waitingTickets`.
+Tong so ticket dang cho cua quay.
 
-## 8. Cac gia tri `reason`
+## 9. Cac gia tri `reason`
 
-Frontend co the gap cac gia tri sau:
+Frontend co the nhan duoc cac gia tri:
 
+- `joined-counter-room`
 - `ticket-created`
 - `ticket-called`
 - `ticket-completed`
@@ -189,146 +272,132 @@ Frontend co the gap cac gia tri sau:
 - `tickets-reset-day`
 - `tickets-reset-all`
 
-Frontend co the dung `reason` de hien toast hoac ghi log, nhung nen update giao dien bang `payload.data`.
+## 10. Quy tac render cho FE
 
-## 9. Flow frontend de xuat
+Frontend nen lam dung quy tac sau:
 
-### Buoc 1
+- moi lan nhan `staff-display-updated`
+- dung thang `payload.data`
+- ghi de state hien tai
 
-Dang nhap staff va lay `token`.
+Khong nen:
 
-### Buoc 2
+- tu cong tru local state
+- tu chen ticket vao danh sach
+- tu bo ticket ra khoi danh sach
 
-Lay `counterId` cua staff.
+Ly do:
 
-Co the lay tu:
+- backend da gui snapshot moi nhat
+- frontend se khong bi lech state
 
-- response login
-- API thong tin user
-- API `GET /api/tickets/my-counter`
-
-### Buoc 3
-
-Goi API ban dau:
-
-```http
-GET /api/tickets/staff/display
-Authorization: Bearer <staff_token>
-```
-
-### Buoc 4
-
-Render giao dien bang response tu API.
-
-### Buoc 5
-
-Mo socket va join room:
+## 11. Mau code FE dung ngay
 
 ```js
-socket.emit('join-counter', counterId);
-```
-
-### Buoc 6
-
-Lang nghe event:
-
-```js
-socket.on('staff-display-updated', (payload) => {
-  setStaffDisplay(payload.data);
-});
-```
-
-## 10. Mau React de dung ngay
-
-```js
-import { useEffect } from 'react';
 import { io } from 'socket.io-client';
 
 const socket = io('http://localhost:3000', {
   transports: ['websocket']
 });
 
-function useStaffDisplay({ token, counterId, setStaffDisplay }) {
-  useEffect(() => {
-    if (!token || !counterId) return;
+function connectStaffDisplay(counterId, setStaffDisplay) {
+  socket.on('connect', () => {
+    socket.emit('join-staff-display', { counterId });
+  });
 
-    fetch('http://localhost:3000/api/tickets/staff/display', {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
-      .then((res) => res.json())
-      .then((json) => {
-        if (json.success) {
-          setStaffDisplay(json.data);
-        }
-      });
+  socket.on('joined-counter-room', (payload) => {
+    console.log('Joined room:', payload);
+  });
 
-    socket.emit('join-counter', counterId);
+  socket.on('staff-display-updated', (payload) => {
+    console.log('Realtime reason:', payload.reason);
+    setStaffDisplay(payload.data);
+  });
 
-    const handleUpdate = (payload) => {
-      setStaffDisplay(payload.data);
-    };
-
-    socket.on('staff-display-updated', handleUpdate);
-
-    return () => {
-      socket.off('staff-display-updated', handleUpdate);
-    };
-  }, [token, counterId, setStaffDisplay]);
+  socket.on('socket-error', (payload) => {
+    console.error('Socket error:', payload);
+  });
 }
 ```
 
-## 11. Nguyen tac quan trong
+## 12. Neu frontend van muon goi API ban dau
 
-Frontend khong nen tu cong tru local state.
+Frontend van co the goi:
 
-Nen lam dung nhu sau:
+```http
+GET /api/tickets/staff/display
+Authorization: Bearer <staff_token>
+```
 
-- Lan dau lay state tu API
-- Moi lan co event realtime, ghi de state bang `payload.data`
+Sau do moi ket noi socket.
 
-Ly do:
+Nhung cach khuyen nghi hien tai van la:
 
-- Backend da gui snapshot moi nhat
-- Frontend khong bi lech state
-- De debug hon
+- connect socket
+- join room
+- nhan snapshot tu `staff-display-updated`
 
-## 12. Loi thuong gap
+## 13. Cac tinh huong backend se phat event
 
-### Khong nhan duoc event
+### Khi tao ticket moi
 
-Kiem tra:
-
-- Da `join-counter(counterId)` chua
-- `counterId` co dung khong
-- Socket co dang ket noi toi dung server khong
-- Backend da restart sau khi update code chua
-
-### Nhan event nhung UI khong doi
-
-Kiem tra:
-
-- Co dang dung `payload.data` de update state khong
-- Co bi ghi de boi request khac khong
-
-### Join sai quay
-
-Neu FE join sai `counterId`, socket van ket noi duoc nhung se khong nhan dung du lieu cua staff hien tai.
-
-## 13. Event khac staff co the gap
-
-Ngoai `staff-display-updated`, room `counter-<counterId>` hien tai van co the nhan:
-
-- `new-current-ticket`
-- `ticket-finished`
-- `ticket-skipped`
-- `counter-reset`
-
-Tuy nhien, de don gian frontend staff nen uu tien dung:
+Neu ticket thuoc dich vu ma quay staff co the xu ly, room cua quay do se nhan:
 
 ```text
 staff-display-updated
 ```
 
-vi event nay da chua snapshot day du va san sang de render.
+voi `reason = "ticket-created"`
+
+### Khi goi so
+
+Quay dang goi se nhan:
+
+- `new-current-ticket`
+- `staff-display-updated`
+
+### Khi hoan thanh ticket
+
+Quay dang xu ly se nhan:
+
+- `ticket-finished`
+- `staff-display-updated`
+
+### Khi skip ticket
+
+Quay hien tai va cac quay lien quan den dich vu do se nhan:
+
+```text
+staff-display-updated
+```
+
+### Khi reset ticket
+
+Cac quay bi anh huong se nhan:
+
+```text
+staff-display-updated
+```
+
+## 14. Checklist debug nhanh
+
+Neu FE bao khong nhan duoc realtime, check theo thu tu nay:
+
+1. Backend da restart chua
+2. Socket co connect thanh cong chua
+3. Co emit `join-staff-display` chua
+4. Co nhan `joined-counter-room` khong
+5. `counterId` co dung voi quay staff khong
+6. Co nhan `socket-error` khong
+7. Sau khi tao ticket moi, co nhan `staff-display-updated` khong
+
+## 15. Ket luan
+
+Frontend staff hien tai co the chi can:
+
+1. connect socket
+2. `emit('join-staff-display', { counterId })`
+3. nghe `staff-display-updated`
+4. render bang `payload.data`
+
+Day la cach don gian nhat va dung voi backend hien tai.
