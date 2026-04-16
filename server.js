@@ -55,6 +55,21 @@ io.on('connection', (socket) => {
   socket.on('join-waiting-room', () => {
     socket.join('waiting-room');
     console.log(`\x1b[43m\x1b[30m \x1b[0m \x1b[36mSocket\x1b[0m: Client \x1b[33m${socket.id}\x1b[0m joined \x1b[35mwaiting-room\x1b[0m`);
+
+    ticketService.getWaitingRoomData()
+      .then((data) => {
+        socket.emit('waiting-room-snapshot', {
+          updatedAt: new Date().toISOString(),
+          totalWaiting: data.tickets.length,
+          tickets: data.tickets,
+          lastIssuedByCounter: data.lastIssuedByCounter
+        });
+      })
+      .catch((error) => {
+        socket.emit('socket-error', {
+          message: error.message || 'Không thể tải dữ liệu màn hình chờ'
+        });
+      });
   });
 
   socket.on('join-counter', (counterId) => {

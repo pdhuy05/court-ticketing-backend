@@ -293,6 +293,7 @@ THỜI GIAN: ${new Date().toLocaleString('vi-VN')}`;
             status: TicketStatus.WAITING,
             isRecall: false
         });
+        const lastIssuedByCounter = await getLastIssuedByCounter();
 
         global.io.to('waiting-room').emit('new-ticket', {
             ticket: {
@@ -306,7 +307,8 @@ THỜI GIAN: ${new Date().toLocaleString('vi-VN')}`;
                 status: ticket.status,
                 qrCode: ticket.qrCode
             },
-            totalWaiting: waitingCount
+            totalWaiting: waitingCount,
+            lastIssuedByCounter
         });
 
         console.log(`\x1b[36m Đã phát hành vé mới: ${displayNumber} - ${service.name}\x1b[0m`);
@@ -349,6 +351,54 @@ const getAllWaiting = async () => {
         formattedNumber: buildTicketPresentation(ticket).formattedNumber,
         displayNumber: buildTicketPresentation(ticket).displayNumber
     }));
+};
+
+const getLastIssuedByCounter = async () => {
+    const counters = await Counter.find({ isActive: true })
+        .select('code name number isActive')
+        .sort({ number: 1 })
+        .lean();
+
+    if (counters.length === 0) {
+        return [];
+    }
+
+    const sequences = await CounterSequence.find({
+        counterId: { $in: counters.map((counter) => counter._id) }
+    })
+        .select('counterId lastNumber')
+        .lean();
+
+    const sequenceMap = new Map(
+        sequences.map((sequence) => [String(sequence.counterId), sequence.lastNumber || 0])
+    );
+
+    return counters.map((counter) => {
+        const lastNumber = sequenceMap.get(String(counter._id)) || 0;
+
+        return {
+            counterId: counter._id,
+            counterCode: counter.code,
+            counterName: counter.name,
+            counterNumber: counter.number,
+            lastNumber,
+            lastDisplayNumber: lastNumber > 0
+                ? formatDisplayNumber(counter.number, lastNumber)
+                : null
+        };
+    });
+};
+
+const getWaitingRoomData = async () => {
+    const [tickets, lastIssuedByCounter] = await Promise.all([
+        getAllWaiting(),
+        getLastIssuedByCounter()
+    ]);
+
+    return {
+        tickets,
+        lastIssuedByCounter
+    };
 };
 
 const buildResetBackupPayload = async ({ type, label, tickets, counterIds, actor, criteria }) => {
@@ -446,11 +496,13 @@ const resetTicketsByDate = async (dateString, actor) => {
     });
 
     await resetCounterSequences(affectedCounterIds);
+    const lastIssuedByCounter = await getLastIssuedByCounter();
 
     if (global.io) {
         global.io.to('waiting-room').emit('tickets-reset-day', {
             date: formattedDate,
-            deletedCount: ticketIds.length
+            deletedCount: ticketIds.length,
+            lastIssuedByCounter
         });
 
         counterIds.forEach((counterId) => {
@@ -503,14 +555,17 @@ const resetAllTickets = async (actor) => {
     await Counter.updateMany({}, { currentTicketId: null });
     await Ticket.deleteMany({});
     await resetCounterSequences();
+    const lastIssuedByCounter = await getLastIssuedByCounter();
 
     if (global.io) {
         global.io.to('waiting-room').emit('tickets-reset-all', {
-            deletedCount
+            deletedCount,
+            lastIssuedByCounter
         });
 
         global.io.emit('tickets-reset-all', {
-            deletedCount
+            deletedCount,
+            lastIssuedByCounter
         });
     }
 
@@ -1041,6 +1096,8 @@ const getStaffDisplay = async (counterId) => {
 module.exports = {
     createTicket,
     getAllWaiting,
+    getLastIssuedByCounter,
+    getWaitingRoomData,
     getRecallList,
     resetTicketsByDate,
     resetAllTickets,

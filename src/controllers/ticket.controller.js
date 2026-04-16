@@ -114,12 +114,13 @@ exports.create = async (req, res) => {
 };
 
 exports.getAllWaiting = async (req, res) => {
-    const tickets = await ticketService.getAllWaiting();
+    const { tickets, lastIssuedByCounter } = await ticketService.getWaitingRoomData();
 
     res.json({
         success: true,
         count: tickets.length,
-        data: tickets
+        data: tickets,
+        lastIssuedByCounter
     });
 };
 
