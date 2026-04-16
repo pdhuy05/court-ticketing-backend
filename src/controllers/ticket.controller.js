@@ -134,7 +134,8 @@ exports.callNext = async (req, res) => {
         }
 
         const { nextTicket, counter } = await ticketService.callNext(
-            req.body.counterId
+            req.body.counterId,
+            req.user?._id
         );
 
         logger.success(`Đã gọi số ${nextTicket.formattedNumber} đến ${counter.name}`);
@@ -157,7 +158,11 @@ exports.callNext = async (req, res) => {
 };
 
 exports.complete = async (req, res) => {
-    const ticket = await ticketService.completeTicket(req.params.id);
+    const ticket = await ticketService.completeTicket(
+        req.params.id,
+        req.user?.counterId,
+        req.user?._id
+    );
 
     res.json({
         success: true,
@@ -171,7 +176,7 @@ exports.skip = async (req, res) => {
     const { id } = req.params;
     const counterId = req.user?.counterId;
 
-    const ticket = await ticketService.skipTicket(id, reason, counterId);
+    const ticket = await ticketService.skipTicket(id, reason, counterId, req.user?._id);
 
     logger.warning(`Đã bỏ qua số ${ticket.formattedNumber} - Lý do: ${reason || 'Khách vắng mặt '}`);
 
@@ -192,7 +197,7 @@ exports.getRecallList = async (req, res) => {
         });
     }
 
-    const recallList = await ticketService.getRecallList(counterId);
+    const recallList = await ticketService.getRecallList(counterId, req.user?._id);
 
     res.json({
         success: true,
@@ -211,7 +216,7 @@ exports.recallTicket = async (req, res) => {
         });
     }
 
-    const ticket = await ticketService.recallTicket(req.params.id, counterId);
+    const ticket = await ticketService.recallTicket(req.params.id, counterId, req.user?._id);
 
     res.json({
         success: true,
@@ -233,6 +238,7 @@ exports.cancelRecallTicket = async (req, res) => {
     const ticket = await ticketService.cancelRecallTicket(
         req.params.id,
         counterId,
+        req.user?._id,
         req.body?.reason
     );
 
@@ -264,7 +270,7 @@ exports.getMyCounter = async (req, res, next) => {
         });
     }
     
-    const data = await ticketService.getMyCounter(counterId);
+    const data = await ticketService.getMyCounter(counterId, req.user?._id);
     
     res.json({
         success: true,
@@ -286,7 +292,7 @@ exports.getStaffDisplay = async (req, res, next) => {
         });
     }
     
-    const data = await ticketService.getStaffDisplay(counterId);
+    const data = await ticketService.getStaffDisplay(counterId, req.user?._id);
     
     res.json({
         success: true,

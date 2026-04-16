@@ -1,6 +1,10 @@
 const User = require('../models/user.model');
 const ApiError = require('../utils/ApiError');
 const { emitDashboardUpdateSafe } = require('./dashboard.service');
+const {
+  getStaffServiceSummary,
+  assignServicesToStaff
+} = require('./staff-permission.service');
 
 const WEAK_PASSWORD_PATTERNS = ['123456', 'password'];
 
@@ -17,9 +21,29 @@ const ensureStrongPassword = (username, password) => {
   }
 };
 
+const enrichStaff = async (staff) => {
+  if (!staff) {
+    return staff;
+  }
+
+  const staffObject = typeof staff.toObject === 'function'
+    ? staff.toObject()
+    : { ...staff };
+
+  const serviceSummary = await getStaffServiceSummary(staffObject._id);
+
+  return {
+    ...staffObject,
+    serviceRestrictionConfigured: serviceSummary.serviceRestrictionConfigured,
+    availableServices: serviceSummary.availableServices,
+    assignedServices: serviceSummary.assignedServices,
+    effectiveServices: serviceSummary.effectiveServices
+  };
+};
+
 const getAllStaff = async () => {
   const staffs = await User.find({ role: 'staff' }).populate('counterId', 'name number');
-  return staffs;
+  return Promise.all(staffs.map(enrichStaff));
 };
 
 const getStaffById = async (id) => {
@@ -27,7 +51,7 @@ const getStaffById = async (id) => {
   if (!staff) {
     throw new ApiError(404, 'Không tìm thấy nhân viên');
   }
-  return staff;
+  return enrichStaff(staff);
 };
 
 const createStaff = async (data) => {
@@ -51,7 +75,7 @@ const createStaff = async (data) => {
 
   await emitDashboardUpdateSafe('staff-created');
 
-  return staff;
+  return enrichStaff(staff);
 };
 
 const updateStaff = async (id, data) => {
@@ -66,7 +90,7 @@ const updateStaff = async (id, data) => {
 
   await emitDashboardUpdateSafe('staff-updated');
 
-  return staff;
+  return enrichStaff(staff);
 };
 
 const deleteStaff = async (id) => {
@@ -92,7 +116,25 @@ const assignCounter = async (id, counterId) => {
 
   await emitDashboardUpdateSafe('staff-counter-assigned');
 
-  return staff;
+  return enrichStaff(staff);
+};
+
+const getStaffServices = async (id) => {
+  return getStaffServiceSummary(id);
+};
+
+const assignServices = async (id, serviceIds = []) => {
+  const serviceSummary = await assignServicesToStaff(id, serviceIds);
+
+  await emitDashboardUpdateSafe('staff-services-assigned');
+
+  return {
+    staffId: id,
+    serviceRestrictionConfigured: serviceSummary.serviceRestrictionConfigured,
+    availableServices: serviceSummary.availableServices,
+    assignedServices: serviceSummary.assignedServices,
+    effectiveServices: serviceSummary.allowedServices
+  };
 };
 
 const toggleActive = async (id) => {
@@ -105,7 +147,7 @@ const toggleActive = async (id) => {
 
   await emitDashboardUpdateSafe('staff-toggled');
 
-  return staff;
+  return enrichStaff(staff);
 };
 
 const removeCounter = async (id) => {
@@ -121,7 +163,7 @@ const removeCounter = async (id) => {
 
   await emitDashboardUpdateSafe('staff-counter-removed');
 
-  return staff;
+  return enrichStaff(staff);
 };
 
 module.exports = {
@@ -131,6 +173,8 @@ module.exports = {
   updateStaff,
   deleteStaff,
   assignCounter,
+  getStaffServices,
+  assignServices,
   toggleActive,
   removeCounter
 };

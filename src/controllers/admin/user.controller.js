@@ -35,6 +35,20 @@ exports.assignCounter = async (req, res) => {
   res.json({ success: true, data: staff, message: 'Đã gán quầy thành công' });
 };
 
+exports.getStaffServices = async (req, res) => {
+  const data = await staffService.getStaffServices(req.params.id);
+  res.json({ success: true, data });
+};
+
+exports.assignServices = async (req, res) => {
+  const data = await staffService.assignServices(req.params.id, req.body.serviceIds || []);
+  res.json({
+    success: true,
+    data,
+    message: 'Đã cập nhật dịch vụ cho nhân viên thành công'
+  });
+};
+
 exports.toggleActive = async (req, res) => {
   const staff = await staffService.toggleActive(req.params.id);
   res.json({

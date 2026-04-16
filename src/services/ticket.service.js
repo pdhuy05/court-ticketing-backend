@@ -1,6 +1,7 @@
 const Ticket = require('../models/ticket.model');
 const Service = require('../models/service.model');
 const Counter = require('../models/counter.model');
+const User = require('../models/user.model');
 const ServiceCounter = require('../models/serviceCounter.model');
 const CounterSequence = require('../models/counterSequence.model');
 const { TicketStatus } = require('../constants/enums');
@@ -8,6 +9,10 @@ const ApiError = require('../utils/ApiError');
 const QRCode = require('qrcode');
 const { emitDashboardUpdateSafe } = require('./dashboard.service');
 const { writeBackup } = require('./ticket-backup.service');
+const {
+    getStaffServiceAccess,
+    assertStaffCanHandleService
+} = require('./staff-permission.service');
 
 const parseTargetDate = (dateString) => {
     if (!dateString) {
@@ -182,15 +187,34 @@ const emitStaffDisplayUpdateForCounters = async (counterIds, reason, extra = {})
     await Promise.all(
         uniqueCounterIds.map(async (counterId) => {
             try {
-                const data = await getStaffDisplay(counterId);
-
                 global.io.to(`counter-${counterId}`).emit('staff-display-updated', {
                     reason,
                     counterId,
                     updatedAt: new Date().toISOString(),
-                    data,
+                    data: await getStaffDisplay(counterId),
                     ...extra
                 });
+
+                const staffs = await User.find({
+                    role: 'staff',
+                    isActive: true,
+                    counterId
+                }).select('_id');
+
+                await Promise.all(
+                    staffs.map(async (staff) => {
+                        const staffId = String(staff._id);
+
+                        global.io.to(`staff-display-${staffId}`).emit('staff-display-updated', {
+                            reason,
+                            counterId,
+                            staffId,
+                            updatedAt: new Date().toISOString(),
+                            data: await getStaffDisplay(counterId, staffId),
+                            ...extra
+                        });
+                    })
+                );
             } catch (error) {
                 console.error(`Không thể cập nhật staff display cho quầy ${counterId}: ${error.message}`);
             }
@@ -205,15 +229,29 @@ const getCounterServiceIds = async (counterId) => {
     }).distinct('serviceId');
 };
 
-const getRecallList = async (counterId) => {
-    const serviceIds = await getCounterServiceIds(counterId);
-    if (serviceIds.length === 0) {
+const getServiceAccessScope = async (counterId, staffId = null) => {
+    return getStaffServiceAccess(staffId, counterId);
+};
+
+const ensureStaffHasAccessibleServices = (accessScope) => {
+    if (accessScope.serviceRestrictionConfigured && accessScope.allowedServiceIds.length === 0) {
+        throw new ApiError(403, 'Nhân viên chưa được gán dịch vụ nào tại quầy hiện tại');
+    }
+};
+
+const canAccessService = (serviceIds, serviceId) => serviceIds.includes(String(serviceId));
+
+const getRecallList = async (counterId, staffId = null) => {
+    const accessScope = await getServiceAccessScope(counterId, staffId);
+    ensureStaffHasAccessibleServices(accessScope);
+
+    if (accessScope.allowedServiceIds.length === 0) {
         return [];
     }
 
     const recallTickets = await Ticket.find({
         recallCounterId: counterId,
-        serviceId: { $in: serviceIds },
+        serviceId: { $in: accessScope.allowedServiceIds },
         status: TicketStatus.WAITING,
         isRecall: true
     })
@@ -581,7 +619,7 @@ const resetAllTickets = async (actor) => {
     };
 };
 
-const callNext = async (counterId) => {
+const callNext = async (counterId, staffId = null) => {
     const counter = await Counter.findById(counterId);
     if (!counter?.isActive) throw new ApiError(400, 'Quầy không tồn tại hoặc không hoạt động');
 
@@ -594,17 +632,17 @@ const callNext = async (counterId) => {
         throw new ApiError(400, `Quầy đang xử lý ticket ${formatDisplayNumber(counter.number, currentTicket.number)}. Vui lòng hoàn thành hoặc bỏ qua trước khi gọi số mới.`);
     }
 
-    const serviceIds = await ServiceCounter.find({ counterId, isActive: true })
-        .distinct('serviceId');
-    
-    if (serviceIds.length === 0) {
+    const accessScope = await getServiceAccessScope(counterId, staffId);
+    ensureStaffHasAccessibleServices(accessScope);
+
+    if (accessScope.allowedServiceIds.length === 0) {
         throw new ApiError(400, 'Quầy chưa được gán dịch vụ');
     }
 
     const nextTicket = await Ticket.findOneAndUpdate(
         {
             queueCounterId: counterId,
-            serviceId: { $in: serviceIds },
+            serviceId: { $in: accessScope.allowedServiceIds },
             status: TicketStatus.WAITING,
             counterId: null,
             isRecall: false
@@ -680,7 +718,7 @@ const callNext = async (counterId) => {
     };
 };
 
-const recallTicket = async (ticketId, counterId) => {
+const recallTicket = async (ticketId, counterId, staffId = null) => {
     const counter = await Counter.findById(counterId);
     if (!counter?.isActive) {
         throw new ApiError(400, 'Quầy không tồn tại hoặc không hoạt động');
@@ -695,14 +733,15 @@ const recallTicket = async (ticketId, counterId) => {
         throw new ApiError(400, `Quầy đang xử lý ticket ${formatDisplayNumber(counter.number, currentTicket.number)}. Vui lòng hoàn thành hoặc bỏ qua trước khi gọi lại.`);
     }
 
-    const serviceIds = await getCounterServiceIds(counterId);
+    const accessScope = await getServiceAccessScope(counterId, staffId);
+    ensureStaffHasAccessibleServices(accessScope);
 
     const ticket = await Ticket.findOne({
         _id: ticketId,
         status: TicketStatus.WAITING,
         isRecall: true,
         recallCounterId: counterId,
-        serviceId: { $in: serviceIds }
+        serviceId: { $in: accessScope.allowedServiceIds }
     })
         .populate('serviceId', 'name code')
         .populate('queueCounterId', 'number');
@@ -769,15 +808,16 @@ const recallTicket = async (ticketId, counterId) => {
     };
 };
 
-const cancelRecallTicket = async (ticketId, counterId, reason = '') => {
-    const serviceIds = await getCounterServiceIds(counterId);
+const cancelRecallTicket = async (ticketId, counterId, staffId = null, reason = '') => {
+    const accessScope = await getServiceAccessScope(counterId, staffId);
+    ensureStaffHasAccessibleServices(accessScope);
 
     const ticket = await Ticket.findOne({
         _id: ticketId,
         status: TicketStatus.WAITING,
         isRecall: true,
         recallCounterId: counterId,
-        serviceId: { $in: serviceIds }
+        serviceId: { $in: accessScope.allowedServiceIds }
     })
         .populate('serviceId', 'name code')
         .populate('queueCounterId', 'number');
@@ -829,12 +869,20 @@ const cancelRecallTicket = async (ticketId, counterId, reason = '') => {
     };
 };
 
-const completeTicket = async (id) => {
+const completeTicket = async (id, counterId = null, staffId = null) => {
     const ticket = await Ticket.findById(id)
         .populate('serviceId', 'name code')
         .populate('queueCounterId', 'number');
     if (!ticket) throw new ApiError(404, 'Không tìm thấy ticket');
     if (ticket.status !== TicketStatus.PROCESSING) throw new ApiError(400, 'Ticket không ở trạng thái đang xử lý');
+
+    if (counterId && String(ticket.counterId) !== String(counterId)) {
+        throw new ApiError(403, 'Bạn chỉ được phép hoàn thành ticket của quầy được gán');
+    }
+
+    if (staffId && counterId) {
+        await assertStaffCanHandleService(staffId, counterId, ticket.serviceId?._id || ticket.serviceId);
+    }
 
     ticket.status = TicketStatus.COMPLETED;
     ticket.completedAt = new Date();
@@ -885,7 +933,7 @@ const completeTicket = async (id) => {
     };
 };
 
-const skipTicket = async (id, reason = '', counterId) => {
+const skipTicket = async (id, reason = '', counterId, staffId = null) => {
     const ticket = await Ticket.findById(id)
         .populate('serviceId', 'name code')
         .populate('queueCounterId', 'number');
@@ -895,6 +943,14 @@ const skipTicket = async (id, reason = '', counterId) => {
     }
 
     const currentCounterId = counterId || ticket.counterId;
+
+    if (counterId && String(ticket.counterId) !== String(counterId)) {
+        throw new ApiError(403, 'Bạn chỉ được phép bỏ qua ticket của quầy được gán');
+    }
+
+    if (staffId && currentCounterId) {
+        await assertStaffCanHandleService(staffId, currentCounterId, ticket.serviceId?._id || ticket.serviceId);
+    }
 
     ticket.skipCount = (ticket.skipCount || 0) + 1;
     ticket.weight = 0;
@@ -1005,22 +1061,24 @@ const getCounterDisplay = async (counterId) => {
     };
 };
 
-const getMyCounter = async (counterId) => {
+const getMyCounter = async (counterId, staffId = null) => {
     const counter = await Counter.findById(counterId);
     if (!counter) {
         throw new ApiError(404, 'Không tìm thấy quầy của bạn');
     }
 
-    const serviceRelations = await ServiceCounter.find({ 
-        counterId, 
-        isActive: true 
-    }).populate('serviceId', 'name code');
+    const accessScope = await getServiceAccessScope(counterId, staffId);
+    ensureStaffHasAccessibleServices(accessScope);
 
     let currentTicket = null;
     if (counter.currentTicketId) {
         currentTicket = await Ticket.findById(counter.currentTicketId)
             .populate('serviceId', 'name code')
             .populate('queueCounterId', 'number');
+    }
+
+    if (currentTicket && !canAccessService(accessScope.allowedServiceIds, currentTicket.serviceId?._id || currentTicket.serviceId)) {
+        currentTicket = null;
     }
 
     return {
@@ -1031,31 +1089,26 @@ const getMyCounter = async (counterId) => {
             processedCount: counter.processedCount,
             isActive: counter.isActive
         },
-        services: serviceRelations.map(rel => ({
-            id: rel.serviceId._id,
-            name: rel.serviceId.name,
-            code: rel.serviceId.code
-        })),
+        services: accessScope.allowedServices,
+        availableServices: accessScope.availableServices,
+        assignedServices: accessScope.assignedServices,
+        serviceRestrictionConfigured: accessScope.serviceRestrictionConfigured,
         currentTicket: currentTicket
             ? buildTicketPresentation(currentTicket, counter)
             : null
     };
 };
 
-const getStaffDisplay = async (counterId) => {
+const getStaffDisplay = async (counterId, staffId = null) => {
     const counter = await Counter.findById(counterId);
     if (!counter) throw new ApiError(404, 'Không tìm thấy quầy');
 
-    const serviceRelations = await ServiceCounter.find({
-        counterId,
-        isActive: true
-    }).populate('serviceId', 'name code');
-
-    const serviceIds = serviceRelations.map(rel => rel.serviceId._id);
+    const accessScope = await getServiceAccessScope(counterId, staffId);
+    ensureStaffHasAccessibleServices(accessScope);
 
     const waitingTickets = await Ticket.find({
         queueCounterId: counterId,
-        serviceId: { $in: serviceIds },
+        serviceId: { $in: accessScope.allowedServiceIds },
         status: TicketStatus.WAITING,
         isRecall: false
     })
@@ -1071,6 +1124,10 @@ const getStaffDisplay = async (counterId) => {
             .populate('queueCounterId', 'number');
     }
 
+    if (currentTicket && !canAccessService(accessScope.allowedServiceIds, currentTicket.serviceId?._id || currentTicket.serviceId)) {
+        currentTicket = null;
+    }
+
     const formatTicket = (ticket) => buildTicketPresentation(ticket, counter);
 
     return {
@@ -1081,14 +1138,13 @@ const getStaffDisplay = async (counterId) => {
             isActive: counter.isActive,
             processedCount: counter.processedCount
         },
-        services: serviceRelations.map(rel => ({
-            id: rel.serviceId._id,
-            name: rel.serviceId.name,
-            code: rel.serviceId.code
-        })),
+        services: accessScope.allowedServices,
+        availableServices: accessScope.availableServices,
+        assignedServices: accessScope.assignedServices,
+        serviceRestrictionConfigured: accessScope.serviceRestrictionConfigured,
         currentTicket: currentTicket ? formatTicket(currentTicket) : null,
         waitingTickets: waitingTickets.map(formatTicket),
-        recallTickets: await getRecallList(counterId),
+        recallTickets: await getRecallList(counterId, staffId),
         totalWaiting: waitingTickets.length
     };
 };

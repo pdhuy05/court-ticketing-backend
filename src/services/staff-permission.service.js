@@ -1,0 +1,169 @@
+const ApiError = require('../utils/ApiError');
+const ServiceCounter = require('../models/serviceCounter.model');
+const StaffService = require('../models/staffService.model');
+const User = require('../models/user.model');
+
+const normalizeId = (value) => String(value?._id || value);
+
+const getCounterServiceRelations = async (counterId) => {
+  if (!counterId) {
+    return [];
+  }
+
+  return ServiceCounter.find({
+    counterId,
+    isActive: true
+  }).populate('serviceId', 'name code icon displayOrder isActive');
+};
+
+const buildServiceSnapshot = (service) => ({
+  id: service._id,
+  _id: service._id,
+  code: service.code,
+  name: service.name,
+  icon: service.icon,
+  displayOrder: service.displayOrder,
+  isActive: service.isActive
+});
+
+const getStaffServiceAccess = async (staffId, counterId) => {
+  const [counterRelations, assignments] = await Promise.all([
+    getCounterServiceRelations(counterId),
+    staffId
+      ? StaffService.find({ staffId }).populate('serviceId', 'name code icon displayOrder isActive')
+      : []
+  ]);
+
+  const availableServices = counterRelations
+    .map((relation) => relation.serviceId)
+    .filter(Boolean)
+    .map(buildServiceSnapshot);
+
+  const availableServiceIds = availableServices.map((service) => String(service.id));
+  const availableServiceIdSet = new Set(availableServiceIds);
+  const serviceRestrictionConfigured = Boolean(staffId) && assignments.length > 0;
+
+  const assignedServices = assignments
+    .filter((assignment) => assignment.isActive && availableServiceIdSet.has(normalizeId(assignment.serviceId)))
+    .map((assignment) => buildServiceSnapshot(assignment.serviceId));
+
+  const effectiveServices = serviceRestrictionConfigured
+    ? assignedServices
+    : availableServices;
+
+  return {
+    availableServices,
+    availableServiceIds,
+    assignedServices,
+    allowedServices: effectiveServices,
+    allowedServiceIds: effectiveServices.map((service) => String(service.id)),
+    serviceRestrictionConfigured
+  };
+};
+
+const ensureStaffAssignable = async (staffId) => {
+  const staff = await User.findOne({ _id: staffId, role: 'staff' }).select('counterId fullName username');
+
+  if (!staff) {
+    throw new ApiError(404, 'Không tìm thấy nhân viên');
+  }
+
+  return staff;
+};
+
+const assignServicesToStaff = async (staffId, serviceIds = []) => {
+  const normalizedServiceIds = [...new Set((serviceIds || []).map(String))];
+  const staff = await ensureStaffAssignable(staffId);
+
+  if (!staff.counterId && normalizedServiceIds.length > 0) {
+    throw new ApiError(400, 'Nhân viên chưa được gán quầy nên chưa thể gán dịch vụ');
+  }
+
+  const counterAccess = await getStaffServiceAccess(null, staff.counterId);
+  const availableServiceIdSet = new Set(counterAccess.availableServiceIds);
+  const invalidServiceIds = normalizedServiceIds.filter((serviceId) => !availableServiceIdSet.has(serviceId));
+
+  if (invalidServiceIds.length > 0) {
+    throw new ApiError(400, 'Chỉ được gán các dịch vụ mà quầy của nhân viên đang phục vụ');
+  }
+
+  const existingAssignments = await StaffService.find({ staffId });
+  const existingMap = new Map(
+    existingAssignments.map((assignment) => [String(assignment.serviceId), assignment])
+  );
+
+  if (normalizedServiceIds.length === 0 && existingAssignments.length === 0) {
+    await Promise.all(
+      counterAccess.availableServiceIds.map((serviceId) => StaffService.create({
+        staffId,
+        serviceId,
+        isActive: false
+      }))
+    );
+
+    return getStaffServiceAccess(staffId, staff.counterId);
+  }
+
+  await Promise.all(
+    normalizedServiceIds.map(async (serviceId) => {
+      const existing = existingMap.get(serviceId);
+
+      if (existing) {
+        if (!existing.isActive) {
+          existing.isActive = true;
+          await existing.save();
+        }
+        return;
+      }
+
+      await StaffService.create({
+        staffId,
+        serviceId,
+        isActive: true
+      });
+    })
+  );
+
+  await Promise.all(
+    existingAssignments
+      .filter((assignment) => !normalizedServiceIds.includes(String(assignment.serviceId)) && assignment.isActive)
+      .map(async (assignment) => {
+        assignment.isActive = false;
+        await assignment.save();
+      })
+  );
+
+  return getStaffServiceAccess(staffId, staff.counterId);
+};
+
+const getStaffServiceSummary = async (staffId) => {
+  const staff = await ensureStaffAssignable(staffId);
+  const access = await getStaffServiceAccess(staffId, staff.counterId);
+
+  return {
+    staffId: staff._id,
+    counterId: staff.counterId,
+    serviceRestrictionConfigured: access.serviceRestrictionConfigured,
+    availableServices: access.availableServices,
+    assignedServices: access.assignedServices,
+    effectiveServices: access.allowedServices
+  };
+};
+
+const assertStaffCanHandleService = async (staffId, counterId, serviceId) => {
+  const access = await getStaffServiceAccess(staffId, counterId);
+
+  if (!access.allowedServiceIds.includes(String(serviceId))) {
+    throw new ApiError(403, 'Nhân viên không được phép xử lý dịch vụ này tại quầy hiện tại');
+  }
+
+  return access;
+};
+
+module.exports = {
+  getCounterServiceRelations,
+  getStaffServiceAccess,
+  assignServicesToStaff,
+  getStaffServiceSummary,
+  assertStaffCanHandleService
+};

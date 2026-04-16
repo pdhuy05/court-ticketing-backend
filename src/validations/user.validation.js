@@ -89,9 +89,22 @@ const assignCounterSchema = Joi.object({
   })
 });
 
+const assignStaffServicesSchema = Joi.object({
+  serviceIds: Joi.array()
+    .items(objectId)
+    .required()
+    .unique()
+    .messages({
+      'any.required': 'Danh sách dịch vụ là bắt buộc',
+      'array.base': 'serviceIds phải là một mảng',
+      'string.pattern.base': 'ID dịch vụ không hợp lệ'
+    })
+});
+
 module.exports = {
   staffIdParamSchema: idParamSchema,
   createStaffSchema,
   updateStaffSchema,
-  assignCounterSchema
+  assignCounterSchema,
+  assignStaffServicesSchema
 };

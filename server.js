@@ -4,6 +4,7 @@ const config = require("./src/config/env");
 const app = require("./src/app");
 const database = require("./src/config/database");
 const ticketService = require("./src/services/ticket.service");
+const User = require("./src/models/user.model");
 
 database();
 
@@ -52,6 +53,68 @@ io.on('connection', (socket) => {
       });
   };
 
+  const joinStaffDisplayRoom = async (payload) => {
+    const staffId = payload?.staffId;
+    const requestedCounterId = payload?.counterId || payload;
+
+    if (!staffId) {
+      joinCounterRoom(requestedCounterId);
+      return;
+    }
+
+    const staff = await User.findOne({
+      _id: staffId,
+      role: 'staff',
+      isActive: true
+    }).select('counterId');
+
+    if (!staff?.counterId) {
+      socket.emit('socket-error', {
+        message: 'Nhân viên chưa được gán quầy hoặc không tồn tại',
+        staffId: String(staffId)
+      });
+      return;
+    }
+
+    const counterId = String(staff.counterId);
+
+    if (requestedCounterId && String(requestedCounterId) !== counterId) {
+      socket.emit('socket-error', {
+        message: 'counterId không khớp với quầy của nhân viên',
+        staffId: String(staffId),
+        counterId
+      });
+      return;
+    }
+
+    const room = `staff-display-${staffId}`;
+    socket.join(room);
+    socket.emit('joined-counter-room', {
+      counterId,
+      staffId: String(staffId),
+      room
+    });
+    console.log(`\x1b[42m\x1b[30m \x1b[0m \x1b[36mSocket\x1b[0m: Client \x1b[33m${socket.id}\x1b[0m joined \x1b[35mstaff ${staffId}\x1b[0m`);
+
+    ticketService.getStaffDisplay(counterId, staffId)
+      .then((data) => {
+        socket.emit('staff-display-updated', {
+          reason: 'joined-counter-room',
+          counterId,
+          staffId: String(staffId),
+          updatedAt: new Date().toISOString(),
+          data
+        });
+      })
+      .catch((error) => {
+        socket.emit('socket-error', {
+          message: error.message || 'Không thể tải dữ liệu staff display',
+          counterId,
+          staffId: String(staffId)
+        });
+      });
+  };
+
   socket.on('join-waiting-room', () => {
     socket.join('waiting-room');
     console.log(`\x1b[43m\x1b[30m \x1b[0m \x1b[36mSocket\x1b[0m: Client \x1b[33m${socket.id}\x1b[0m joined \x1b[35mwaiting-room\x1b[0m`);
@@ -77,7 +140,11 @@ io.on('connection', (socket) => {
   });
 
   socket.on('join-staff-display', (payload) => {
-    joinCounterRoom(payload?.counterId || payload);
+    joinStaffDisplayRoom(payload).catch((error) => {
+      socket.emit('socket-error', {
+        message: error.message || 'Không thể join room staff display'
+      });
+    });
   });
 
   socket.on('join-admin-dashboard', () => {

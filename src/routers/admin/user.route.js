@@ -8,7 +8,8 @@ const {
   staffIdParamSchema,
   createStaffSchema,
   updateStaffSchema,
-  assignCounterSchema
+  assignCounterSchema,
+  assignStaffServicesSchema
 } = require('../../validations/user.validation');
 
 // ====================================
@@ -20,11 +21,13 @@ router.post('/staff', authMiddleware, adminOnly, validate(createStaffSchema), Us
 router.put('/staff/:id', authMiddleware, adminOnly, validate(staffIdParamSchema, 'params'), validate(updateStaffSchema), UserAdminController.updateStaff);
 router.delete('/staff/:id', authMiddleware, adminOnly, validate(staffIdParamSchema, 'params'), UserAdminController.deleteStaff);
 router.patch('/staff/:id/remove-counter', authMiddleware, adminOnly, validate(staffIdParamSchema, 'params'), UserAdminController.removeCounter);
+router.get('/staff/:id/services', authMiddleware, adminOnly, validate(staffIdParamSchema, 'params'), UserAdminController.getStaffServices);
 
 // ====================================
 // STAFF ACTIONS
 // ====================================
 router.patch('/staff/:id/assign-counter', authMiddleware, adminOnly, validate(staffIdParamSchema, 'params'), validate(assignCounterSchema), UserAdminController.assignCounter);
+router.put('/staff/:id/services', authMiddleware, adminOnly, validate(staffIdParamSchema, 'params'), validate(assignStaffServicesSchema), UserAdminController.assignServices);
 router.patch('/staff/:id/toggle-active', authMiddleware, adminOnly, validate(staffIdParamSchema, 'params'), UserAdminController.toggleActive);
 
 module.exports = router;
