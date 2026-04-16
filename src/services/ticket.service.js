@@ -158,6 +158,20 @@ const getNextCounterNumber = async (counterId) => {
     return sequence.lastNumber;
 };
 
+const resetCounterSequences = async (counterIds = null) => {
+    const query = counterIds?.length
+        ? { counterId: { $in: counterIds } }
+        : {};
+
+    const result = await CounterSequence.updateMany(query, {
+        $set: { lastNumber: 0 }
+    });
+
+    console.log(`Đã reset ${result.modifiedCount || 0} counter sequences về 0`);
+
+    return result;
+};
+
 const emitStaffDisplayUpdateForCounters = async (counterIds, reason, extra = {}) => {
     if (!global.io || !counterIds?.length) {
         return;
@@ -431,6 +445,8 @@ const resetTicketsByDate = async (dateString, actor) => {
         _id: { $in: ticketIds }
     });
 
+    await resetCounterSequences(affectedCounterIds);
+
     if (global.io) {
         global.io.to('waiting-room').emit('tickets-reset-day', {
             date: formattedDate,
@@ -486,6 +502,7 @@ const resetAllTickets = async (actor) => {
 
     await Counter.updateMany({}, { currentTicketId: null });
     await Ticket.deleteMany({});
+    await resetCounterSequences();
 
     if (global.io) {
         global.io.to('waiting-room').emit('tickets-reset-all', {

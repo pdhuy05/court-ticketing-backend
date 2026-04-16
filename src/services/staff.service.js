@@ -2,6 +2,21 @@ const User = require('../models/user.model');
 const ApiError = require('../utils/ApiError');
 const { emitDashboardUpdateSafe } = require('./dashboard.service');
 
+const WEAK_PASSWORD_PATTERNS = ['123456', 'password'];
+
+const ensureStrongPassword = (username, password) => {
+  const normalizedUsername = String(username || '').toLowerCase();
+  const normalizedPassword = String(password || '').toLowerCase();
+
+  if (normalizedUsername && normalizedPassword.includes(normalizedUsername)) {
+    throw new ApiError(400, 'Mật khẩu không được chứa tên đăng nhập');
+  }
+
+  if (WEAK_PASSWORD_PATTERNS.some((pattern) => normalizedPassword.includes(pattern))) {
+    throw new ApiError(400, 'Mật khẩu quá yếu, không được chứa các chuỗi dễ đoán như "123456" hoặc "password"');
+  }
+};
+
 const getAllStaff = async () => {
   const staffs = await User.find({ role: 'staff' }).populate('counterId', 'name number');
   return staffs;
@@ -22,6 +37,8 @@ const createStaff = async (data) => {
   if (existing) {
     throw new ApiError(400, 'Tên đăng nhập đã tồn tại');
   }
+
+  ensureStrongPassword(username, password);
 
   const staff = await User.create({
     username,
