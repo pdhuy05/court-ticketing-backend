@@ -57,7 +57,7 @@ exports.update = async (req, res, next) => {
   const printer = await Printer.findByIdAndUpdate(
     req.params.id,
     req.body,
-    { new: true, runValidators: true }
+    { returnDocument: 'after', runValidators: true }
   );
   
   if (!printer) {

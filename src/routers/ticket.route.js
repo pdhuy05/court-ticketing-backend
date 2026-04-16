@@ -18,6 +18,7 @@ const TicketController = require("../controllers/ticket.controller");
 // PUBLIC ROUTES 
 // ====================================
 router.get("/waiting", TicketController.getAllWaiting);
+router.get("/qr/:qrData", TicketController.getTicketByQR);
 router.get("/counters/:counterId/display", validate(counterDisplayParamsSchema, 'params'), TicketController.getCounterDisplay);
 router.post("/", validate(createTicketSchema), TicketController.create);
 

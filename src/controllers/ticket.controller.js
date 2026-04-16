@@ -4,56 +4,42 @@ const Printer = require('../models/printer.model');
 const logger = require('../utils/Logger');
 const { emitAdminNotificationSafe } = require('../services/admin-notification.service');
 
-exports.create = async (req, res) => {
-    const result = await ticketService.createTicket(req.body);
-    result.ticket.displayNumber = result.ticketNumberDisplay;
-
-    let printResult = { success: false, message: 'Không có máy in để in' };
-    const shouldPrint = req.body.autoPrint !== false;
-
-    if (shouldPrint) {
+const queueAutoPrintTicket = ({ ticket, service, ticketNumberDisplay }) => {
+    setImmediate(async () => {
         try {
             const defaultPrinter = await Printer.findOne({
                 isDefault: true,
                 isActive: true
             });
 
-            if (defaultPrinter) {
-                if (
-                    defaultPrinter.type === 'network' &&
-                    defaultPrinter.connection?.host
-                ) {
-                    if (!printerService.hasPrinter(defaultPrinter.code)) {
-                        printerService.addNetworkPrinter(
-                            defaultPrinter.code,
-                            defaultPrinter.connection.host,
-                            defaultPrinter.connection.port || 9100
-                        );
-                    }
-
-                    printResult = await printerService.printTicket(
-                        defaultPrinter.code,
-                        result.ticket,
-                        result.service
-                    );
-
-                    logger.success(`Đã in ticket ${result.ticketNumberDisplay} trên máy ${defaultPrinter.name}`);
-                } else {
-                    logger.warning(`Máy in ${defaultPrinter.name} chưa hỗ trợ loại kết nối ${defaultPrinter.type}`);
-
-                    printResult = {
-                        success: false,
-                        message: `Máy in ${defaultPrinter.type} chưa được hỗ trợ`
-                    };
-                }
-            } else {
-                logger.warning(`Không tìm thấy máy in mặc định`);
-
-                printResult = {
-                    success: false,
-                    message: 'Chưa cấu hình máy in mặc định'
-                };
+            if (!defaultPrinter) {
+                logger.warning('Không tìm thấy máy in mặc định');
+                return;
             }
+
+            if (
+                defaultPrinter.type !== 'network' ||
+                !defaultPrinter.connection?.host
+            ) {
+                logger.warning(`Máy in ${defaultPrinter.name} chưa hỗ trợ loại kết nối ${defaultPrinter.type}`);
+                return;
+            }
+
+            if (!printerService.hasPrinter(defaultPrinter.code)) {
+                printerService.addNetworkPrinter(
+                    defaultPrinter.code,
+                    defaultPrinter.connection.host,
+                    defaultPrinter.connection.port || 9100
+                );
+            }
+
+            await printerService.printTicket(
+                defaultPrinter.code,
+                ticket,
+                service
+            );
+
+            logger.success(`Đã in ticket ${ticketNumberDisplay} trên máy ${defaultPrinter.name}`);
         } catch (printError) {
             logger.error(`Lỗi in ticket: ${printError.message}`);
             emitAdminNotificationSafe({
@@ -61,20 +47,22 @@ exports.create = async (req, res) => {
                 severity: 'warning',
                 title: 'Lỗi in ticket',
                 message: printError.message,
-                source: 'ticket.controller.create',
+                source: 'ticket.controller.queueAutoPrintTicket',
                 meta: {
                     printer: 'default',
-                    serviceId: result.service?._id,
-                    ticketId: result.ticket?._id
+                    serviceId: service?._id,
+                    ticketId: ticket?._id
                 }
             });
-
-            printResult = {
-                success: false,
-                message: printError.message
-            };
         }
-    }
+    });
+};
+
+exports.create = async (req, res) => {
+    const result = await ticketService.createTicket(req.body);
+    result.ticket.displayNumber = result.ticketNumberDisplay;
+
+    const shouldPrint = req.body.autoPrint !== false;
 
     const ticketData = {
         _id: result.ticket._id,
@@ -85,8 +73,8 @@ exports.create = async (req, res) => {
         name: result.ticket.name,
         phone: result.ticket.phone,
         status: result.ticket.status,
-        qrCode: result.ticket.qrCode,
-        createdAt: result.ticket.createdAt
+        createdAt: result.ticket.createdAt,
+        qrData: result.qrData
     };
 
     const serviceData = {
@@ -102,13 +90,24 @@ exports.create = async (req, res) => {
         number: counter.number
     }));
 
+    if (shouldPrint) {
+        queueAutoPrintTicket({
+            ticket: result.ticket,
+            service: result.service,
+            ticketNumberDisplay: result.ticketNumberDisplay
+        });
+    }
+
     res.status(201).json({
         success: true,
         data: ticketData,
         service: serviceData,
         availableCounters: availableCountersData,
-        printed: printResult.success,
-        printMessage: printResult.message,
+        printRequested: shouldPrint,
+        printStatus: shouldPrint ? 'queued' : 'disabled',
+        printMessage: shouldPrint
+            ? 'Lệnh in đã được đưa vào xử lý nền'
+            : 'Tắt tự động in cho request này',
         message: `Đã cấp số ${result.ticketNumberDisplay} cho dịch vụ ${result.service.name}`
     });
 };
@@ -121,6 +120,15 @@ exports.getAllWaiting = async (req, res) => {
         count: tickets.length,
         data: tickets,
         lastIssuedByCounter
+    });
+};
+
+exports.getTicketByQR = async (req, res) => {
+    const data = await ticketService.getTicketByQR(req.params.qrData);
+
+    res.json({
+        success: true,
+        data
     });
 };
 

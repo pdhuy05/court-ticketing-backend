@@ -82,7 +82,7 @@ const updateStaff = async (id, data) => {
   const staff = await User.findOneAndUpdate(
     { _id: id, role: 'staff' },
     data,
-    { new: true, runValidators: true }
+    { returnDocument: 'after', runValidators: true }
   );
   if (!staff) {
     throw new ApiError(404, 'Không tìm thấy nhân viên');
@@ -108,7 +108,7 @@ const assignCounter = async (id, counterId) => {
   const staff = await User.findOneAndUpdate(
     { _id: id, role: 'staff' },
     { counterId },
-    { new: true }
+    { returnDocument: 'after' }
   );
   if (!staff) {
     throw new ApiError(404, 'Không tìm thấy nhân viên');
@@ -154,7 +154,7 @@ const removeCounter = async (id) => {
   const staff = await User.findOneAndUpdate(
     { _id: id, role: 'staff' },
     { counterId: null },
-    { new: true, runValidators: true }
+    { returnDocument: 'after', runValidators: true }
   );
   
   if (!staff) {

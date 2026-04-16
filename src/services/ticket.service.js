@@ -6,9 +6,9 @@ const ServiceCounter = require('../models/serviceCounter.model');
 const CounterSequence = require('../models/counterSequence.model');
 const { TicketStatus } = require('../constants/enums');
 const ApiError = require('../utils/ApiError');
-const QRCode = require('qrcode');
 const { emitDashboardUpdateSafe } = require('./dashboard.service');
 const { writeBackup } = require('./ticket-backup.service');
+const { generateQRData, verifyQRData } = require('../utils/qrData.util');
 const {
     getStaffServiceAccess,
     assertStaffCanHandleService
@@ -154,7 +154,7 @@ const getNextCounterNumber = async (counterId) => {
         { counterId },
         { $inc: { lastNumber: 1 } },
         {
-            new: true,
+            returnDocument: 'after',
             upsert: true,
             setDefaultsOnInsert: true
         }
@@ -302,29 +302,8 @@ const createTicket = async ({ serviceId, name, phone, counterId = null }) => {
         qrCode: null
     });
 
-    const qrText = `SỐ THỨ TỰ: ${displayNumber}
-YÊU CẦU: ${service.name}
-ĐƯƠNG SỰ: ${name}
-ĐIỆN THOẠI: ${phone}
-THỜI GIAN: ${new Date().toLocaleString('vi-VN')}`;
-    
-    let qrCode = null;
-    try {
-        qrCode = await QRCode.toDataURL(qrText, {
-            errorCorrectionLevel: 'L',
-            margin: 0,
-            width: 100
-        });
-    } catch (err) {
-        console.error('Lỗi tạo QR:', err.message);
-    }
-
-    if (qrCode) {
-        ticket.qrCode = qrCode;
-        await ticket.save();
-    }
-
     await ticket.populate('serviceId', 'name code');
+    const qrData = generateQRData(ticket, service, displayNumber);
 
     if (global.io) {
         const waitingCount = await Ticket.countDocuments({
@@ -342,8 +321,7 @@ THỜI GIAN: ${new Date().toLocaleString('vi-VN')}`;
                 customerName: ticket.name,
                 phone: ticket.phone,
                 serviceName: service.name,
-                status: ticket.status,
-                qrCode: ticket.qrCode
+                status: ticket.status
             },
             totalWaiting: waitingCount,
             lastIssuedByCounter
@@ -371,7 +349,22 @@ THỜI GIAN: ${new Date().toLocaleString('vi-VN')}`;
         ticketNumberRaw: nextNumber,
         ticketNumberFormatted: displayNumber,
         availableCounters: availableCounters.map(ac => ac.counterId),
-        qrCode: ticket.qrCode
+        qrData
+    };
+};
+
+const getTicketByQR = async (qrData) => {
+    const decoded = verifyQRData(qrData);
+
+    return {
+        ticketId: decoded.ticketId,
+        displayNumber: decoded.displayNumber,
+        serviceName: decoded.serviceName,
+        serviceCode: decoded.serviceCode,
+        customerName: decoded.customerName,
+        customerPhone: decoded.customerPhone,
+        issuedAt: decoded.issuedAt,
+        exp: decoded.exp
     };
 };
 
@@ -1165,4 +1158,5 @@ module.exports = {
     getCounterDisplay,
     getMyCounter,
     getStaffDisplay,
+    getTicketByQR,
 };
