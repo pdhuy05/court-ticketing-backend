@@ -11,6 +11,9 @@ logs
 *.log
 npm-debug.log*
 
+# Runtime backups
+backups/
+
 # Build files
 dist/
 build/
