@@ -30,6 +30,7 @@ const createTicketSchema = Joi.object({
             'string.empty': 'Số điện thoại không được để trống',
             'string.pattern.base': 'Số điện thoại phải gồm đúng 10 chữ số'
         }),
+    counterId: objectId.optional(),
     autoPrint: Joi.boolean().default(true)
 });
 
@@ -64,5 +65,9 @@ module.exports = {
     callNextSchema,
     completeTicketSchema,
     cancelTicketSchema,
-    skipTicketSchema
+    skipTicketSchema,
+    recallTicketParamsSchema: idParamSchema,
+    cancelRecallTicketSchema: Joi.object({
+        reason: Joi.string().trim().max(500).optional()
+    })
 };

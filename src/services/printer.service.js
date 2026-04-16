@@ -5,6 +5,8 @@ const logger = require('../utils/Logger');
 
 const { ConnectPrint } = require('../constants/enums');
 
+const getDisplayTicketNumber = (ticket) => ticket.displayNumber || ticket.ticketNumber || '001';
+
 class PrinterService {
   constructor() {
     this.printers = new Map();
@@ -37,7 +39,7 @@ class PrinterService {
   // ================= QR =================
   async generateQRCode(ticket, service) {
     const qrText = `
-SỐ THỨ TỰ: ${ticket.ticketNumber}
+SỐ THỨ TỰ: ${getDisplayTicketNumber(ticket)}
 YÊU CẦU: ${service?.name || ''}
 ĐƯƠNG SỰ: ${ticket.name || ''}
 ĐIỆN THOẠI: ${ticket.phone || ''}
@@ -80,7 +82,7 @@ THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString('vi-VN')}
         <text x="50%" y="130" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="22" fill="black">${timeStr}</text>
 
         <!-- TICKET NUMBER -->
-        <text x="50%" y="320" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="200" font-weight="bold" fill="black">${ticket.ticketNumber || '001'}</text>
+        <text x="50%" y="320" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="200" font-weight="bold" fill="black">${getDisplayTicketNumber(ticket)}</text>
 
         <!-- SERVICE NAME -->
         <text x="50%" y="410" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="28" font-weight="bold" fill="black">- ${service?.name || 'Dịch vụ'} -</text>

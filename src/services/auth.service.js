@@ -16,9 +16,9 @@ const login = async (username, password) => {
 
   let expiresIn;
   if (user.role === 'admin') {
-    expiresIn = '1h';     
+    expiresIn = '8h';
   } else {
-    expiresIn = '8h';     
+    expiresIn = '8h';
   }
 
   const token = jwt.sign(

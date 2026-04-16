@@ -5,6 +5,8 @@ const validate = require('../middlewares/validate.middleware');
 const { authMiddleware, staffOnly, counterStaff } = require('../middlewares/auth.middleware');
 const {
   counterDisplayParamsSchema,
+  cancelRecallTicketSchema,
+  recallTicketParamsSchema,
   ticketIdParamSchema,
   createTicketSchema,
   callNextSchema,
@@ -24,7 +26,10 @@ router.post("/", validate(createTicketSchema), TicketController.create);
 // ====================================
 router.get("/my-counter", authMiddleware, staffOnly, counterStaff, TicketController.getMyCounter);
 router.get("/staff/display", authMiddleware, staffOnly, counterStaff, TicketController.getStaffDisplay);
+router.get("/recall-list", authMiddleware, staffOnly, counterStaff, TicketController.getRecallList);
 router.post("/call-next", authMiddleware, staffOnly, counterStaff, validate(callNextSchema), TicketController.callNext);
+router.post("/:id/recall", authMiddleware, staffOnly, counterStaff, validate(recallTicketParamsSchema, 'params'), TicketController.recallTicket);
+router.patch("/:id/cancel-recall", authMiddleware, staffOnly, counterStaff, validate(recallTicketParamsSchema, 'params'), validate(cancelRecallTicketSchema), TicketController.cancelRecallTicket);
 router.patch("/:id/complete", authMiddleware, staffOnly, counterStaff, validate(ticketIdParamSchema, 'params'), TicketController.complete);
 router.patch("/:id/skip", authMiddleware, staffOnly, counterStaff, validate(ticketIdParamSchema, 'params'), validate(skipTicketSchema), TicketController.skip);
 

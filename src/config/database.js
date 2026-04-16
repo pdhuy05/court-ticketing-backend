@@ -1,9 +1,13 @@
 const mongoose = require("mongoose");
 const env = require("./env");
+const Ticket = require("../models/ticket.model");
+const CounterSequence = require("../models/counterSequence.model");
 
 const connectDB = async () => {
 try {
 await mongoose.connect(env.db);
+await Ticket.syncIndexes();
+await CounterSequence.syncIndexes();
 
 console.log(`
 \x1b[42m\x1b[30m ✓ \x1b[0m \x1b[36mMongoDB\x1b[0m: Kết nối thành công!

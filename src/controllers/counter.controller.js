@@ -30,7 +30,7 @@ exports.create = async (req, res) => {
   res.status(201).json({
     success: true,
     data: counter,
-    message: `Tạo quầy ${counter.name} (${counter.code}) thành công với ${counter.services?.length || 0} dịch vụ`
+    message: `Tạo ${counter.name} (${counter.code}) thành công với ${counter.services?.length || 0} dịch vụ`
   });
 };
 
