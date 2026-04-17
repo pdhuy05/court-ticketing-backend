@@ -8,6 +8,9 @@ const logger = require('../utils/Logger');
 const TTS_TIMEOUT_MS = Number(process.env.TTS_TIMEOUT_MS || 10000);
 const TTS_ENABLED = process.env.TTS_ENABLED !== 'false';
 const TTS_LANG = process.env.TTS_LANG || 'vi';
+const TTS_NATIVE_FALLBACK_ENABLED = process.env.TTS_NATIVE_FALLBACK_ENABLED
+  ? process.env.TTS_NATIVE_FALLBACK_ENABLED === 'true'
+  : os.platform() !== 'win32';
 
 let speechQueue = Promise.resolve();
 
@@ -65,7 +68,7 @@ const playAudio = (filePath) => new Promise((resolve, reject) => {
       command = `afplay "${filePath}"`;
       break;
     case 'win32':
-      command = `powershell -Command "Add-Type -AssemblyName PresentationCore; $mp = New-Object System.Windows.Media.MediaPlayer; $mp.Open([Uri]'${filePath}'); $mp.Play(); Start-Sleep -Seconds 10; $mp.Stop()"`;
+      command = `powershell -Command "Add-Type -AssemblyName PresentationCore; $mp = New-Object System.Windows.Media.MediaPlayer; $mp.Open([Uri]'${filePath}'); $mp.Play(); Start-Sleep -Seconds 10; $mp.Stop(); exit 0"`;
       break;
     case 'linux':
       command = `aplay "${filePath}" 2>/dev/null || mpg123 "${filePath}" 2>/dev/null || ffplay -nodisp -autoexit "${filePath}" 2>/dev/null`;
@@ -137,6 +140,11 @@ const runSpeakProcess = async (text) => {
     logger.info(`Đã đọc (Google TTS): "${text}"`);
     return;
   } catch (googleError) {
+    if (!TTS_NATIVE_FALLBACK_ENABLED) {
+      logger.error(`Google TTS thất bại và fallback native đang tắt: ${googleError.message}`);
+      return;
+    }
+
     logger.warning(`Google TTS thất bại: ${googleError.message}. Thử fallback native...`);
   }
 
