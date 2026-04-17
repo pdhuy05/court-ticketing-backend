@@ -40,6 +40,7 @@ Quầy 1 ──► Staff A đang xử lý ND-2031
 
 ---
 
+
 ## 3. Những gì THAY ĐỔI — Chi tiết theo API
 
 ### 3.1. `GET /api/tickets/staff/display` — Staff Display

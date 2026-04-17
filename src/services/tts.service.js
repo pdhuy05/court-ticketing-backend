@@ -1,83 +1,153 @@
 const { exec } = require('child_process');
+const https = require('https');
+const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const logger = require('../utils/Logger');
 
-const PYTHON_BIN = process.env.TTS_PYTHON_BIN || 'python3';
-const PYTHON_SCRIPT = path.join(__dirname, '../../speak.py');
-const TTS_TIMEOUT_MS = Number(process.env.TTS_TIMEOUT_MS || 5000);
+const TTS_TIMEOUT_MS = Number(process.env.TTS_TIMEOUT_MS || 10000);
 const TTS_ENABLED = process.env.TTS_ENABLED !== 'false';
+const TTS_LANG = process.env.TTS_LANG || 'vi';
 
 let speechQueue = Promise.resolve();
 
-const isProduction = process.env.NODE_ENV === 'production';
+const sanitizeText = (text = '') => String(text).replace(/"/g, '\\"').replace(/'/g, "\\'").trim();
 
-const sanitizeText = (text = '') => String(text).replace(/"/g, '\\"').trim();
+/**
+ * Tải audio TTS từ Google Translate API (miễn phí, hỗ trợ tiếng Việt)
+ */
+const downloadGoogleTTS = (text, outputPath) => new Promise((resolve, reject) => {
+  const encodedText = encodeURIComponent(text);
+  const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=${TTS_LANG}&client=tw-ob`;
 
-const shouldIgnoreError = (error) => {
-  if (!error) {
-    return false;
+  const request = https.get(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0',
+      'Referer': 'https://translate.google.com/'
+    },
+    timeout: TTS_TIMEOUT_MS
+  }, (response) => {
+    if (response.statusCode !== 200) {
+      reject(new Error(`Google TTS trả về status ${response.statusCode}`));
+      return;
+    }
+
+    const fileStream = fs.createWriteStream(outputPath);
+    response.pipe(fileStream);
+
+    fileStream.on('finish', () => {
+      fileStream.close();
+      resolve(outputPath);
+    });
+
+    fileStream.on('error', (error) => {
+      fs.unlink(outputPath, () => {});
+      reject(error);
+    });
+  });
+
+  request.on('error', reject);
+  request.on('timeout', () => {
+    request.destroy();
+    reject(new Error('Google TTS timeout'));
+  });
+});
+
+/**
+ * Phát file audio bằng lệnh native của OS
+ */
+const playAudio = (filePath) => new Promise((resolve, reject) => {
+  const platform = os.platform();
+  let command;
+
+  switch (platform) {
+    case 'darwin':
+      command = `afplay "${filePath}"`;
+      break;
+    case 'win32':
+      command = `powershell -Command "(New-Object Media.SoundPlayer '${filePath}').PlaySync()"`;
+      break;
+    case 'linux':
+      command = `aplay "${filePath}" 2>/dev/null || mpg123 "${filePath}" 2>/dev/null || ffplay -nodisp -autoexit "${filePath}" 2>/dev/null`;
+      break;
+    default:
+      reject(new Error(`Không hỗ trợ phát audio trên OS: ${platform}`));
+      return;
   }
 
-  const message = String(error.message || error);
-  return (
-    isProduction &&
-    (
-      message.includes('not found') ||
-      message.includes('ENOENT') ||
-      message.includes('pyttsx3') ||
-      message.includes('No module named')
-    )
-  );
-};
+  exec(command, { timeout: TTS_TIMEOUT_MS }, (error) => {
+    // Dọn file tạm sau khi phát
+    fs.unlink(filePath, () => {});
 
-const runSpeakProcess = (text) => new Promise((resolve, reject) => {
+    if (error) {
+      reject(error);
+    } else {
+      resolve();
+    }
+  });
+});
+
+/**
+ * Fallback: dùng lệnh TTS native của OS (đọc tiếng Anh)
+ */
+const speakNativeFallback = (text) => new Promise((resolve, reject) => {
+  const platform = os.platform();
+  const escapedText = sanitizeText(text);
+  let command;
+
+  switch (platform) {
+    case 'win32':
+      command = `powershell -Command "Add-Type -AssemblyName System.Speech; $synth = New-Object System.Speech.Synthesis.SpeechSynthesizer; $synth.Speak('${escapedText.replace(/'/g, "''")}')"`;
+      break;
+    case 'darwin':
+      command = `say "${escapedText}"`;
+      break;
+    case 'linux':
+      command = `espeak "${escapedText}" 2>/dev/null`;
+      break;
+    default:
+      reject(new Error(`OS not supported: ${platform}`));
+      return;
+  }
+
+  exec(command, { timeout: TTS_TIMEOUT_MS }, (error) => {
+    if (error) {
+      reject(error);
+    } else {
+      resolve();
+    }
+  });
+});
+
+const runSpeakProcess = async (text) => {
   if (!TTS_ENABLED) {
     logger.info('TTS đang bị tắt qua cấu hình môi trường');
-    resolve();
     return;
   }
 
   if (!text || text.trim() === '') {
-    reject(new Error('Văn bản trống, không thể đọc'));
-    return;
+    throw new Error('Văn bản trống, không thể đọc');
   }
 
-  const escapedText = sanitizeText(text);
-  const command = `"${PYTHON_BIN}" "${PYTHON_SCRIPT}" "${escapedText}"`;
+  // Thử Google TTS (tiếng Việt) trước
+  try {
+    const tmpFile = path.join(os.tmpdir(), `tts_${Date.now()}.mp3`);
+    await downloadGoogleTTS(text, tmpFile);
+    await playAudio(tmpFile);
+    logger.info(`Đã đọc (Google TTS): "${text}"`);
+    return;
+  } catch (googleError) {
+    logger.warning(`Google TTS thất bại: ${googleError.message}. Thử fallback native...`);
+  }
 
-  exec(
-    command,
-    {
-      timeout: TTS_TIMEOUT_MS,
-      env: process.env,
-      maxBuffer: 1024 * 1024
-    },
-    (error, stdout, stderr) => {
-      if (stdout?.trim()) {
-        logger.info(`TTS stdout: ${stdout.trim()}`);
-      }
-
-      if (stderr?.trim()) {
-        logger.warning(`Cảnh báo pyttsx3: ${stderr.trim()}`);
-      }
-
-      if (error) {
-        const wrappedError = new Error(`Lỗi đọc số: ${error.message}`);
-        if (shouldIgnoreError(wrappedError)) {
-          logger.warning(`${wrappedError.message}. Bỏ qua vì môi trường production không có Python/TTS.`);
-          resolve();
-          return;
-        }
-
-        reject(wrappedError);
-        return;
-      }
-
-      logger.info(`Đã đọc: "${text}"`);
-      resolve();
-    }
-  );
-});
+  // Fallback: dùng native OS TTS
+  try {
+    await speakNativeFallback(text);
+    logger.info(`Đã đọc (native fallback): "${text}"`);
+  } catch (nativeError) {
+    logger.error(`Cả Google TTS và native TTS đều thất bại: ${nativeError.message}`);
+  }
+};
 
 const speak = (text) => {
   const task = speechQueue
