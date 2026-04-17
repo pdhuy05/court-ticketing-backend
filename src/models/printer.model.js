@@ -44,19 +44,15 @@ const printerSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
-printerSchema.pre('save', function(next) {
-    if (this.isDefault) {
-        this.constructor.updateMany(
-            { _id: { $ne: this._id }, isDefault: true },
-            { isDefault: false }
-        ).then(() => {
-            next();
-        }).catch((err) => {
-            next(err);
-        });
-    } else {
-        next();
+printerSchema.pre('save', async function() {
+    if (!this.isDefault) {
+        return;
     }
+
+    await this.constructor.updateMany(
+        { _id: { $ne: this._id }, isDefault: true },
+        { isDefault: false }
+    );
 });
 
 module.exports = mongoose.model('Printer', printerSchema);
