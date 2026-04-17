@@ -54,20 +54,6 @@ exports.create = async (req, res, next) => {
 
 // PUT: Cập nhật máy in
 exports.update = async (req, res, next) => {
-  if (req.body.code) {
-    const existingPrinter = await Printer.findOne({
-      code: req.body.code,
-      _id: { $ne: req.params.id }
-    });
-
-    if (existingPrinter) {
-      return res.status(400).json({
-        success: false,
-        message: `Mã máy in '${req.body.code}' đã tồn tại`
-      });
-    }
-  }
-
   const printer = await Printer.findByIdAndUpdate(
     req.params.id,
     req.body,
