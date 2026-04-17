@@ -868,6 +868,59 @@ const recallTicket = async (ticketId, counterId, staffId = null) => {
     };
 };
 
+const recallProcessingTicket = async (ticketId, counterId, staffId = null) => {
+    const counter = await ensureCounterActive(counterId);
+    const accessScope = await getServiceAccessScope(counterId, staffId);
+    ensureStaffHasAccessibleServices(accessScope);
+
+    const ticket = await Ticket.findOne({
+        _id: ticketId,
+        counterId,
+        status: TicketStatus.PROCESSING,
+        serviceId: { $in: accessScope.allowedServiceIds }
+    })
+        .populate('serviceId', 'name code')
+        .populate('queueCounterId', 'number');
+
+    if (!ticket) {
+        throw new ApiError(404, 'Không tìm thấy ticket đang xử lý để gọi lại');
+    }
+
+    if (staffId && ticket.staffId && String(ticket.staffId) !== String(staffId)) {
+        throw new ApiError(403, 'Bạn chỉ được phép gọi lại ticket đang xử lý của chính mình');
+    }
+
+    await emitTicketCalled(ticket, counter, 'recall-processing');
+
+    if (global.io) {
+        const presentation = buildTicketPresentation(ticket, counter);
+
+        global.io.to('waiting-room').emit('ticket-processing-recalled', {
+            ticketId: ticket._id,
+            number: ticket.number,
+            formattedNumber: presentation.formattedNumber,
+            displayNumber: presentation.displayNumber,
+            customerName: ticket.name,
+            counterId: counter._id,
+            counterName: counter.name,
+            serviceName: ticket.serviceId.name,
+            recalledAt: new Date()
+        });
+    }
+
+    await emitStaffDisplayUpdateForCounters([counterId], 'ticket-processing-recalled', {
+        ticketId: ticket._id
+    });
+
+    await emitDashboardUpdateSafe('ticket-processing-recalled');
+
+    return {
+        ...ticket.toObject(),
+        formattedNumber: buildTicketPresentation(ticket, counter).formattedNumber,
+        displayNumber: buildTicketPresentation(ticket, counter).displayNumber
+    };
+};
+
 const cancelRecallTicket = async (ticketId, counterId, staffId = null, reason = '') => {
     const accessScope = await getServiceAccessScope(counterId, staffId);
     ensureStaffHasAccessibleServices(accessScope);
@@ -1247,6 +1300,7 @@ module.exports = {
     callNext,
     callById,
     recallTicket,
+    recallProcessingTicket,
     cancelRecallTicket,
     completeTicket,
     skipTicket,

@@ -32,6 +32,7 @@ router.get("/recall-list", authMiddleware, staffOnly, counterStaff, TicketContro
 router.post("/call-next", authMiddleware, staffOnly, counterStaff, validate(callNextSchema), TicketController.callNext);
 router.post("/call-by-id", authMiddleware, staffOnly, counterStaff, validate(callByIdSchema), TicketController.callById);
 router.post("/:id/recall", authMiddleware, staffOnly, counterStaff, validate(recallTicketParamsSchema, 'params'), TicketController.recallTicket);
+router.post("/:id/recall-processing", authMiddleware, staffOnly, counterStaff, validate(recallTicketParamsSchema, 'params'), TicketController.recallProcessingTicket);
 router.patch("/:id/cancel-recall", authMiddleware, staffOnly, counterStaff, validate(recallTicketParamsSchema, 'params'), validate(cancelRecallTicketSchema), TicketController.cancelRecallTicket);
 router.patch("/:id/complete", authMiddleware, staffOnly, counterStaff, validate(ticketIdParamSchema, 'params'), TicketController.complete);
 router.patch("/:id/skip", authMiddleware, staffOnly, counterStaff, validate(ticketIdParamSchema, 'params'), validate(skipTicketSchema), TicketController.skip);

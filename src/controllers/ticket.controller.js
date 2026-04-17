@@ -265,6 +265,31 @@ exports.recallTicket = async (req, res) => {
     });
 };
 
+exports.recallProcessingTicket = async (req, res) => {
+    const counterId = req.user.counterId;
+
+    if (!counterId) {
+        return res.status(400).json({
+            success: false,
+            message: 'Tài khoản chưa được gán quầy'
+        });
+    }
+
+    const ticket = await ticketService.recallProcessingTicket(
+        req.params.id,
+        counterId,
+        req.user?._id
+    );
+
+    logger.success(`Đã gọi lại vé đang xử lý ${ticket.formattedNumber}`);
+
+    res.json({
+        success: true,
+        data: ticket,
+        message: `Đã gọi lại vé đang xử lý ${ticket.formattedNumber}`
+    });
+};
+
 exports.cancelRecallTicket = async (req, res) => {
     const counterId = req.user.counterId;
 
