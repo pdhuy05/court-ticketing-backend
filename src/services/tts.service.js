@@ -65,7 +65,7 @@ const playAudio = (filePath) => new Promise((resolve, reject) => {
       command = `afplay "${filePath}"`;
       break;
     case 'win32':
-      command = `powershell -Command "(New-Object Media.SoundPlayer '${filePath}').PlaySync()"`;
+      command = `powershell -Command "Add-Type -AssemblyName PresentationCore; $mp = New-Object System.Windows.Media.MediaPlayer; $mp.Open([Uri]'${filePath}'); $mp.Play(); Start-Sleep -Seconds 10; $mp.Stop()"`;
       break;
     case 'linux':
       command = `aplay "${filePath}" 2>/dev/null || mpg123 "${filePath}" 2>/dev/null || ffplay -nodisp -autoexit "${filePath}" 2>/dev/null`;
