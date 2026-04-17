@@ -2,6 +2,7 @@ const ticketService = require('../services/ticket.service');
 const printerService = require('../services/printer.service');
 const { speakCallTicket } = require('../services/tts.service');
 const Printer = require('../models/printer.model');
+const Counter = require('../models/counter.model');
 const logger = require('../utils/Logger');
 const { emitAdminNotificationSafe } = require('../services/admin-notification.service');
 
@@ -257,6 +258,11 @@ exports.recallTicket = async (req, res) => {
     }
 
     const ticket = await ticketService.recallTicket(req.params.id, counterId, req.user?._id);
+    const counter = await Counter.findById(counterId).select('name');
+
+    speakCallTicket(ticket.displayNumber, counter?.name || 'quầy hiện tại').catch((error) => {
+        logger.error(`Lỗi phát âm thanh: ${error.message}`);
+    });
 
     res.json({
         success: true,
@@ -280,8 +286,12 @@ exports.recallProcessingTicket = async (req, res) => {
         counterId,
         req.user?._id
     );
+    const counter = await Counter.findById(counterId).select('name');
 
     logger.success(`Đã gọi lại vé đang xử lý ${ticket.formattedNumber}`);
+    speakCallTicket(ticket.displayNumber, counter?.name || 'quầy hiện tại').catch((error) => {
+        logger.error(`Lỗi phát âm thanh: ${error.message}`);
+    });
 
     res.json({
         success: true,
