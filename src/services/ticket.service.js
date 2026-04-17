@@ -241,22 +241,28 @@ const ensureStaffHasAccessibleServices = (accessScope) => {
 
 const canAccessService = (serviceIds, serviceId) => serviceIds.includes(String(serviceId));
 
-const ensureCounterReadyForProcessing = async (counterId) => {
+const ensureCounterActive = async (counterId) => {
     const counter = await Counter.findById(counterId);
     if (!counter?.isActive) {
         throw new ApiError(400, 'Quầy không tồn tại hoặc không hoạt động');
     }
 
-    const currentTicket = await Ticket.findOne({
-        counterId,
-        status: TicketStatus.PROCESSING
-    });
+    return counter;
+};
 
-    if (currentTicket) {
-        throw new ApiError(400, `Quầy đang xử lý ticket ${formatDisplayNumber(counter.number, currentTicket.number)}. Vui lòng hoàn thành hoặc bỏ qua trước khi gọi số mới.`);
+const refreshCounterCurrentTicket = async (counterId) => {
+    if (!counterId) {
+        return;
     }
 
-    return counter;
+    const latestProcessingTicket = await Ticket.findOne({
+        counterId,
+        status: TicketStatus.PROCESSING
+    }).sort({ processingAt: -1, updatedAt: -1 });
+
+    await Counter.findByIdAndUpdate(counterId, {
+        currentTicketId: latestProcessingTicket?._id || null
+    });
 };
 
 const emitTicketCalled = async (ticket, counter, reason = 'ticket-called') => {
@@ -664,7 +670,7 @@ const resetAllTickets = async (actor) => {
 };
 
 const callNext = async (counterId, staffId = null) => {
-    const counter = await ensureCounterReadyForProcessing(counterId);
+    const counter = await ensureCounterActive(counterId);
 
     const accessScope = await getServiceAccessScope(counterId, staffId);
     ensureStaffHasAccessibleServices(accessScope);
@@ -727,7 +733,7 @@ const callNext = async (counterId, staffId = null) => {
 };
 
 const callById = async (ticketId, counterId, staffId = null) => {
-    const counter = await ensureCounterReadyForProcessing(counterId);
+    const counter = await ensureCounterActive(counterId);
     const accessScope = await getServiceAccessScope(counterId, staffId);
     ensureStaffHasAccessibleServices(accessScope);
 
@@ -795,7 +801,7 @@ const callById = async (ticketId, counterId, staffId = null) => {
 };
 
 const recallTicket = async (ticketId, counterId, staffId = null) => {
-    const counter = await ensureCounterReadyForProcessing(counterId);
+    const counter = await ensureCounterActive(counterId);
 
     const accessScope = await getServiceAccessScope(counterId, staffId);
     ensureStaffHasAccessibleServices(accessScope);
@@ -971,9 +977,9 @@ const completeTicket = async (id, counterId = null, staffId = null) => {
 
     if (ticket.counterId) {
         await Counter.findByIdAndUpdate(ticket.counterId, {
-            currentTicketId: null,
             $inc: { processedCount: 1 }
         });
+        await refreshCounterCurrentTicket(ticket.counterId);
 
         await emitStaffDisplayUpdateForCounters([ticket.counterId], 'ticket-completed', {
             ticketId: ticket._id
@@ -1025,7 +1031,7 @@ const skipTicket = async (id, reason = '', counterId, staffId = null) => {
     await ticket.save();
 
     if (currentCounterId) {
-        await Counter.findByIdAndUpdate(currentCounterId, { currentTicketId: null });
+        await refreshCounterCurrentTicket(currentCounterId);
     }
 
     if (global.io) {
@@ -1089,12 +1095,13 @@ const getCounterDisplay = async (counterId) => {
     .sort({ weight: -1, createdAt: 1, number: 1 })
     .limit(10);
 
-    let currentTicket = null;
-    if (counter.currentTicketId) {
-        currentTicket = await Ticket.findById(counter.currentTicketId)
-            .populate('serviceId', 'name code')
-            .populate('queueCounterId', 'number');
-    }
+    const processingTickets = await Ticket.find({
+        counterId,
+        status: TicketStatus.PROCESSING
+    })
+        .populate('serviceId', 'name code')
+        .populate('queueCounterId', 'number')
+        .sort({ processingAt: 1, createdAt: 1, number: 1 });
 
     const formatTicket = (ticket) => buildTicketPresentation(ticket, counter);
 
@@ -1111,7 +1118,8 @@ const getCounterDisplay = async (counterId) => {
             name: rel.serviceId.name,
             code: rel.serviceId.code
         })),
-        currentTicket: currentTicket ? formatTicket(currentTicket) : null,
+        currentTicket: processingTickets.length ? formatTicket(processingTickets[0]) : null,
+        processingTickets: processingTickets.map(formatTicket),
         waitingTickets: waitingTickets.map(formatTicket),
         recallTickets: [],
         totalWaiting: waitingTickets.length
@@ -1128,14 +1136,25 @@ const getMyCounter = async (counterId, staffId = null) => {
     ensureStaffHasAccessibleServices(accessScope);
 
     let currentTicket = null;
-    if (counter.currentTicketId) {
-        currentTicket = await Ticket.findById(counter.currentTicketId)
+    if (staffId) {
+        currentTicket = await Ticket.findOne({
+            counterId,
+            staffId,
+            status: TicketStatus.PROCESSING,
+            serviceId: { $in: accessScope.allowedServiceIds }
+        })
             .populate('serviceId', 'name code')
-            .populate('queueCounterId', 'number');
-    }
-
-    if (currentTicket && !canAccessService(accessScope.allowedServiceIds, currentTicket.serviceId?._id || currentTicket.serviceId)) {
-        currentTicket = null;
+            .populate('queueCounterId', 'number')
+            .sort({ processingAt: -1, updatedAt: -1 });
+    } else {
+        currentTicket = await Ticket.findOne({
+            counterId,
+            status: TicketStatus.PROCESSING,
+            serviceId: { $in: accessScope.allowedServiceIds }
+        })
+            .populate('serviceId', 'name code')
+            .populate('queueCounterId', 'number')
+            .sort({ processingAt: -1, updatedAt: -1 });
     }
 
     return {
@@ -1175,14 +1194,25 @@ const getStaffDisplay = async (counterId, staffId = null) => {
     .limit(10);
 
     let currentTicket = null;
-    if (counter.currentTicketId) {
-        currentTicket = await Ticket.findById(counter.currentTicketId)
+    if (staffId) {
+        currentTicket = await Ticket.findOne({
+            counterId,
+            staffId,
+            status: TicketStatus.PROCESSING,
+            serviceId: { $in: accessScope.allowedServiceIds }
+        })
             .populate('serviceId', 'name code')
-            .populate('queueCounterId', 'number');
-    }
-
-    if (currentTicket && !canAccessService(accessScope.allowedServiceIds, currentTicket.serviceId?._id || currentTicket.serviceId)) {
-        currentTicket = null;
+            .populate('queueCounterId', 'number')
+            .sort({ processingAt: -1, updatedAt: -1 });
+    } else {
+        currentTicket = await Ticket.findOne({
+            counterId,
+            status: TicketStatus.PROCESSING,
+            serviceId: { $in: accessScope.allowedServiceIds }
+        })
+            .populate('serviceId', 'name code')
+            .populate('queueCounterId', 'number')
+            .sort({ processingAt: -1, updatedAt: -1 });
     }
 
     const formatTicket = (ticket) => buildTicketPresentation(ticket, counter);
