@@ -1,5 +1,6 @@
 const ticketService = require('../services/ticket.service');
 const printerService = require('../services/printer.service');
+const { speakCallTicket } = require('../services/tts.service');
 const Printer = require('../models/printer.model');
 const logger = require('../utils/Logger');
 const { emitAdminNotificationSafe } = require('../services/admin-notification.service');
@@ -147,11 +148,14 @@ exports.callNext = async (req, res) => {
         );
 
         logger.success(`Đã gọi số ${nextTicket.formattedNumber} đến ${counter.name}`);
+        speakCallTicket(nextTicket.displayNumber, counter.name).catch((error) => {
+            logger.error(`Lỗi phát âm thanh: ${error.message}`);
+        });
 
         res.json({
             success: true,
             data: nextTicket,
-            message: `Đã gọi số ${nextTicket.formattedNumber} đến ${counter.name}`
+            message: `Vui lòng số ${nextTicket.formattedNumber} đến ${counter.name}`
         });
     } catch (error) {
         if (error.message.includes('đang xử lý')) {
