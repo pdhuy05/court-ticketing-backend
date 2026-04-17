@@ -27,6 +27,13 @@ const TicketSchema = new mongoose.Schema({
     index: true
   },
 
+  staffId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null,
+    index: true
+  },
+
   queueCounterId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Counter',
@@ -111,6 +118,7 @@ const TicketSchema = new mongoose.Schema({
 TicketSchema.index({ status: 1, createdAt: 1 });
 TicketSchema.index({ serviceId: 1, status: 1 });
 TicketSchema.index({ counterId: 1, status: 1 });
+TicketSchema.index({ staffId: 1, status: 1 });
 TicketSchema.index({ queueCounterId: 1, status: 1 });
 TicketSchema.index({ isRecall: 1, status: 1, recalledAt: 1 });
 TicketSchema.index({ recallCounterId: 1, isRecall: 1, status: 1, recalledAt: 1 });

@@ -169,6 +169,34 @@ exports.callNext = async (req, res) => {
     }
 };
 
+exports.callById = async (req, res) => {
+    const counterId = req.user?.counterId;
+
+    if (!counterId) {
+        return res.status(400).json({
+            success: false,
+            message: 'Tài khoản chưa được gán quầy'
+        });
+    }
+
+    const { ticket, counter } = await ticketService.callById(
+        req.body.ticketId,
+        counterId,
+        req.user?._id
+    );
+
+    logger.success(`Đã gọi số ${ticket.formattedNumber} đến ${counter.name} theo ticketId`);
+    speakCallTicket(ticket.displayNumber, counter.name).catch((error) => {
+        logger.error(`Lỗi phát âm thanh: ${error.message}`);
+    });
+
+    res.json({
+        success: true,
+        data: ticket,
+        message: `Vui lòng số ${ticket.formattedNumber} đến ${counter.name}`
+    });
+};
+
 exports.complete = async (req, res) => {
     const ticket = await ticketService.completeTicket(
         req.params.id,

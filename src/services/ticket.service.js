@@ -241,6 +241,57 @@ const ensureStaffHasAccessibleServices = (accessScope) => {
 
 const canAccessService = (serviceIds, serviceId) => serviceIds.includes(String(serviceId));
 
+const ensureCounterReadyForProcessing = async (counterId) => {
+    const counter = await Counter.findById(counterId);
+    if (!counter?.isActive) {
+        throw new ApiError(400, 'Quầy không tồn tại hoặc không hoạt động');
+    }
+
+    const currentTicket = await Ticket.findOne({
+        counterId,
+        status: TicketStatus.PROCESSING
+    });
+
+    if (currentTicket) {
+        throw new ApiError(400, `Quầy đang xử lý ticket ${formatDisplayNumber(counter.number, currentTicket.number)}. Vui lòng hoàn thành hoặc bỏ qua trước khi gọi số mới.`);
+    }
+
+    return counter;
+};
+
+const emitTicketCalled = async (ticket, counter, reason = 'ticket-called') => {
+    if (global.io) {
+        const formattedNumber = buildTicketPresentation(ticket, counter).formattedNumber;
+
+        global.io.to('waiting-room').emit('ticket-called', {
+            ticket: {
+                id: ticket._id,
+                number: ticket.number,
+                formattedNumber,
+                customerName: ticket.name,
+                serviceName: ticket.serviceId.name,
+                isRecall: ticket.isRecall
+            },
+            counterName: counter.name,
+            counterId: counter._id,
+            calledAt: new Date(),
+            reason
+        });
+
+        global.io.to(`counter-${counter._id}`).emit('new-current-ticket', {
+            currentTicket: {
+                id: ticket._id,
+                number: ticket.number,
+                formattedNumber,
+                customerName: ticket.name,
+                phone: ticket.phone,
+                serviceName: ticket.serviceId.name,
+                status: TicketStatus.PROCESSING
+            }
+        });
+    }
+};
+
 const getRecallList = async (counterId, staffId = null) => {
     const accessScope = await getServiceAccessScope(counterId, staffId);
     ensureStaffHasAccessibleServices(accessScope);
@@ -613,17 +664,7 @@ const resetAllTickets = async (actor) => {
 };
 
 const callNext = async (counterId, staffId = null) => {
-    const counter = await Counter.findById(counterId);
-    if (!counter?.isActive) throw new ApiError(400, 'Quầy không tồn tại hoặc không hoạt động');
-
-    const currentTicket = await Ticket.findOne({
-        counterId,
-        status: TicketStatus.PROCESSING
-    });
-
-    if (currentTicket) {
-        throw new ApiError(400, `Quầy đang xử lý ticket ${formatDisplayNumber(counter.number, currentTicket.number)}. Vui lòng hoàn thành hoặc bỏ qua trước khi gọi số mới.`);
-    }
+    const counter = await ensureCounterReadyForProcessing(counterId);
 
     const accessScope = await getServiceAccessScope(counterId, staffId);
     ensureStaffHasAccessibleServices(accessScope);
@@ -662,38 +703,12 @@ const callNext = async (counterId, staffId = null) => {
     });
 
     nextTicket.serviceCounterId = serviceCounter?._id || null;
+    nextTicket.staffId = staffId || null;
     await nextTicket.save();
     counter.currentTicketId = nextTicket._id;
     await counter.save();
 
-    if (global.io) {
-        const formattedNumber = buildTicketPresentation(nextTicket, counter).formattedNumber;
-
-        global.io.to('waiting-room').emit('ticket-called', {
-            ticket: {
-                id: nextTicket._id,
-                number: nextTicket.number,
-                formattedNumber,
-                customerName: nextTicket.name,
-                serviceName: nextTicket.serviceId.name
-            },
-            counterName: counter.name,
-            counterId: counter._id,
-            calledAt: new Date()
-        });
-
-        global.io.to(`counter-${counter._id}`).emit('new-current-ticket', {
-            currentTicket: {
-                id: nextTicket._id,
-                number: nextTicket.number,
-                formattedNumber,
-                customerName: nextTicket.name,
-                phone: nextTicket.phone,
-                serviceName: nextTicket.serviceId.name,
-                status: TicketStatus.PROCESSING
-            }
-        });
-    }
+    await emitTicketCalled(nextTicket, counter, 'call-next');
 
     await emitStaffDisplayUpdateForCounters([counter._id], 'ticket-called', {
         ticketId: nextTicket._id
@@ -711,20 +726,76 @@ const callNext = async (counterId, staffId = null) => {
     };
 };
 
-const recallTicket = async (ticketId, counterId, staffId = null) => {
-    const counter = await Counter.findById(counterId);
-    if (!counter?.isActive) {
-        throw new ApiError(400, 'Quầy không tồn tại hoặc không hoạt động');
+const callById = async (ticketId, counterId, staffId = null) => {
+    const counter = await ensureCounterReadyForProcessing(counterId);
+    const accessScope = await getServiceAccessScope(counterId, staffId);
+    ensureStaffHasAccessibleServices(accessScope);
+
+    const ticket = await Ticket.findById(ticketId)
+        .populate('serviceId', 'name code')
+        .populate('queueCounterId', 'number')
+        .populate('counterId', 'name number');
+
+    if (!ticket) {
+        throw new ApiError(404, 'Không tìm thấy ticket');
     }
 
-    const currentTicket = await Ticket.findOne({
+    if (ticket.status !== TicketStatus.WAITING) {
+        throw new ApiError(400, 'Chỉ có thể gọi ticket đang ở trạng thái chờ');
+    }
+
+    if (!canAccessService(accessScope.allowedServiceIds, ticket.serviceId?._id || ticket.serviceId)) {
+        throw new ApiError(403, 'Nhân viên không được phép gọi ticket thuộc dịch vụ này');
+    }
+
+    const belongsToCounter = ticket.isRecall
+        ? String(ticket.recallCounterId || '') === String(counterId)
+        : String(ticket.queueCounterId?._id || ticket.queueCounterId || '') === String(counterId);
+
+    if (!belongsToCounter) {
+        throw new ApiError(403, 'Ticket không thuộc danh sách xử lý của quầy này');
+    }
+
+    const serviceCounter = await ServiceCounter.findOne({
+        serviceId: ticket.serviceId._id,
         counterId,
-        status: TicketStatus.PROCESSING
+        isActive: true
     });
 
-    if (currentTicket) {
-        throw new ApiError(400, `Quầy đang xử lý ticket ${formatDisplayNumber(counter.number, currentTicket.number)}. Vui lòng hoàn thành hoặc bỏ qua trước khi gọi lại.`);
-    }
+    ticket.isRecall = false;
+    ticket.recalledAt = null;
+    ticket.recallCounterId = null;
+    ticket.status = TicketStatus.PROCESSING;
+    ticket.counterId = counterId;
+    ticket.staffId = staffId || null;
+    ticket.processingAt = new Date();
+    ticket.serviceCounterId = serviceCounter?._id || null;
+    await ticket.save();
+
+    counter.currentTicketId = ticket._id;
+    await counter.save();
+
+    await emitTicketCalled(ticket, counter, 'call-by-id');
+
+    await emitStaffDisplayUpdateForCounters([counterId], 'ticket-called', {
+        ticketId: ticket._id,
+        callMode: 'call-by-id'
+    });
+
+    await emitDashboardUpdateSafe('ticket-called');
+
+    return {
+        ticket: {
+            ...ticket.toObject(),
+            formattedNumber: buildTicketPresentation(ticket, counter).formattedNumber,
+            displayNumber: buildTicketPresentation(ticket, counter).displayNumber
+        },
+        counter
+    };
+};
+
+const recallTicket = async (ticketId, counterId, staffId = null) => {
+    const counter = await ensureCounterReadyForProcessing(counterId);
 
     const accessScope = await getServiceAccessScope(counterId, staffId);
     ensureStaffHasAccessibleServices(accessScope);
@@ -748,6 +819,7 @@ const recallTicket = async (ticketId, counterId, staffId = null) => {
     ticket.recallCounterId = null;
     ticket.status = TicketStatus.PROCESSING;
     ticket.counterId = counterId;
+    ticket.staffId = staffId || null;
     ticket.processingAt = new Date();
 
     const serviceCounter = await ServiceCounter.findOne({
@@ -761,9 +833,10 @@ const recallTicket = async (ticketId, counterId, staffId = null) => {
     counter.currentTicketId = ticket._id;
     await counter.save();
 
+    await emitTicketCalled(ticket, counter, 'recall-ticket');
+
     if (global.io) {
         const formattedNumber = buildTicketPresentation(ticket, counter).formattedNumber;
-
         global.io.to('waiting-room').emit('ticket-recalled', {
             ticketId: ticket._id,
             number: ticket.number,
@@ -773,18 +846,6 @@ const recallTicket = async (ticketId, counterId, staffId = null) => {
             counterName: counter.name,
             serviceName: ticket.serviceId.name,
             recalledAt: new Date()
-        });
-
-        global.io.to(`counter-${counterId}`).emit('new-current-ticket', {
-            currentTicket: {
-                id: ticket._id,
-                number: ticket.number,
-                formattedNumber,
-                customerName: ticket.name,
-                phone: ticket.phone,
-                serviceName: ticket.serviceId.name,
-                status: TicketStatus.PROCESSING
-            }
         });
     }
 
@@ -824,6 +885,7 @@ const cancelRecallTicket = async (ticketId, counterId, staffId = null, reason = 
     ticket.recallCounterId = null;
     ticket.status = TicketStatus.SKIPPED;
     ticket.counterId = null;
+    ticket.staffId = null;
     ticket.serviceCounterId = null;
     ticket.processingAt = null;
 
@@ -883,6 +945,7 @@ const completeTicket = async (id, counterId = null, staffId = null) => {
     ticket.isRecall = false;
     ticket.recalledAt = null;
     ticket.recallCounterId = null;
+    ticket.staffId = null;
     await ticket.save();
 
     if (global.io) {
@@ -952,6 +1015,7 @@ const skipTicket = async (id, reason = '', counterId, staffId = null) => {
     ticket.recallCounterId = currentCounterId;
     ticket.status = TicketStatus.WAITING;
     ticket.counterId = null;
+    ticket.staffId = null;
     ticket.serviceCounterId = null;
     ticket.processingAt = null;
     
@@ -1151,6 +1215,7 @@ module.exports = {
     resetTicketsByDate,
     resetAllTickets,
     callNext,
+    callById,
     recallTicket,
     cancelRecallTicket,
     completeTicket,

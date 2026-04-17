@@ -41,7 +41,7 @@ const getStaffServiceAccess = async (staffId, counterId) => {
 
   const availableServiceIds = availableServices.map((service) => String(service.id));
   const availableServiceIdSet = new Set(availableServiceIds);
-  const serviceRestrictionConfigured = Boolean(staffId) && assignments.length > 0;
+  const serviceRestrictionConfigured = Boolean(staffId);
 
   const assignedServices = assignments
     .filter((assignment) => assignment.isActive && availableServiceIdSet.has(normalizeId(assignment.serviceId)))

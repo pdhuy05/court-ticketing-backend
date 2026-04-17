@@ -44,6 +44,12 @@ const callNextSchema = Joi.object({
         })
 });
 
+const callByIdSchema = Joi.object({
+    ticketId: objectId.required().messages({
+        'any.required': 'ticketId là bắt buộc'
+    })
+});
+
 const completeTicketSchema = Joi.object({}).optional();
 
 const cancelTicketSchema = Joi.object({
@@ -63,6 +69,7 @@ module.exports = {
     }),
     createTicketSchema,
     callNextSchema,
+    callByIdSchema,
     completeTicketSchema,
     cancelTicketSchema,
     skipTicketSchema,
