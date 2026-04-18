@@ -57,9 +57,9 @@ const TicketSchema = new mongoose.Schema({
     type: String,
     required: true,
     trim: true,
-    match: [/^(03|05|07|08|09|01[2|6|8|9])[0-9]{7,8}$/, 'Số điện thoại không hợp lệ (VD: 0912345678)'],
-    minlength: 10,
-    maxlength: 11
+    match: [/^[0-9]{8,15}$/, 'Số điện thoại phải gồm ít nhất 8 chữ số'],
+    minlength: 8,
+    maxlength: 15
   },
 
   status: {
