@@ -221,10 +221,14 @@ exports.skip = async (req, res) => {
 
     logger.warning(`Đã bỏ qua số ${ticket.formattedNumber} - Lý do: ${reason || 'Khách vắng mặt '}`);
 
+    const message = ticket.isRecall
+        ? `Đã chuyển số ${ticket.formattedNumber} vào danh sách cần gọi lại`
+        : `Đã đóng ticket ${ticket.formattedNumber} sau ${ticket.skipCount} lần bỏ qua`;
+
     res.json({
         success: true,
         data: ticket,
-        message: `Đã chuyển số ${ticket.formattedNumber} vào danh sách cần gọi lại`
+        message
     });
 };
 

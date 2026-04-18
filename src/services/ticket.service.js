@@ -240,6 +240,26 @@ const ensureStaffHasAccessibleServices = (accessScope) => {
 };
 
 const canAccessService = (serviceIds, serviceId) => serviceIds.includes(String(serviceId));
+const MAX_RECALL_SKIP_COUNT = 3;
+
+const getDurationInSeconds = (from, to = new Date()) => {
+    if (!from || !to) {
+        return 0;
+    }
+
+    const diff = Math.floor((new Date(to).getTime() - new Date(from).getTime()) / 1000);
+    return diff > 0 ? diff : 0;
+};
+
+const markTicketAsCalled = (ticket, calledTime = new Date()) => {
+    if (!ticket.calledAt) {
+        ticket.calledAt = calledTime;
+        ticket.waitingDuration = getDurationInSeconds(ticket.createdAt, calledTime);
+    }
+
+    ticket.processingAt = calledTime;
+    ticket.skippedAt = null;
+};
 
 const ensureCounterActive = async (counterId) => {
     const counter = await Counter.findById(counterId);
@@ -356,11 +376,13 @@ const createTicket = async ({ serviceId, name, phone, counterId = null }) => {
         status: TicketStatus.WAITING,
         isRecall: false,
         recalledAt: null,
-        qrCode: null
+        qrData: null
     });
 
     await ticket.populate('serviceId', 'name code');
     const qrData = generateQRData(ticket, service, displayNumber);
+    ticket.qrData = qrData;
+    await ticket.save();
 
     if (global.io) {
         const waitingCount = await Ticket.countDocuments({
@@ -432,7 +454,7 @@ const getAllWaiting = async () => {
     })
         .populate('serviceId', 'name code')
         .populate('queueCounterId', 'number')
-        .sort({ weight: -1, number: 1 });
+        .sort({ createdAt: 1, number: 1 });
 
     return tickets.map(ticket => ({
         ...ticket.toObject(),
@@ -690,10 +712,9 @@ const callNext = async (counterId, staffId = null) => {
         {
             status: TicketStatus.PROCESSING,
             counterId,
-            processingAt: new Date(),
             recalledAt: null
         },
-        { sort: { weight: -1, number: 1 }, returnDocument: 'after' }
+        { sort: { createdAt: 1, number: 1 }, returnDocument: 'after' }
     )
         .populate('serviceId', 'name code')
         .populate('queueCounterId', 'number');
@@ -710,6 +731,7 @@ const callNext = async (counterId, staffId = null) => {
 
     nextTicket.serviceCounterId = serviceCounter?._id || null;
     nextTicket.staffId = staffId || null;
+    markTicketAsCalled(nextTicket);
     await nextTicket.save();
     counter.currentTicketId = nextTicket._id;
     await counter.save();
@@ -774,7 +796,7 @@ const callById = async (ticketId, counterId, staffId = null) => {
     ticket.status = TicketStatus.PROCESSING;
     ticket.counterId = counterId;
     ticket.staffId = staffId || null;
-    ticket.processingAt = new Date();
+    markTicketAsCalled(ticket);
     ticket.serviceCounterId = serviceCounter?._id || null;
     await ticket.save();
 
@@ -826,7 +848,7 @@ const recallTicket = async (ticketId, counterId, staffId = null) => {
     ticket.status = TicketStatus.PROCESSING;
     ticket.counterId = counterId;
     ticket.staffId = staffId || null;
-    ticket.processingAt = new Date();
+    markTicketAsCalled(ticket);
 
     const serviceCounter = await ServiceCounter.findOne({
         serviceId: ticket.serviceId._id,
@@ -947,6 +969,7 @@ const cancelRecallTicket = async (ticketId, counterId, staffId = null, reason = 
     ticket.staffId = null;
     ticket.serviceCounterId = null;
     ticket.processingAt = null;
+    ticket.skippedAt = new Date();
 
     if (reason) {
         ticket.note = reason;
@@ -1000,11 +1023,13 @@ const completeTicket = async (id, counterId = null, staffId = null) => {
 
     ticket.status = TicketStatus.COMPLETED;
     ticket.completedAt = new Date();
-    ticket.qrCode = null;
+    ticket.qrData = null;
     ticket.isRecall = false;
     ticket.recalledAt = null;
     ticket.recallCounterId = null;
     ticket.staffId = null;
+    ticket.processingDuration = getDurationInSeconds(ticket.calledAt || ticket.processingAt || ticket.createdAt, ticket.completedAt);
+    ticket.totalDuration = getDurationInSeconds(ticket.createdAt, ticket.completedAt);
     await ticket.save();
 
     if (global.io) {
@@ -1068,15 +1093,23 @@ const skipTicket = async (id, reason = '', counterId, staffId = null) => {
     }
 
     ticket.skipCount = (ticket.skipCount || 0) + 1;
-    ticket.weight = 0;
-    ticket.isRecall = true;
-    ticket.recalledAt = new Date();
-    ticket.recallCounterId = currentCounterId;
-    ticket.status = TicketStatus.WAITING;
+    ticket.skippedAt = new Date();
     ticket.counterId = null;
     ticket.staffId = null;
     ticket.serviceCounterId = null;
     ticket.processingAt = null;
+
+    if (ticket.skipCount >= MAX_RECALL_SKIP_COUNT) {
+        ticket.isRecall = false;
+        ticket.recalledAt = null;
+        ticket.recallCounterId = null;
+        ticket.status = TicketStatus.SKIPPED;
+    } else {
+        ticket.isRecall = true;
+        ticket.recalledAt = ticket.skippedAt;
+        ticket.recallCounterId = currentCounterId;
+        ticket.status = TicketStatus.WAITING;
+    }
     
     if (reason) {
         ticket.note = reason;
@@ -1096,8 +1129,8 @@ const skipTicket = async (id, reason = '', counterId, staffId = null) => {
             formattedNumber: formattedNumberSkip,
             customerName: ticket.name,
             skipCount: ticket.skipCount,
-            weight: ticket.weight,
-            isRecall: true,
+            isRecall: ticket.isRecall,
+            status: ticket.status,
             recalledAt: ticket.recalledAt
         });
         
@@ -1145,7 +1178,7 @@ const getCounterDisplay = async (counterId) => {
     })
     .populate('serviceId', 'name code')
     .populate('queueCounterId', 'number')
-    .sort({ weight: -1, createdAt: 1, number: 1 })
+    .sort({ createdAt: 1, number: 1 })
     .limit(10);
 
     const processingTickets = await Ticket.find({
@@ -1243,7 +1276,7 @@ const getStaffDisplay = async (counterId, staffId = null) => {
     })
     .populate('serviceId', 'name code')
     .populate('queueCounterId', 'number')
-    .sort({ weight: -1, createdAt: 1, number: 1 })
+    .sort({ createdAt: 1, number: 1 })
     .limit(10);
 
     let currentTicket = null;

@@ -68,6 +68,11 @@ const TicketSchema = new mongoose.Schema({
     default: TicketStatus.WAITING,
     required: true
   },
+
+  calledAt: {
+    type: Date,
+    default: null
+  },
   
   processingAt: {
     type: Date,
@@ -79,7 +84,30 @@ const TicketSchema = new mongoose.Schema({
     default: null
   },
 
-  qrCode: { 
+  skippedAt: {
+    type: Date,
+    default: null
+  },
+
+  waitingDuration: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+
+  processingDuration: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+
+  totalDuration: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+
+  qrData: {
     type: String, 
     default: null 
   },
@@ -100,11 +128,6 @@ const TicketSchema = new mongoose.Schema({
     ref: 'Counter',
     default: null,
     index: true
-  },
-
-  weight: {
-    type: Number, 
-    default: 0 
   },
 
   skipCount: { 
