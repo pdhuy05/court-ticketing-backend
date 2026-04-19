@@ -15,7 +15,6 @@ class PrinterService {
     this.printers = new Map();
   }
 
-  // ================= PRINTER =================
   addNetworkPrinter(printerId, host, port = 9100) {
     this.printers.set(printerId, {
       type: ConnectPrint.NETWORK,
@@ -39,7 +38,6 @@ class PrinterService {
     }));
   }
 
-  // ================= QR =================
   async generateQRCode(ticket, service) {
     const qrText = `
 SỐ THỨ TỰ: ${getDisplayTicketNumber(ticket)}
@@ -66,7 +64,6 @@ THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString('vi-VN')}
     }
   }
 
-  // ================= TẠO SVG LAYOUT =================
   async generateSVG(ticket, service, qrBuffer) {
     const width = 576;
     const height = 1240;
@@ -146,7 +143,6 @@ THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString('vi-VN')}
     `;
   }
 
-  // ================= CONVERT SVG TO ESC/POS =================
   async convertToEscPos(svgBuffer, printWidth) {
     const pngBuffer = await sharp(svgBuffer)
       .png()
@@ -193,7 +189,6 @@ THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString('vi-VN')}
     return Buffer.concat([header, imageData]);
   }
 
-  // ================= PRINT =================
   async printTicket(printerId, ticket, service) {
     const printer = this.printers.get(printerId);
     if (!printer) {

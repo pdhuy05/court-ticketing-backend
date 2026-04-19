@@ -9,10 +9,8 @@ const ApiError = require('../utils/ApiError');
 const { emitDashboardUpdateSafe } = require('./dashboard.service');
 const { writeBackup } = require('./ticket-backup.service');
 const { generateQRData, verifyQRData } = require('../utils/qrData.util');
-const {
-    getStaffServiceAccess,
-    assertStaffCanHandleService
-} = require('./staff-permission.service');
+const { getStaffServiceAccess, assertStaffCanHandleService } = require('./staff-permission.service');
+const { calculateDailyStatistics } = require('./statistics.service');
 
 const parseTargetDate = (dateString) => {
     if (!dateString) {
@@ -595,6 +593,8 @@ const resetTicketsByDate = async (dateString, actor) => {
             end
         }
     });
+
+    await calculateDailyStatistics(start, end, actor);
 
     await Counter.updateMany(
         { currentTicketId: { $in: ticketIds } },

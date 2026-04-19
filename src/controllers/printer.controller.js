@@ -1,9 +1,7 @@
-// controllers/printer.controller.js
 const Printer = require('../models/printer.model');
 const printerService = require('../services/printer.service');
 const Ticket = require('../models/ticket.model');
 
-// GET: Lấy danh sách tất cả máy in
 exports.getAll = async (req, res, next) => {
   const printers = await Printer.find().sort({ createdAt: -1 });
   res.json({ 
@@ -13,7 +11,6 @@ exports.getAll = async (req, res, next) => {
   });
 };
 
-// GET: Lấy máy in theo ID
 exports.getById = async (req, res, next) => {
   const printer = await Printer.findById(req.params.id);
   if (!printer) {
@@ -25,7 +22,6 @@ exports.getById = async (req, res, next) => {
   res.json({ success: true, data: printer });
 };
 
-// POST: Tạo máy in mới
 exports.create = async (req, res, next) => {
   const { name, code, type, connection, location, isActive, isDefault } = req.body;
   
@@ -52,7 +48,6 @@ exports.create = async (req, res, next) => {
   });
 };
 
-// PUT: Cập nhật máy in
 exports.update = async (req, res, next) => {
   const printer = await Printer.findByIdAndUpdate(
     req.params.id,
@@ -74,7 +69,6 @@ exports.update = async (req, res, next) => {
   });
 };
 
-// DELETE: Xóa máy in
 exports.delete = async (req, res, next) => {
   const printer = await Printer.findByIdAndDelete(req.params.id);
   if (!printer) {
@@ -86,7 +80,6 @@ exports.delete = async (req, res, next) => {
   res.json({ success: true, message: 'Xóa máy in thành công' });
 };
 
-// POST: Test kết nối máy in
 exports.testPrint = async (req, res, next) => {
   const { code } = req.params;
   
@@ -119,7 +112,6 @@ exports.testPrint = async (req, res, next) => {
   res.json(result);
 };
 
-// POST: In ticket
 exports.printTicket = async (req, res, next) => {
   const { printerCode, ticketId } = req.body;
   
@@ -149,7 +141,6 @@ exports.printTicket = async (req, res, next) => {
   res.json({ success: true, message: 'Đã gửi lệnh in', data: result });
 };
 
-// GET: Lấy trạng thái máy in
 exports.getStatus = async (req, res, next) => {
   const { code } = req.params;
   
