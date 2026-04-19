@@ -8,6 +8,7 @@ const AuthRoute = require("./routers/auth.route");
 const AdminUserRoute = require("./routers/admin/user.route");
 const AdminDashboardRoute = require("./routers/admin/dashboard.route");
 const AdminTicketRoute = require("./routers/admin/ticket.route");
+const AdminSettingsRoute = require("./routers/admin/settings.route");
 const StatisticsRoute = require("./routers/statistics.route");
 const { notifySystemError } = require("./services/admin-notification.service");
 
@@ -26,6 +27,7 @@ app.use("/api/auth", AuthRoute)
 app.use("/api/admin/users", AdminUserRoute);  
 app.use("/api/admin/dashboard", AdminDashboardRoute);
 app.use("/api/admin/tickets", AdminTicketRoute);
+app.use("/api/admin/settings", AdminSettingsRoute);
 app.use("/api/statistics", StatisticsRoute);
 
 app.use((err, req, res, next) => {

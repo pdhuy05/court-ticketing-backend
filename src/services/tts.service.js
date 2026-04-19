@@ -16,9 +16,6 @@ let speechQueue = Promise.resolve();
 
 const sanitizeText = (text = '') => String(text).replace(/"/g, '\\"').replace(/'/g, "\\'").trim();
 
-/**
- * Tải audio TTS từ Google Translate API (miễn phí, hỗ trợ tiếng Việt)
- */
 const downloadGoogleTTS = (text, outputPath) => new Promise((resolve, reject) => {
   const encodedText = encodeURIComponent(text);
   const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=${TTS_LANG}&client=tw-ob`;
@@ -56,9 +53,6 @@ const downloadGoogleTTS = (text, outputPath) => new Promise((resolve, reject) =>
   });
 });
 
-/**
- * Phát file audio bằng lệnh native của OS
- */
 const playAudio = (filePath) => new Promise((resolve, reject) => {
   const platform = os.platform();
   let command;
@@ -90,9 +84,6 @@ const playAudio = (filePath) => new Promise((resolve, reject) => {
   });
 });
 
-/**
- * Fallback: dùng lệnh TTS native của OS (đọc tiếng Anh)
- */
 const speakNativeFallback = (text) => new Promise((resolve, reject) => {
   const platform = os.platform();
   const escapedText = sanitizeText(text);
@@ -132,7 +123,6 @@ const runSpeakProcess = async (text) => {
     throw new Error('Văn bản trống, không thể đọc');
   }
 
-  // Thử Google TTS (tiếng Việt) trước
   try {
     const tmpFile = path.join(os.tmpdir(), `tts_${Date.now()}.mp3`);
     await downloadGoogleTTS(text, tmpFile);
@@ -148,7 +138,6 @@ const runSpeakProcess = async (text) => {
     logger.warning(`Google TTS thất bại: ${googleError.message}. Thử fallback native...`);
   }
 
-  // Fallback: dùng native OS TTS
   try {
     await speakNativeFallback(text);
     logger.info(`Đã đọc (native fallback): "${text}"`);

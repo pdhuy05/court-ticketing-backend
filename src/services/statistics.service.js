@@ -153,7 +153,7 @@ const calculateDailyStatistics = async (startDate, endDate, actor = null) => {
   const saved = await DailyStatistics.findOneAndUpdate(
     { date },
     { $set: payload },
-    { upsert: true, new: true, runValidators: true }
+    { upsert: true, returnDocument: 'after', runValidators: true }
   );
 
   return saved.toObject ? saved.toObject() : saved;

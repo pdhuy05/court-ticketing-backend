@@ -45,9 +45,13 @@ const callNextSchema = Joi.object({
 });
 
 const callByIdSchema = Joi.object({
-    ticketId: objectId.required().messages({
-        'any.required': 'ticketId là bắt buộc'
-    })
+    ticketId: objectId
+        .required()
+        .messages({
+            'any.required': 'ticketId là bắt buộc',
+            'string.empty': 'ticketId không được để trống',
+            'string.pattern.base': 'ticketId phải là ObjectId hợp lệ (24 ký tự hex)'
+        })
 });
 
 const completeTicketSchema = Joi.object({}).optional();

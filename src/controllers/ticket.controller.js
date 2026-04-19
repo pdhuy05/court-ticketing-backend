@@ -1,10 +1,20 @@
 const ticketService = require('../services/ticket.service');
 const printerService = require('../services/printer.service');
+const settingService = require('../services/setting.service');
 const { speakCallTicket } = require('../services/tts.service');
 const Printer = require('../models/printer.model');
 const Counter = require('../models/counter.model');
 const logger = require('../utils/Logger');
 const { emitAdminNotificationSafe } = require('../services/admin-notification.service');
+
+const speakTicketIfTtsEnabled = async (displayNumber, counterName) => {
+    if (!(await settingService.isTtsEnabled())) {
+        return;
+    }
+    speakCallTicket(displayNumber, counterName).catch((error) => {
+        logger.error(`Lỗi phát âm thanh: ${error.message}`);
+    });
+};
 
 const queueAutoPrintTicket = ({ ticket, service, ticketNumberDisplay }) => {
     setImmediate(async () => {
@@ -149,9 +159,7 @@ exports.callNext = async (req, res) => {
         );
 
         logger.success(`Đã gọi số ${nextTicket.formattedNumber} đến ${counter.name}`);
-        speakCallTicket(nextTicket.displayNumber, counter.name).catch((error) => {
-            logger.error(`Lỗi phát âm thanh: ${error.message}`);
-        });
+        await speakTicketIfTtsEnabled(nextTicket.displayNumber, counter.name);
 
         res.json({
             success: true,
@@ -187,9 +195,7 @@ exports.callById = async (req, res) => {
     );
 
     logger.success(`Đã gọi số ${ticket.formattedNumber} đến ${counter.name} theo ticketId`);
-    speakCallTicket(ticket.displayNumber, counter.name).catch((error) => {
-        logger.error(`Lỗi phát âm thanh: ${error.message}`);
-    });
+    await speakTicketIfTtsEnabled(ticket.displayNumber, counter.name);
 
     res.json({
         success: true,
@@ -264,9 +270,7 @@ exports.recallTicket = async (req, res) => {
     const ticket = await ticketService.recallTicket(req.params.id, counterId, req.user?._id);
     const counter = await Counter.findById(counterId).select('name');
 
-    speakCallTicket(ticket.displayNumber, counter?.name || 'quầy hiện tại').catch((error) => {
-        logger.error(`Lỗi phát âm thanh: ${error.message}`);
-    });
+    await speakTicketIfTtsEnabled(ticket.displayNumber, counter?.name || 'quầy hiện tại');
 
     res.json({
         success: true,
@@ -293,9 +297,7 @@ exports.recallProcessingTicket = async (req, res) => {
     const counter = await Counter.findById(counterId).select('name');
 
     logger.success(`Đã gọi lại vé đang xử lý ${ticket.formattedNumber}`);
-    speakCallTicket(ticket.displayNumber, counter?.name || 'quầy hiện tại').catch((error) => {
-        logger.error(`Lỗi phát âm thanh: ${error.message}`);
-    });
+    await speakTicketIfTtsEnabled(ticket.displayNumber, counter?.name || 'quầy hiện tại');
 
     res.json({
         success: true,

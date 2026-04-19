@@ -150,6 +150,8 @@ TicketSchema.index({ staffId: 1, status: 1 });
 TicketSchema.index({ queueCounterId: 1, status: 1 });
 TicketSchema.index({ isRecall: 1, status: 1, recalledAt: 1 });
 TicketSchema.index({ recallCounterId: 1, isRecall: 1, status: 1, recalledAt: 1 });
+TicketSchema.index({ status: 1, isRecall: 1, createdAt: 1 });
+TicketSchema.index({ recallCounterId: 1, isRecall: 1, status: 1 });
 
 TicketSchema.index(
   { queueCounterId: 1, number: 1 },

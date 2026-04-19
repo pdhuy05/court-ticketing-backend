@@ -1234,6 +1234,30 @@ const getCounterDisplay = async (counterId) => {
     };
 };
 
+/**
+ * Ticket đang xử lý tại quầy, lọc theo dịch vụ staff được phép; có staffId thì chỉ vé của staff đó.
+ */
+const getCurrentTicketForStaff = async (counterId, staffId, allowedServiceIds) => {
+    if (!counterId || !allowedServiceIds?.length) {
+        return null;
+    }
+
+    const query = {
+        counterId,
+        status: TicketStatus.PROCESSING,
+        serviceId: { $in: allowedServiceIds }
+    };
+
+    if (staffId) {
+        query.staffId = staffId;
+    }
+
+    return Ticket.findOne(query)
+        .populate('serviceId', 'name code prefixNumber')
+        .populate('queueCounterId', 'number')
+        .sort({ processingAt: -1, updatedAt: -1 });
+};
+
 const getMyCounter = async (counterId, staffId = null) => {
     const counter = await Counter.findById(counterId);
     if (!counter) {
@@ -1243,27 +1267,11 @@ const getMyCounter = async (counterId, staffId = null) => {
     const accessScope = await getServiceAccessScope(counterId, staffId);
     ensureStaffHasAccessibleServices(accessScope);
 
-    let currentTicket = null;
-    if (staffId) {
-        currentTicket = await Ticket.findOne({
-            counterId,
-            staffId,
-            status: TicketStatus.PROCESSING,
-            serviceId: { $in: accessScope.allowedServiceIds }
-        })
-            .populate('serviceId', 'name code prefixNumber')
-            .populate('queueCounterId', 'number')
-            .sort({ processingAt: -1, updatedAt: -1 });
-    } else {
-        currentTicket = await Ticket.findOne({
-            counterId,
-            status: TicketStatus.PROCESSING,
-            serviceId: { $in: accessScope.allowedServiceIds }
-        })
-            .populate('serviceId', 'name code prefixNumber')
-            .populate('queueCounterId', 'number')
-            .sort({ processingAt: -1, updatedAt: -1 });
-    }
+    const currentTicket = await getCurrentTicketForStaff(
+        counterId,
+        staffId,
+        accessScope.allowedServiceIds
+    );
 
     return {
         counter: {
@@ -1298,8 +1306,7 @@ const getStaffDisplay = async (counterId, staffId = null) => {
     })
     .populate('serviceId', 'name code prefixNumber')
     .populate('queueCounterId', 'number')
-    .sort({ createdAt: 1, number: 1 })
-    .limit(10);
+    .sort({ createdAt: 1, number: 1 });
 
     let currentTicket = null;
     if (staffId) {
@@ -1350,6 +1357,7 @@ module.exports = {
     getLastIssuedByCounter,
     getWaitingRoomData,
     getRecallList,
+    getCurrentTicketForStaff,
     resetTicketsByDate,
     resetAllTickets,
     callNext,

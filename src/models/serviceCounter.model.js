@@ -24,5 +24,6 @@ ServiceCounterSchema.index({ serviceId: 1, counterId: 1 }, { unique: true });
 
 ServiceCounterSchema.index({ serviceId: 1, isActive: 1 });
 ServiceCounterSchema.index({ counterId: 1, isActive: 1 });
+ServiceCounterSchema.index({ counterId: 1, serviceId: 1, isActive: 1 });
 
 module.exports = mongoose.model('ServiceCounter', ServiceCounterSchema);
