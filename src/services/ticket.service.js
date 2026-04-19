@@ -62,12 +62,23 @@ const extractCounterIdsFromRelations = (relations = []) => {
 
 const formatQueueNumber = (number) => String(number).padStart(3, '0');
 
-const formatDisplayNumber = (counterNumber, ticketNumber) => {
+const formatCounterDisplayNumber = (counterNumber, ticketNumber) => {
     if (!counterNumber) {
         return formatQueueNumber(ticketNumber);
     }
 
     return `${counterNumber}${formatQueueNumber(ticketNumber)}`;
+};
+
+const formatServiceDisplayNumber = (servicePrefix, ticketNumber) => {
+    const p = Number(servicePrefix);
+    const formattedNumber = String(ticketNumber).padStart(3, '0'); 
+    
+    if (!Number.isFinite(p) || p <= 0) {
+        return formattedNumber;
+    }
+    
+    return `${p}${formattedNumber}`;
 };
 
 const getPrimaryCounter = (counterRefs = []) => {
@@ -96,10 +107,19 @@ const resolveDisplayCounter = (ticket, fallbackCounter = null) => {
 };
 
 const buildTicketPresentation = (ticket, counter = null) => {
-    const normalizedCounter = resolveDisplayCounter(ticket, counter);
-    const formattedNumber = normalizedCounter?.number
-        ? formatDisplayNumber(normalizedCounter.number, ticket.number)
-        : formatQueueNumber(ticket.number);
+    let formattedNumber;
+    if (ticket.displayUsesServicePrefix === true) {
+        const prefix = ticket.serviceId?.prefixNumber;
+        formattedNumber = formatServiceDisplayNumber(
+            typeof prefix === 'number' ? prefix : 0,
+            ticket.number
+        );
+    } else {
+        const normalizedCounter = resolveDisplayCounter(ticket, counter);
+        formattedNumber = normalizedCounter?.number
+            ? formatCounterDisplayNumber(normalizedCounter.number, ticket.number)
+            : formatQueueNumber(ticket.number);
+    }
 
     return {
         id: ticket._id,
@@ -330,7 +350,7 @@ const getRecallList = async (counterId, staffId = null) => {
         status: TicketStatus.WAITING,
         isRecall: true
     })
-        .populate('serviceId', 'name code')
+        .populate('serviceId', 'name code prefixNumber')
         .populate('queueCounterId', 'number')
         .sort({ recalledAt: 1, createdAt: 1, number: 1 });
 
@@ -362,7 +382,8 @@ const createTicket = async ({ serviceId, name, phone, counterId = null }) => {
     const { issueCounter, availableCounters } = await resolveIssueCounter(serviceId, counterId);
     const nextNumber = await getNextCounterNumber(issueCounter._id);
     const formattedNumber = formatQueueNumber(nextNumber);
-    const displayNumber = formatDisplayNumber(issueCounter.number, nextNumber);
+    const servicePrefix = typeof service.prefixNumber === 'number' ? service.prefixNumber : 0;
+    const displayNumber = formatServiceDisplayNumber(servicePrefix, nextNumber);
 
     const ticket = await Ticket.create({
         number: nextNumber,
@@ -374,10 +395,11 @@ const createTicket = async ({ serviceId, name, phone, counterId = null }) => {
         status: TicketStatus.WAITING,
         isRecall: false,
         recalledAt: null,
-        qrData: null
+        qrData: null,
+        displayUsesServicePrefix: true
     });
 
-    await ticket.populate('serviceId', 'name code');
+    await ticket.populate('serviceId', 'name code prefixNumber');
     const qrData = generateQRData(ticket, service, displayNumber);
     ticket.qrData = qrData;
     await ticket.save();
@@ -450,7 +472,7 @@ const getAllWaiting = async () => {
         status: TicketStatus.WAITING,
         isRecall: false
     })
-        .populate('serviceId', 'name code')
+        .populate('serviceId', 'name code prefixNumber')
         .populate('queueCounterId', 'number')
         .sort({ createdAt: 1, number: 1 });
 
@@ -491,7 +513,7 @@ const getLastIssuedByCounter = async () => {
             counterNumber: counter.number,
             lastNumber,
             lastDisplayNumber: lastNumber > 0
-                ? formatDisplayNumber(counter.number, lastNumber)
+                ? formatCounterDisplayNumber(counter.number, lastNumber)
                 : null
         };
     });
@@ -716,7 +738,7 @@ const callNext = async (counterId, staffId = null) => {
         },
         { sort: { createdAt: 1, number: 1 }, returnDocument: 'after' }
     )
-        .populate('serviceId', 'name code')
+        .populate('serviceId', 'name code prefixNumber')
         .populate('queueCounterId', 'number');
 
     if (!nextTicket) {
@@ -760,7 +782,7 @@ const callById = async (ticketId, counterId, staffId = null) => {
     ensureStaffHasAccessibleServices(accessScope);
 
     const ticket = await Ticket.findById(ticketId)
-        .populate('serviceId', 'name code')
+        .populate('serviceId', 'name code prefixNumber')
         .populate('queueCounterId', 'number')
         .populate('counterId', 'name number');
 
@@ -835,7 +857,7 @@ const recallTicket = async (ticketId, counterId, staffId = null) => {
         recallCounterId: counterId,
         serviceId: { $in: accessScope.allowedServiceIds }
     })
-        .populate('serviceId', 'name code')
+        .populate('serviceId', 'name code prefixNumber')
         .populate('queueCounterId', 'number');
 
     if (!ticket) {
@@ -901,7 +923,7 @@ const recallProcessingTicket = async (ticketId, counterId, staffId = null) => {
         status: TicketStatus.PROCESSING,
         serviceId: { $in: accessScope.allowedServiceIds }
     })
-        .populate('serviceId', 'name code')
+        .populate('serviceId', 'name code prefixNumber')
         .populate('queueCounterId', 'number');
 
     if (!ticket) {
@@ -954,7 +976,7 @@ const cancelRecallTicket = async (ticketId, counterId, staffId = null, reason = 
         recallCounterId: counterId,
         serviceId: { $in: accessScope.allowedServiceIds }
     })
-        .populate('serviceId', 'name code')
+        .populate('serviceId', 'name code prefixNumber')
         .populate('queueCounterId', 'number');
 
     if (!ticket) {
@@ -1008,7 +1030,7 @@ const cancelRecallTicket = async (ticketId, counterId, staffId = null, reason = 
 
 const completeTicket = async (id, counterId = null, staffId = null) => {
     const ticket = await Ticket.findById(id)
-        .populate('serviceId', 'name code')
+        .populate('serviceId', 'name code prefixNumber')
         .populate('queueCounterId', 'number');
     if (!ticket) throw new ApiError(404, 'Không tìm thấy ticket');
     if (ticket.status !== TicketStatus.PROCESSING) throw new ApiError(400, 'Ticket không ở trạng thái đang xử lý');
@@ -1075,7 +1097,7 @@ const completeTicket = async (id, counterId = null, staffId = null) => {
 
 const skipTicket = async (id, reason = '', counterId, staffId = null) => {
     const ticket = await Ticket.findById(id)
-        .populate('serviceId', 'name code')
+        .populate('serviceId', 'name code prefixNumber')
         .populate('queueCounterId', 'number');
     if (!ticket) throw new ApiError(404, 'Không tìm thấy ticket');
     if (ticket.status !== TicketStatus.PROCESSING) {
@@ -1166,7 +1188,7 @@ const getCounterDisplay = async (counterId) => {
     const serviceRelations = await ServiceCounter.find({ 
         counterId, 
         isActive: true 
-    }).populate('serviceId', 'name code');
+    }).populate('serviceId', 'name code prefixNumber');
 
     const serviceIds = serviceRelations.map(rel => rel.serviceId._id);
 
@@ -1176,7 +1198,7 @@ const getCounterDisplay = async (counterId) => {
         status: TicketStatus.WAITING,
         isRecall: false
     })
-    .populate('serviceId', 'name code')
+    .populate('serviceId', 'name code prefixNumber')
     .populate('queueCounterId', 'number')
     .sort({ createdAt: 1, number: 1 })
     .limit(10);
@@ -1185,7 +1207,7 @@ const getCounterDisplay = async (counterId) => {
         counterId,
         status: TicketStatus.PROCESSING
     })
-        .populate('serviceId', 'name code')
+        .populate('serviceId', 'name code prefixNumber')
         .populate('queueCounterId', 'number')
         .sort({ processingAt: 1, createdAt: 1, number: 1 });
 
@@ -1229,7 +1251,7 @@ const getMyCounter = async (counterId, staffId = null) => {
             status: TicketStatus.PROCESSING,
             serviceId: { $in: accessScope.allowedServiceIds }
         })
-            .populate('serviceId', 'name code')
+            .populate('serviceId', 'name code prefixNumber')
             .populate('queueCounterId', 'number')
             .sort({ processingAt: -1, updatedAt: -1 });
     } else {
@@ -1238,7 +1260,7 @@ const getMyCounter = async (counterId, staffId = null) => {
             status: TicketStatus.PROCESSING,
             serviceId: { $in: accessScope.allowedServiceIds }
         })
-            .populate('serviceId', 'name code')
+            .populate('serviceId', 'name code prefixNumber')
             .populate('queueCounterId', 'number')
             .sort({ processingAt: -1, updatedAt: -1 });
     }
@@ -1274,7 +1296,7 @@ const getStaffDisplay = async (counterId, staffId = null) => {
         status: TicketStatus.WAITING,
         isRecall: false
     })
-    .populate('serviceId', 'name code')
+    .populate('serviceId', 'name code prefixNumber')
     .populate('queueCounterId', 'number')
     .sort({ createdAt: 1, number: 1 })
     .limit(10);
@@ -1287,7 +1309,7 @@ const getStaffDisplay = async (counterId, staffId = null) => {
             status: TicketStatus.PROCESSING,
             serviceId: { $in: accessScope.allowedServiceIds }
         })
-            .populate('serviceId', 'name code')
+            .populate('serviceId', 'name code prefixNumber')
             .populate('queueCounterId', 'number')
             .sort({ processingAt: -1, updatedAt: -1 });
     } else {
@@ -1296,7 +1318,7 @@ const getStaffDisplay = async (counterId, staffId = null) => {
             status: TicketStatus.PROCESSING,
             serviceId: { $in: accessScope.allowedServiceIds }
         })
-            .populate('serviceId', 'name code')
+            .populate('serviceId', 'name code prefixNumber')
             .populate('queueCounterId', 'number')
             .sort({ processingAt: -1, updatedAt: -1 });
     }

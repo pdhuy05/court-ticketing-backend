@@ -1,8 +1,44 @@
+const mongoose = require('mongoose');
 const Service = require('../models/service.model');
 const ServiceCounter = require('../models/serviceCounter.model');
 const Counter = require('../models/counter.model');
 const Ticket = require('../models/ticket.model');
+const ApiError = require('../utils/ApiError');
 const { emitDashboardUpdateSafe } = require('./dashboard.service');
+
+const normalizePrefixNumber = (value) => {
+  const p = Number(value);
+  if (!Number.isFinite(p)) {
+    return 0;
+  }
+  return Math.min(99, Math.max(0, Math.trunc(p)));
+};
+
+const assertPrefixNumberUnique = async (prefixNumber, excludeId = null) => {
+  const p = normalizePrefixNumber(prefixNumber);
+  if (p === 0) {
+    return;
+  }
+
+  const query = { prefixNumber: p };
+  if (excludeId) {
+    try {
+      query._id = { $ne: new mongoose.Types.ObjectId(String(excludeId)) };
+    } catch {
+      query._id = { $ne: excludeId };
+    }
+  }
+
+  const existingService = await Service.findOne(query);
+  if (existingService) {
+    throw new ApiError(400, `Prefix số ${p} đã được sử dụng bởi dịch vụ "${existingService.name}". Vui lòng chọn prefix khác.`);
+  }
+};
+
+const isDuplicatePrefixMongoError = (err) => (
+  err?.code === 11000
+  && (err?.keyPattern?.prefixNumber || String(err?.message || '').includes('prefixNumber'))
+);
 
 exports.getAll = async () => {
   const services = await Service.find().sort({ displayOrder: 1 });
@@ -27,7 +63,7 @@ exports.getAll = async () => {
 exports.getActive = async () => {
   const services = await Service.find({ isActive: true })
     .sort({ displayOrder: 1 })
-    .select("code name description displayOrder icon backgroundColor");
+    .select('code name description displayOrder icon backgroundColor prefixNumber');
 
   const servicesWithCounters = [];
 
@@ -87,11 +123,25 @@ exports.create = async (data) => {
     }
   }
 
-  const service = await Service.create({
-    ...data,
-    code: code.toUpperCase(),
-    name: name.toUpperCase()
-  });
+  const prefixNumber = data.prefixNumber !== undefined && data.prefixNumber !== null
+    ? normalizePrefixNumber(data.prefixNumber)
+    : 0;
+  await assertPrefixNumberUnique(prefixNumber);
+
+  let service;
+  try {
+    service = await Service.create({
+      ...data,
+      code: code.toUpperCase(),
+      name: name.toUpperCase(),
+      prefixNumber
+    });
+  } catch (err) {
+    if (isDuplicatePrefixMongoError(err)) {
+      throw new ApiError(400, `Prefix số ${prefixNumber} đã được sử dụng bởi dịch vụ khác. Vui lòng chọn prefix khác.`);
+    }
+    throw err;
+  }
 
   await emitDashboardUpdateSafe('service-created');
 
@@ -99,7 +149,13 @@ exports.create = async (data) => {
 };
 
 exports.update = async (id, body) => {
-  const { code, name, displayOrder, backgroundColor, ...updateData } = body;
+  const { code, name, displayOrder, backgroundColor, prefixNumber, ...updateData } = body;
+
+  if (prefixNumber !== undefined && prefixNumber !== null) {
+    const nextPrefix = normalizePrefixNumber(prefixNumber);
+    await assertPrefixNumberUnique(nextPrefix, id);
+    updateData.prefixNumber = nextPrefix;
+  }
 
   if (code) {
     updateData.code = code.toUpperCase();
@@ -122,10 +178,18 @@ exports.update = async (id, body) => {
     updateData.displayOrder = displayOrder;
   }
   
-  const service = await Service.findByIdAndUpdate(id, updateData, {
-    returnDocument: 'after',
-    runValidators: true
-  });
+  let service;
+  try {
+    service = await Service.findByIdAndUpdate(id, updateData, {
+      returnDocument: 'after',
+      runValidators: true
+    });
+  } catch (err) {
+    if (isDuplicatePrefixMongoError(err)) {
+      throw new ApiError(400, `Prefix số ${prefixNumber} đã được sử dụng bởi dịch vụ khác. Vui lòng chọn prefix khác.`);
+    }
+    throw err;
+  }
 
   if (!service) {
     const error = new Error('Không tìm thấy dịch vụ');

@@ -31,6 +31,12 @@ const ServiceSchema = new mongoose.Schema({
   displayOrder: { 
     type: Number, 
     default: 0 
+  },
+  prefixNumber: {
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 99
   }
 }, {
   timestamps: true,
@@ -54,5 +60,12 @@ ServiceSchema.virtual('counters', {
 
 ServiceSchema.index({ isActive: 1, displayOrder: 1 });
 ServiceSchema.index({ name: 1 });
+ServiceSchema.index(
+  { prefixNumber: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { prefixNumber: { $gt: 0 } }
+  }
+);
 
 module.exports = mongoose.model('Service', ServiceSchema);

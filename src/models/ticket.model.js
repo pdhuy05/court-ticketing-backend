@@ -112,6 +112,11 @@ const TicketSchema = new mongoose.Schema({
     default: null 
   },
 
+  displayUsesServicePrefix: {
+    type: Boolean,
+    default: false
+  },
+
   isRecall: {
     type: Boolean,
     default: false,

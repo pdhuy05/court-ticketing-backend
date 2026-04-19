@@ -30,7 +30,18 @@ const createServiceSchema = Joi.object({
         .min(0)
         .default(0)
         .optional(),
-    isActive: Joi.boolean().default(true)
+    isActive: Joi.boolean().default(true),
+    prefixNumber: Joi.number()
+        .integer()
+        .min(0)
+        .max(99)
+        .default(0)
+        .optional()
+        .messages({
+            'number.base': 'prefixNumber phải là số',
+            'number.min': 'prefixNumber tối thiểu là 0',
+            'number.max': 'prefixNumber tối đa là 99'
+        })
 });
 
 const updateServiceSchema = Joi.object({
@@ -50,7 +61,17 @@ const updateServiceSchema = Joi.object({
     icon: Joi.string().optional().allow(''),
     description: Joi.string().optional().allow(''),
     displayOrder: Joi.number().integer().min(0).optional(),
-    isActive: Joi.boolean().optional()
+    isActive: Joi.boolean().optional(),
+    prefixNumber: Joi.number()
+        .integer()
+        .min(0)
+        .max(99)
+        .optional()
+        .messages({
+            'number.base': 'prefixNumber phải là số',
+            'number.min': 'prefixNumber tối thiểu là 0',
+            'number.max': 'prefixNumber tối đa là 99'
+        })
 }).min(1);
 
 const addCountersSchema = Joi.object({
