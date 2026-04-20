@@ -14,8 +14,7 @@ const buildTicketActionErrorPayload = (error, fallbackMessage) => {
 
         return {
             statusCode: 409,
-            message: `Lỗi database: ${fieldLabel} đã tồn tại`,
-            code: 'DUPLICATE_KEY'
+            message: `Lỗi database: ${fieldLabel} đã tồn tại`
         };
     }
 
@@ -27,23 +26,20 @@ const buildTicketActionErrorPayload = (error, fallbackMessage) => {
 
         return {
             statusCode: 400,
-            message: message || 'Dữ liệu không hợp lệ',
-            code: 'VALIDATION_ERROR'
+            message: message || 'Dữ liệu không hợp lệ'
         };
     }
 
     if (error?.statusCode && error?.message) {
         return {
             statusCode: error.statusCode,
-            message: error.message,
-            code: error.code || null
+            message: error.message
         };
     }
 
     return {
         statusCode: 500,
-        message: error?.message || fallbackMessage,
-        code: 'INTERNAL_ERROR'
+        message: error?.message || fallbackMessage
     };
 };
 
@@ -189,8 +185,7 @@ exports.callNext = async (req, res) => {
         if (req.user?.counterId && String(req.user.counterId) !== req.body.counterId) {
             return res.status(403).json({
                 success: false,
-                message: 'Bạn chỉ được phép gọi số cho quầy được gán',
-                code: 'NO_PERMISSION'
+                message: 'Bạn chỉ được phép gọi số cho quầy được gán'
             });
         }
 
@@ -208,12 +203,11 @@ exports.callNext = async (req, res) => {
             message: `Xin mời ông bà có số vé ${nextTicket.formattedNumber} đến ${counter.name}`
         });
     } catch (error) {
-        const { statusCode, message, code } = buildTicketActionErrorPayload(error, 'Không thể gọi số tiếp theo');
+        const { statusCode, message } = buildTicketActionErrorPayload(error, 'Không thể gọi số tiếp theo');
 
         res.status(statusCode).json({
             success: false,
-            message,
-            code
+            message
         });
     }
 };
@@ -225,8 +219,7 @@ exports.callById = async (req, res) => {
         if (!counterId) {
             return res.status(400).json({
                 success: false,
-                message: 'Tài khoản chưa được gán quầy',
-                code: 'COUNTER_NOT_FOUND'
+                message: 'Tài khoản chưa được gán quầy'
             });
         }
 
@@ -245,12 +238,11 @@ exports.callById = async (req, res) => {
             message: `Xin mời ông bà có số vé ${ticket.formattedNumber} đến ${counter.name}`
         });
     } catch (error) {
-        const { statusCode, message, code } = buildTicketActionErrorPayload(error, 'Không thể gọi ticket theo ID');
+        const { statusCode, message } = buildTicketActionErrorPayload(error, 'Không thể gọi ticket theo ID');
 
         res.status(statusCode).json({
             success: false,
-            message,
-            code
+            message
         });
     }
 };
@@ -269,12 +261,11 @@ exports.complete = async (req, res) => {
             message: `Hoàn thành số ${ticket.formattedNumber}`
         });
     } catch (error) {
-        const { statusCode, message, code } = buildTicketActionErrorPayload(error, 'Không thể hoàn thành ticket');
+        const { statusCode, message } = buildTicketActionErrorPayload(error, 'Không thể hoàn thành ticket');
 
         res.status(statusCode).json({
             success: false,
-            message,
-            code
+            message
         });
     }
 };
@@ -299,12 +290,11 @@ exports.skip = async (req, res) => {
             message
         });
     } catch (error) {
-        const { statusCode, message, code } = buildTicketActionErrorPayload(error, 'Không thể bỏ qua ticket');
+        const { statusCode, message } = buildTicketActionErrorPayload(error, 'Không thể bỏ qua ticket');
 
         res.status(statusCode).json({
             success: false,
-            message,
-            code
+            message
         });
     }
 };
@@ -315,8 +305,7 @@ exports.getRecallList = async (req, res) => {
     if (!counterId) {
         return res.status(400).json({
             success: false,
-            message: 'Tài khoản chưa được gán quầy',
-            code: 'COUNTER_NOT_FOUND'
+            message: 'Tài khoản chưa được gán quầy'
         });
     }
 
@@ -336,8 +325,7 @@ exports.recallTicket = async (req, res) => {
         if (!counterId) {
             return res.status(400).json({
                 success: false,
-                message: 'Tài khoản chưa được gán quầy',
-                code: 'COUNTER_NOT_FOUND'
+                message: 'Tài khoản chưa được gán quầy'
             });
         }
 
@@ -352,12 +340,11 @@ exports.recallTicket = async (req, res) => {
             message: `Đã gọi lại số ${ticket.formattedNumber}`
         });
     } catch (error) {
-        const { statusCode, message, code } = buildTicketActionErrorPayload(error, 'Không thể gọi lại ticket');
+        const { statusCode, message } = buildTicketActionErrorPayload(error, 'Không thể gọi lại ticket');
 
         res.status(statusCode).json({
             success: false,
-            message,
-            code
+            message
         });
     }
 };
@@ -369,8 +356,7 @@ exports.recallProcessingTicket = async (req, res) => {
         if (!counterId) {
             return res.status(400).json({
                 success: false,
-                message: 'Tài khoản chưa được gán quầy',
-                code: 'COUNTER_NOT_FOUND'
+                message: 'Tài khoản chưa được gán quầy'
             });
         }
 
@@ -390,12 +376,11 @@ exports.recallProcessingTicket = async (req, res) => {
             message: `Đã gọi lại vé đang xử lý ${ticket.formattedNumber}`
         });
     } catch (error) {
-        const { statusCode, message, code } = buildTicketActionErrorPayload(error, 'Không thể gọi lại ticket đang xử lý');
+        const { statusCode, message } = buildTicketActionErrorPayload(error, 'Không thể gọi lại ticket đang xử lý');
 
         res.status(statusCode).json({
             success: false,
-            message,
-            code
+            message
         });
     }
 };
@@ -407,8 +392,7 @@ exports.cancelRecallTicket = async (req, res) => {
         if (!counterId) {
             return res.status(400).json({
                 success: false,
-                message: 'Tài khoản chưa được gán quầy',
-                code: 'COUNTER_NOT_FOUND'
+                message: 'Tài khoản chưa được gán quầy'
             });
         }
 
@@ -425,12 +409,11 @@ exports.cancelRecallTicket = async (req, res) => {
             message: `Đã hủy ticket recall số ${ticket.formattedNumber}`
         });
     } catch (error) {
-        const { statusCode, message, code } = buildTicketActionErrorPayload(error, 'Không thể hủy ticket recall');
+        const { statusCode, message } = buildTicketActionErrorPayload(error, 'Không thể hủy ticket recall');
 
         res.status(statusCode).json({
             success: false,
-            message,
-            code
+            message
         });
     }
 };
@@ -452,8 +435,7 @@ exports.getMyCounter = async (req, res) => {
     if (!counterId) {
         return res.status(400).json({
             success: false,
-            message: 'Tài khoản chưa được gán quầy',
-            code: 'COUNTER_NOT_FOUND'
+            message: 'Tài khoản chưa được gán quầy'
         });
     }
     
@@ -475,8 +457,7 @@ exports.getStaffDisplay = async (req, res) => {
     if (!counterId) {
         return res.status(400).json({
             success: false,
-            message: 'Tài khoản chưa được gán quầy',
-            code: 'COUNTER_NOT_FOUND'
+            message: 'Tài khoản chưa được gán quầy'
         });
     }
     
