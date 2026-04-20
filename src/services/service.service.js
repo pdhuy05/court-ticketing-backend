@@ -87,9 +87,7 @@ exports.getById = async (id) => {
   const service = await Service.findById(id);
   
   if (!service) {
-    const error = new Error('Không tìm thấy dịch vụ');
-    error.statusCode = 404;
-    throw error;
+    throw new ApiError(404, 'Không tìm thấy dịch vụ');
   }
   
   const counterRelations = await ServiceCounter.find({
@@ -109,17 +107,13 @@ exports.create = async (data) => {
   const existing = await Service.findOne({ code: code.toUpperCase() });
 
   if (existing) {
-    const error = new Error('Mã dịch vụ đã tồn tại');
-    error.statusCode = 400;
-    throw error;
+    throw new ApiError(400, 'Mã dịch vụ đã tồn tại');
   }
 
   if (displayOrder !== undefined && displayOrder !== null) {
     const existingOrder = await Service.findOne({ displayOrder });
     if (existingOrder) {
-      const error = new Error(`Thứ tự hiển thị ${displayOrder} đã được sử dụng`);
-      error.statusCode = 400;
-      throw error;
+      throw new ApiError(400, `Thứ tự hiển thị ${displayOrder} đã được sử dụng`);
     }
   }
 
@@ -171,9 +165,7 @@ exports.update = async (id, body) => {
       _id: { $ne: id }
     });
     if (existingOrder) {
-      const error = new Error(`Thứ tự hiển thị ${displayOrder} đã được sử dụng bởi dịch vụ khác`);
-      error.statusCode = 400;
-      throw error;
+      throw new ApiError(400, `Thứ tự hiển thị ${displayOrder} đã được sử dụng bởi dịch vụ khác`);
     }
     updateData.displayOrder = displayOrder;
   }
@@ -192,9 +184,7 @@ exports.update = async (id, body) => {
   }
 
   if (!service) {
-    const error = new Error('Không tìm thấy dịch vụ');
-    error.statusCode = 404;
-    throw error;
+    throw new ApiError(404, 'Không tìm thấy dịch vụ');
   }
 
   await emitDashboardUpdateSafe('service-updated');
@@ -206,17 +196,13 @@ exports.remove = async (id) => {
   const service = await Service.findById(id);
   
   if (!service) {
-    const error = new Error("Không tìm thấy dịch vụ");
-    error.statusCode = 404;
-    throw error;
+    throw new ApiError(404, 'Không tìm thấy dịch vụ');
   }
   
   const counterRelations = await ServiceCounter.find({ serviceId: service._id });
   
   if (counterRelations.length > 0) {
-    const error = new Error(`Không thể xóa dịch vụ vì đang được sử dụng bởi ${counterRelations.length} quầy. Vui lòng xóa quan hệ trước.`);
-    error.statusCode = 400;
-    throw error;
+    throw new ApiError(400, `Không thể xóa dịch vụ vì đang được sử dụng bởi ${counterRelations.length} quầy. Vui lòng xóa quan hệ trước.`);
   }
   
   await service.deleteOne();
@@ -230,9 +216,7 @@ exports.addCounters = async (id, counterIds) => {
   const service = await Service.findById(id);
   
   if (!service) {
-    const error = new Error("Không tìm thấy dịch vụ");
-    error.statusCode = 404;
-    throw error;
+    throw new ApiError(404, 'Không tìm thấy dịch vụ');
   }
   
   const addedCounters = [];
@@ -272,9 +256,7 @@ exports.removeCounter = async (id, counterId) => {
   const service = await Service.findById(id);
   
   if (!service) {
-    const error = new Error("Không tìm thấy dịch vụ");
-    error.statusCode = 404;
-    throw error;
+    throw new ApiError(404, 'Không tìm thấy dịch vụ');
   }
   
   const deleted = await ServiceCounter.findOneAndDelete({
@@ -283,9 +265,7 @@ exports.removeCounter = async (id, counterId) => {
   });
   
   if (!deleted) {
-    const error = new Error("Không tìm thấy mối quan hệ giữa dịch vụ và quầy");
-    error.statusCode = 404;
-    throw error;
+    throw new ApiError(404, 'Không tìm thấy mối quan hệ giữa dịch vụ và quầy');
   }
   
   const result = {
@@ -302,9 +282,7 @@ exports.getCounters = async (id) => {
   const service = await Service.findById(id);
   
   if (!service) {
-    const error = new Error("Không tìm thấy dịch vụ");
-    error.statusCode = 404;
-    throw error;
+    throw new ApiError(404, 'Không tìm thấy dịch vụ');
   }
   
   const counterRelations = await ServiceCounter.find({ 
@@ -320,7 +298,7 @@ exports.getCounters = async (id) => {
 
 exports.getStats = async (id) => {
   const service = await Service.findById(id);
-  if (!service) throw new Error('Không tìm thấy dịch vụ');
+  if (!service) throw new ApiError(404, 'Không tìm thấy dịch vụ');
 
   const waiting = await Ticket.countDocuments({ serviceId: id, status: 'waiting' });
   const processing = await Ticket.countDocuments({ serviceId: id, status: 'processing' });

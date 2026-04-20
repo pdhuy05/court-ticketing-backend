@@ -253,7 +253,7 @@ const getServiceAccessScope = async (counterId, staffId = null) => {
 
 const ensureStaffHasAccessibleServices = (accessScope) => {
     if (accessScope.serviceRestrictionConfigured && accessScope.allowedServiceIds.length === 0) {
-        throw new ApiError(403, 'Nhân viên chưa được gán dịch vụ nào tại quầy hiện tại');
+        throw new ApiError(403, 'Nhân viên chưa được gán dịch vụ nào tại quầy hiện tại', 'NO_PERMISSION');
     }
 };
 
@@ -282,7 +282,7 @@ const markTicketAsCalled = (ticket, calledTime = new Date()) => {
 const ensureCounterActive = async (counterId) => {
     const counter = await Counter.findById(counterId);
     if (!counter?.isActive) {
-        throw new ApiError(400, 'Quầy không tồn tại hoặc không hoạt động');
+        throw new ApiError(400, 'Quầy không tồn tại hoặc không hoạt động', 'COUNTER_NOT_FOUND');
     }
 
     return counter;
@@ -516,11 +516,14 @@ const getAllWaiting = async () => {
         .populate('queueCounterId', 'number')
         .sort({ createdAt: 1, number: 1 });
 
-    return tickets.map(ticket => ({
-        ...ticket.toObject(),
-        formattedNumber: buildTicketPresentation(ticket).formattedNumber,
-        displayNumber: buildTicketPresentation(ticket).displayNumber
-    }));
+    return tickets.map(ticket => {
+        const presentation = buildTicketPresentation(ticket);
+        return {
+            ...ticket.toObject(),
+            formattedNumber: presentation.formattedNumber,
+            displayNumber: presentation.displayNumber
+        };
+    });
 };
 
 const getLastIssuedByCounter = async () => {
@@ -760,7 +763,7 @@ const callNext = async (counterId, staffId = null) => {
     ensureStaffHasAccessibleServices(accessScope);
 
     if (accessScope.allowedServiceIds.length === 0) {
-        throw new ApiError(400, 'Quầy chưa được gán dịch vụ');
+        throw new ApiError(400, 'Quầy chưa được gán dịch vụ', 'COUNTER_NOT_SERVING');
     }
 
     const nextTicket = await Ticket.findOneAndUpdate(
@@ -782,7 +785,7 @@ const callNext = async (counterId, staffId = null) => {
         .populate('queueCounterId', 'number');
 
     if (!nextTicket) {
-        throw new ApiError(404, 'Không có ticket đang chờ');
+        throw new ApiError(404, 'Không có ticket đang chờ trong danh sách dịch vụ được phân quyền', 'TICKET_NOT_FOUND');
     }
 
     const serviceCounter = await ServiceCounter.findOne({
@@ -806,11 +809,13 @@ const callNext = async (counterId, staffId = null) => {
 
     await emitDashboardUpdateSafe('ticket-called');
 
+    const presentation = buildTicketPresentation(nextTicket, counter);
+
     return {
         nextTicket: {
             ...nextTicket.toObject(),
-            formattedNumber: buildTicketPresentation(nextTicket, counter).formattedNumber,
-            displayNumber: buildTicketPresentation(nextTicket, counter).displayNumber
+            formattedNumber: presentation.formattedNumber,
+            displayNumber: presentation.displayNumber
         },
         counter
     };
@@ -827,15 +832,16 @@ const callById = async (ticketId, counterId, staffId = null) => {
         .populate('counterId', 'name number');
 
     if (!ticket) {
-        throw new ApiError(404, 'Không tìm thấy ticket');
+        throw new ApiError(404, 'Không tìm thấy ticket', 'TICKET_NOT_FOUND');
     }
 
     if (ticket.status !== TicketStatus.WAITING) {
-        throw new ApiError(400, 'Chỉ có thể gọi ticket đang ở trạng thái chờ');
+        throw new ApiError(400, `Ticket đang ở trạng thái ${ticket.status}, không thể gọi. Chỉ có thể gọi ticket đang chờ`, 'TICKET_WRONG_STATUS');
     }
 
     if (!canAccessService(accessScope.allowedServiceIds, ticket.serviceId?._id || ticket.serviceId)) {
-        throw new ApiError(403, 'Nhân viên không được phép gọi ticket thuộc dịch vụ này');
+        const serviceName = ticket.serviceId?.name || 'không xác định';
+        throw new ApiError(403, `Bạn không có quyền xử lý dịch vụ ${serviceName}`, 'NO_PERMISSION');
     }
 
     const belongsToCounter = ticket.isRecall
@@ -843,7 +849,7 @@ const callById = async (ticketId, counterId, staffId = null) => {
         : String(ticket.queueCounterId?._id || ticket.queueCounterId || '') === String(counterId);
 
     if (!belongsToCounter) {
-        throw new ApiError(403, 'Ticket không thuộc danh sách xử lý của quầy này');
+        throw new ApiError(403, `Ticket không thuộc danh sách xử lý của quầy ${counter.name}`, 'COUNTER_NOT_SERVING');
     }
 
     const serviceCounter = await ServiceCounter.findOne({
@@ -874,11 +880,13 @@ const callById = async (ticketId, counterId, staffId = null) => {
 
     await emitDashboardUpdateSafe('ticket-called');
 
+    const presentation = buildTicketPresentation(ticket, counter);
+
     return {
         ticket: {
             ...ticket.toObject(),
-            formattedNumber: buildTicketPresentation(ticket, counter).formattedNumber,
-            displayNumber: buildTicketPresentation(ticket, counter).displayNumber
+            formattedNumber: presentation.formattedNumber,
+            displayNumber: presentation.displayNumber
         },
         counter
     };
@@ -895,15 +903,15 @@ const recallTicket = async (ticketId, counterId, staffId = null) => {
         .populate('queueCounterId', 'number');
 
     if (!ticket) {
-        throw new ApiError(404, 'Ticket không tồn tại');
+        throw new ApiError(404, 'Ticket không tồn tại', 'TICKET_NOT_FOUND');
     }
 
     if (ticket.status !== TicketStatus.WAITING) {
-        throw new ApiError(400, 'Ticket không ở trạng thái chờ để gọi lại');
+        throw new ApiError(400, `Ticket đang ở trạng thái ${ticket.status}, không thể gọi lại. Chỉ gọi lại được ticket đang chờ`, 'TICKET_WRONG_STATUS');
     }
 
     if (!ticket.isRecall || String(ticket.recallCounterId) !== String(counterId)) {
-        throw new ApiError(400, 'Ticket không nằm trong danh sách gọi lại của quầy hiện tại');
+        throw new ApiError(400, `Ticket không nằm trong danh sách gọi lại của quầy ${counter.name}`, 'COUNTER_NOT_SERVING');
     }
 
     if (staffId) {
@@ -955,10 +963,12 @@ const recallTicket = async (ticketId, counterId, staffId = null) => {
 
     await emitDashboardUpdateSafe('ticket-recalled');
 
+    const presentation = buildTicketPresentation(ticket, counter);
+
     return {
         ...ticket.toObject(),
-        formattedNumber: buildTicketPresentation(ticket, counter).formattedNumber,
-        displayNumber: buildTicketPresentation(ticket, counter).displayNumber
+        formattedNumber: presentation.formattedNumber,
+        displayNumber: presentation.displayNumber
     };
 };
 
@@ -972,15 +982,15 @@ const recallProcessingTicket = async (ticketId, counterId, staffId = null) => {
         .populate('queueCounterId', 'number');
 
     if (!ticket) {
-        throw new ApiError(404, 'Ticket không tồn tại');
+        throw new ApiError(404, 'Ticket không tồn tại', 'TICKET_NOT_FOUND');
     }
 
     if (ticket.status !== TicketStatus.PROCESSING) {
-        throw new ApiError(400, 'Ticket không ở trạng thái xử lý để gọi lại');
+        throw new ApiError(400, `Ticket đang ở trạng thái ${ticket.status}, không thể gọi lại. Chỉ gọi lại được ticket đang xử lý`, 'TICKET_WRONG_STATUS');
     }
 
     if (String(ticket.counterId) !== String(counterId)) {
-        throw new ApiError(403, 'Ticket không thuộc quầy hiện tại');
+        throw new ApiError(403, `Ticket không thuộc quầy ${counter.name}`, 'COUNTER_NOT_SERVING');
     }
 
     if (staffId) {
@@ -988,7 +998,7 @@ const recallProcessingTicket = async (ticketId, counterId, staffId = null) => {
     }
 
     if (staffId && ticket.staffId && String(ticket.staffId) !== String(staffId)) {
-        throw new ApiError(403, 'Bạn chỉ được phép gọi lại ticket đang xử lý của chính mình');
+        throw new ApiError(403, 'Bạn chỉ được phép gọi lại ticket đang xử lý của chính mình', 'NO_PERMISSION');
     }
 
     await emitTicketCalled(ticket, counter, 'recall-processing');
@@ -1015,10 +1025,12 @@ const recallProcessingTicket = async (ticketId, counterId, staffId = null) => {
 
     await emitDashboardUpdateSafe('ticket-processing-recalled');
 
+    const presentation = buildTicketPresentation(ticket, counter);
+
     return {
         ...ticket.toObject(),
-        formattedNumber: buildTicketPresentation(ticket, counter).formattedNumber,
-        displayNumber: buildTicketPresentation(ticket, counter).displayNumber
+        formattedNumber: presentation.formattedNumber,
+        displayNumber: presentation.displayNumber
     };
 };
 
@@ -1033,15 +1045,15 @@ const cancelRecallTicket = async (ticketId, counterId, staffId = null, reason = 
         .populate('queueCounterId', 'number');
 
     if (!ticket) {
-        throw new ApiError(404, 'Ticket không tồn tại');
+        throw new ApiError(404, 'Ticket không tồn tại', 'TICKET_NOT_FOUND');
     }
 
     if (ticket.status !== TicketStatus.WAITING) {
-        throw new ApiError(400, 'Ticket không ở trạng thái chờ để hủy gọi lại');
+        throw new ApiError(400, `Ticket đang ở trạng thái ${ticket.status}, không thể hủy gọi lại. Chỉ hủy được ticket đang chờ`, 'TICKET_WRONG_STATUS');
     }
 
     if (!ticket.isRecall || String(ticket.recallCounterId) !== String(counterId)) {
-        throw new ApiError(400, 'Ticket không nằm trong danh sách gọi lại của quầy hiện tại');
+        throw new ApiError(400, 'Ticket không nằm trong danh sách gọi lại của quầy hiện tại', 'COUNTER_NOT_SERVING');
     }
 
     if (staffId) {
@@ -1101,11 +1113,13 @@ const completeTicket = async (id, counterId = null, staffId = null) => {
     const ticket = await Ticket.findById(id)
         .populate('serviceId', 'name code prefixNumber')
         .populate('queueCounterId', 'number');
-    if (!ticket) throw new ApiError(404, 'Không tìm thấy ticket');
-    if (ticket.status !== TicketStatus.PROCESSING) throw new ApiError(400, 'Ticket không ở trạng thái đang xử lý');
+    if (!ticket) throw new ApiError(404, 'Không tìm thấy ticket', 'TICKET_NOT_FOUND');
+    if (ticket.status !== TicketStatus.PROCESSING) {
+        throw new ApiError(400, `Ticket đang ở trạng thái ${ticket.status}, không thể hoàn thành. Chỉ hoàn thành được ticket đang xử lý`, 'TICKET_WRONG_STATUS');
+    }
 
     if (counterId && String(ticket.counterId) !== String(counterId)) {
-        throw new ApiError(403, 'Bạn chỉ được phép hoàn thành ticket của quầy được gán');
+        throw new ApiError(403, 'Bạn chỉ được phép hoàn thành ticket của quầy được gán', 'COUNTER_NOT_SERVING');
     }
 
     if (staffId && counterId) {
@@ -1157,10 +1171,12 @@ const completeTicket = async (id, counterId = null, staffId = null) => {
 
     await emitDashboardUpdateSafe('ticket-completed');
 
+    const presentationResult = buildTicketPresentation(ticket);
+
     return {
         ...ticket.toObject(),
-        formattedNumber: buildTicketPresentation(ticket).formattedNumber,
-        displayNumber: buildTicketPresentation(ticket).displayNumber
+        formattedNumber: presentationResult.formattedNumber,
+        displayNumber: presentationResult.displayNumber
     };
 };
 
@@ -1168,15 +1184,15 @@ const skipTicket = async (id, reason = '', counterId, staffId = null) => {
     const ticket = await Ticket.findById(id)
         .populate('serviceId', 'name code prefixNumber')
         .populate('queueCounterId', 'number');
-    if (!ticket) throw new ApiError(404, 'Không tìm thấy ticket');
+    if (!ticket) throw new ApiError(404, 'Không tìm thấy ticket', 'TICKET_NOT_FOUND');
     if (ticket.status !== TicketStatus.PROCESSING) {
-        throw new ApiError(400, 'Chỉ có thể bỏ qua ticket đang xử lý');
+        throw new ApiError(400, `Ticket đang ở trạng thái ${ticket.status}, không thể bỏ qua. Chỉ bỏ qua được ticket đang xử lý`, 'TICKET_WRONG_STATUS');
     }
 
     const currentCounterId = counterId || ticket.counterId;
 
     if (counterId && String(ticket.counterId) !== String(counterId)) {
-        throw new ApiError(403, 'Bạn chỉ được phép bỏ qua ticket của quầy được gán');
+        throw new ApiError(403, 'Bạn chỉ được phép bỏ qua ticket của quầy được gán', 'COUNTER_NOT_SERVING');
     }
 
     if (staffId && currentCounterId) {
@@ -1243,10 +1259,12 @@ const skipTicket = async (id, reason = '', counterId, staffId = null) => {
 
     await emitDashboardUpdateSafe('ticket-skipped');
 
+    const presentationResult = buildTicketPresentation(ticket);
+
     return {
         ...ticket.toObject(),
-        formattedNumber: buildTicketPresentation(ticket).formattedNumber,
-        displayNumber: buildTicketPresentation(ticket).displayNumber
+        formattedNumber: presentationResult.formattedNumber,
+        displayNumber: presentationResult.displayNumber
     };
 };
 

@@ -14,7 +14,8 @@ const buildTicketActionErrorPayload = (error, fallbackMessage) => {
 
         return {
             statusCode: 409,
-            message: `Lỗi database: ${fieldLabel} đã tồn tại`
+            message: `Lỗi database: ${fieldLabel} đã tồn tại`,
+            code: 'DUPLICATE_KEY'
         };
     }
 
@@ -26,20 +27,23 @@ const buildTicketActionErrorPayload = (error, fallbackMessage) => {
 
         return {
             statusCode: 400,
-            message: message || 'Dữ liệu không hợp lệ'
+            message: message || 'Dữ liệu không hợp lệ',
+            code: 'VALIDATION_ERROR'
         };
     }
 
     if (error?.statusCode && error?.message) {
         return {
             statusCode: error.statusCode,
-            message: error.message
+            message: error.message,
+            code: error.code || null
         };
     }
 
     return {
         statusCode: 500,
-        message: error?.message || fallbackMessage
+        message: error?.message || fallbackMessage,
+        code: 'INTERNAL_ERROR'
     };
 };
 
@@ -185,7 +189,8 @@ exports.callNext = async (req, res) => {
         if (req.user?.counterId && String(req.user.counterId) !== req.body.counterId) {
             return res.status(403).json({
                 success: false,
-                message: 'Bạn chỉ được phép gọi số cho quầy được gán'
+                message: 'Bạn chỉ được phép gọi số cho quầy được gán',
+                code: 'NO_PERMISSION'
             });
         }
 
@@ -203,75 +208,105 @@ exports.callNext = async (req, res) => {
             message: `Xin mời ông bà có số vé ${nextTicket.formattedNumber} đến ${counter.name}`
         });
     } catch (error) {
-        if (error.message.includes('đang xử lý')) {
-            res.status(400).json({
-                success: false,
-                message: error.message
-            });
-        } else {
-            throw error;
-        }
+        const { statusCode, message, code } = buildTicketActionErrorPayload(error, 'Không thể gọi số tiếp theo');
+
+        res.status(statusCode).json({
+            success: false,
+            message,
+            code
+        });
     }
 };
 
 exports.callById = async (req, res) => {
-    const counterId = req.user?.counterId;
+    try {
+        const counterId = req.user?.counterId;
 
-    if (!counterId) {
-        return res.status(400).json({
+        if (!counterId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Tài khoản chưa được gán quầy',
+                code: 'COUNTER_NOT_FOUND'
+            });
+        }
+
+        const { ticket, counter } = await ticketService.callById(
+            req.body.ticketId,
+            counterId,
+            req.user?._id
+        );
+
+        logger.success(`Đã gọi số ${ticket.formattedNumber} đến ${counter.name} theo ticketId`);
+        await speakTicketIfTtsEnabled(ticket.displayNumber, counter.name);
+
+        res.json({
+            success: true,
+            data: ticket,
+            message: `Xin mời ông bà có số vé ${ticket.formattedNumber} đến ${counter.name}`
+        });
+    } catch (error) {
+        const { statusCode, message, code } = buildTicketActionErrorPayload(error, 'Không thể gọi ticket theo ID');
+
+        res.status(statusCode).json({
             success: false,
-            message: 'Tài khoản chưa được gán quầy'
+            message,
+            code
         });
     }
-
-    const { ticket, counter } = await ticketService.callById(
-        req.body.ticketId,
-        counterId,
-        req.user?._id
-    );
-
-    logger.success(`Đã gọi số ${ticket.formattedNumber} đến ${counter.name} theo ticketId`);
-    await speakTicketIfTtsEnabled(ticket.displayNumber, counter.name);
-
-    res.json({
-        success: true,
-        data: ticket,
-        message: `Xin mời ông bà có số vé ${ticket.formattedNumber} đến ${counter.name}`
-    });
 };
 
 exports.complete = async (req, res) => {
-    const ticket = await ticketService.completeTicket(
-        req.params.id,
-        req.user?.counterId,
-        req.user?._id
-    );
+    try {
+        const ticket = await ticketService.completeTicket(
+            req.params.id,
+            req.user?.counterId,
+            req.user?._id
+        );
 
-    res.json({
-        success: true,
-        data: ticket,
-        message: `Hoàn thành số ${ticket.formattedNumber}`
-    });
+        res.json({
+            success: true,
+            data: ticket,
+            message: `Hoàn thành số ${ticket.formattedNumber}`
+        });
+    } catch (error) {
+        const { statusCode, message, code } = buildTicketActionErrorPayload(error, 'Không thể hoàn thành ticket');
+
+        res.status(statusCode).json({
+            success: false,
+            message,
+            code
+        });
+    }
 };
 
 exports.skip = async (req, res) => {
-    const { reason } = req.body || {};
-    const { id } = req.params;
-    const counterId = req.user?.counterId;
+    try {
+        const { reason } = req.body || {};
+        const { id } = req.params;
+        const counterId = req.user?.counterId;
 
-    const ticket = await ticketService.skipTicket(id, reason, counterId, req.user?._id);
+        const ticket = await ticketService.skipTicket(id, reason, counterId, req.user?._id);
 
-    logger.warning(`Đã bỏ qua số ${ticket.formattedNumber} - Lý do: ${reason || 'Khách vắng mặt '}`);
+        logger.warning(`Đã bỏ qua số ${ticket.formattedNumber} - Lý do: ${reason || 'Khách vắng mặt '}`);
 
-    const message = ticket.isRecall
-        ? `Đã chuyển số ${ticket.formattedNumber} vào danh sách cần gọi lại`
-        : `Đã đóng ticket ${ticket.formattedNumber} sau ${ticket.skipCount} lần bỏ qua`;
+        const message = ticket.isRecall
+            ? `Đã chuyển số ${ticket.formattedNumber} vào danh sách cần gọi lại`
+            : `Đã đóng ticket ${ticket.formattedNumber} sau ${ticket.skipCount} lần bỏ qua`;
 
-    res.json({
-        success: true,
-        data: ticket,
-        message
-    });
+        res.json({
+            success: true,
+            data: ticket,
+            message
+        });
+    } catch (error) {
+        const { statusCode, message, code } = buildTicketActionErrorPayload(error, 'Không thể bỏ qua ticket');
+
+        res.status(statusCode).json({
+            success: false,
+            message,
+            code
+        });
+    }
 };
 
 exports.getRecallList = async (req, res) => {
@@ -280,7 +315,8 @@ exports.getRecallList = async (req, res) => {
     if (!counterId) {
         return res.status(400).json({
             success: false,
-            message: 'Tài khoản chưa được gán quầy'
+            message: 'Tài khoản chưa được gán quầy',
+            code: 'COUNTER_NOT_FOUND'
         });
     }
 
@@ -300,7 +336,8 @@ exports.recallTicket = async (req, res) => {
         if (!counterId) {
             return res.status(400).json({
                 success: false,
-                message: 'Tài khoản chưa được gán quầy'
+                message: 'Tài khoản chưa được gán quầy',
+                code: 'COUNTER_NOT_FOUND'
             });
         }
 
@@ -315,11 +352,12 @@ exports.recallTicket = async (req, res) => {
             message: `Đã gọi lại số ${ticket.formattedNumber}`
         });
     } catch (error) {
-        const { statusCode, message } = buildTicketActionErrorPayload(error, 'Không thể gọi lại ticket');
+        const { statusCode, message, code } = buildTicketActionErrorPayload(error, 'Không thể gọi lại ticket');
 
         res.status(statusCode).json({
             success: false,
-            message
+            message,
+            code
         });
     }
 };
@@ -331,7 +369,8 @@ exports.recallProcessingTicket = async (req, res) => {
         if (!counterId) {
             return res.status(400).json({
                 success: false,
-                message: 'Tài khoản chưa được gán quầy'
+                message: 'Tài khoản chưa được gán quầy',
+                code: 'COUNTER_NOT_FOUND'
             });
         }
 
@@ -351,11 +390,12 @@ exports.recallProcessingTicket = async (req, res) => {
             message: `Đã gọi lại vé đang xử lý ${ticket.formattedNumber}`
         });
     } catch (error) {
-        const { statusCode, message } = buildTicketActionErrorPayload(error, 'Không thể gọi lại ticket đang xử lý');
+        const { statusCode, message, code } = buildTicketActionErrorPayload(error, 'Không thể gọi lại ticket đang xử lý');
 
         res.status(statusCode).json({
             success: false,
-            message
+            message,
+            code
         });
     }
 };
@@ -367,7 +407,8 @@ exports.cancelRecallTicket = async (req, res) => {
         if (!counterId) {
             return res.status(400).json({
                 success: false,
-                message: 'Tài khoản chưa được gán quầy'
+                message: 'Tài khoản chưa được gán quầy',
+                code: 'COUNTER_NOT_FOUND'
             });
         }
 
@@ -384,11 +425,12 @@ exports.cancelRecallTicket = async (req, res) => {
             message: `Đã hủy ticket recall số ${ticket.formattedNumber}`
         });
     } catch (error) {
-        const { statusCode, message } = buildTicketActionErrorPayload(error, 'Không thể hủy ticket recall');
+        const { statusCode, message, code } = buildTicketActionErrorPayload(error, 'Không thể hủy ticket recall');
 
         res.status(statusCode).json({
             success: false,
-            message
+            message,
+            code
         });
     }
 };
@@ -404,13 +446,14 @@ exports.getCounterDisplay = async (req, res) => {
     });
 };
 
-exports.getMyCounter = async (req, res, next) => {
+exports.getMyCounter = async (req, res) => {
     const counterId = req.user.counterId;
     
     if (!counterId) {
         return res.status(400).json({
             success: false,
-            message: 'Tài khoản chưa được gán quầy'
+            message: 'Tài khoản chưa được gán quầy',
+            code: 'COUNTER_NOT_FOUND'
         });
     }
     
@@ -426,13 +469,14 @@ exports.getMyCounter = async (req, res, next) => {
     });
 };
 
-exports.getStaffDisplay = async (req, res, next) => {
+exports.getStaffDisplay = async (req, res) => {
     const counterId = req.user.counterId;
     
     if (!counterId) {
         return res.status(400).json({
             success: false,
-            message: 'Tài khoản chưa được gán quầy'
+            message: 'Tài khoản chưa được gán quầy',
+            code: 'COUNTER_NOT_FOUND'
         });
     }
     

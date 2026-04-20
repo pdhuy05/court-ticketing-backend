@@ -163,19 +163,23 @@ const assertStaffCanHandleService = async (staffId, counterId, serviceId) => {
   ]);
 
   if (!service) {
-    throw new ApiError(404, 'Không tìm thấy dịch vụ');
+    console.warn(`[Permission] Dịch vụ không tồn tại — staffId=${staffId}, counterId=${counterId}, serviceId=${serviceId}`);
+    throw new ApiError(404, 'Không tìm thấy dịch vụ', 'SERVICE_NOT_FOUND');
   }
 
   if (!service.isActive) {
-    throw new ApiError(403, `Dịch vụ ${service.name} đã bị vô hiệu hóa`);
+    console.warn(`[Permission] Dịch vụ bị vô hiệu hóa — staff=${staffId}, counter=${counterId}, service=${serviceId} (${service.name})`);
+    throw new ApiError(403, `Dịch vụ ${service.name} đã bị vô hiệu hóa, không thể thực hiện thao tác này`, 'SERVICE_DISABLED');
   }
 
   if (!access.availableServiceIds.includes(String(serviceId))) {
-    throw new ApiError(403, `Quầy hiện tại không phục vụ dịch vụ ${service.name}`);
+    console.warn(`[Permission] Quầy không phục vụ dịch vụ — staff=${staffId}, counter=${counterId}, service=${serviceId} (${service.name})`);
+    throw new ApiError(403, `Quầy hiện tại không phục vụ dịch vụ ${service.name}`, 'COUNTER_NOT_SERVING');
   }
 
   if (!access.allowedServiceIds.includes(String(serviceId))) {
-    throw new ApiError(403, `Nhân viên không có quyền xử lý dịch vụ ${service.name}`);
+    console.warn(`[Permission] Nhân viên không có quyền — staff=${staffId}, counter=${counterId}, service=${serviceId} (${service.name})`);
+    throw new ApiError(403, `Bạn không có quyền xử lý dịch vụ ${service.name}`, 'NO_PERMISSION');
   }
 
   return access;
