@@ -1,6 +1,7 @@
 const ApiError = require('../utils/ApiError');
 const ServiceCounter = require('../models/serviceCounter.model');
 const StaffService = require('../models/staffService.model');
+const Service = require('../models/service.model');
 const User = require('../models/user.model');
 
 const normalizeId = (value) => String(value?._id || value);
@@ -37,6 +38,7 @@ const getStaffServiceAccess = async (staffId, counterId) => {
   const availableServices = counterRelations
     .map((relation) => relation.serviceId)
     .filter(Boolean)
+    .filter((service) => service.isActive)
     .map(buildServiceSnapshot);
 
   const availableServiceIds = availableServices.map((service) => String(service.id));
@@ -44,7 +46,11 @@ const getStaffServiceAccess = async (staffId, counterId) => {
   const serviceRestrictionConfigured = Boolean(staffId);
 
   const assignedServices = assignments
-    .filter((assignment) => assignment.isActive && availableServiceIdSet.has(normalizeId(assignment.serviceId)))
+    .filter((assignment) =>
+      assignment.isActive &&
+      assignment.serviceId?.isActive &&
+      availableServiceIdSet.has(normalizeId(assignment.serviceId))
+    )
     .map((assignment) => buildServiceSnapshot(assignment.serviceId));
 
   const effectiveServices = serviceRestrictionConfigured
@@ -151,10 +157,25 @@ const getStaffServiceSummary = async (staffId) => {
 };
 
 const assertStaffCanHandleService = async (staffId, counterId, serviceId) => {
-  const access = await getStaffServiceAccess(staffId, counterId);
+  const [access, service] = await Promise.all([
+    getStaffServiceAccess(staffId, counterId),
+    Service.findById(serviceId).select('name code isActive')
+  ]);
+
+  if (!service) {
+    throw new ApiError(404, 'Không tìm thấy dịch vụ');
+  }
+
+  if (!service.isActive) {
+    throw new ApiError(403, `Dịch vụ ${service.name} đã bị vô hiệu hóa`);
+  }
+
+  if (!access.availableServiceIds.includes(String(serviceId))) {
+    throw new ApiError(403, `Quầy hiện tại không phục vụ dịch vụ ${service.name}`);
+  }
 
   if (!access.allowedServiceIds.includes(String(serviceId))) {
-    throw new ApiError(403, 'Nhân viên không được phép xử lý dịch vụ này tại quầy hiện tại');
+    throw new ApiError(403, `Nhân viên không có quyền xử lý dịch vụ ${service.name}`);
   }
 
   return access;

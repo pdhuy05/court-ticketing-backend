@@ -7,6 +7,42 @@ const Counter = require('../models/counter.model');
 const logger = require('../utils/Logger');
 const { emitAdminNotificationSafe } = require('../services/admin-notification.service');
 
+const buildTicketActionErrorPayload = (error, fallbackMessage) => {
+    if (error?.code === 11000) {
+        const duplicatedFields = Object.keys(error.keyPattern || error.keyValue || {});
+        const fieldLabel = duplicatedFields.length > 0 ? duplicatedFields.join(', ') : 'dữ liệu';
+
+        return {
+            statusCode: 409,
+            message: `Lỗi database: ${fieldLabel} đã tồn tại`
+        };
+    }
+
+    if (error?.name === 'ValidationError') {
+        const message = Object.values(error.errors || {})
+            .map((item) => item.message)
+            .filter(Boolean)
+            .join('; ');
+
+        return {
+            statusCode: 400,
+            message: message || 'Dữ liệu không hợp lệ'
+        };
+    }
+
+    if (error?.statusCode && error?.message) {
+        return {
+            statusCode: error.statusCode,
+            message: error.message
+        };
+    }
+
+    return {
+        statusCode: 500,
+        message: error?.message || fallbackMessage
+    };
+};
+
 const speakTicketIfTtsEnabled = async (displayNumber, counterName) => {
     if (!(await settingService.isTtsEnabled())) {
         return;
@@ -164,7 +200,7 @@ exports.callNext = async (req, res) => {
         res.json({
             success: true,
             data: nextTicket,
-            message: `Vui lòng số ${nextTicket.formattedNumber} đến ${counter.name}`
+            message: `Xin mời ông bà có số vé ${nextTicket.formattedNumber} đến ${counter.name}`
         });
     } catch (error) {
         if (error.message.includes('đang xử lý')) {
@@ -200,7 +236,7 @@ exports.callById = async (req, res) => {
     res.json({
         success: true,
         data: ticket,
-        message: `Vui lòng số ${ticket.formattedNumber} đến ${counter.name}`
+        message: `Xin mời ông bà có số vé ${ticket.formattedNumber} đến ${counter.name}`
     });
 };
 
@@ -258,76 +294,103 @@ exports.getRecallList = async (req, res) => {
 };
 
 exports.recallTicket = async (req, res) => {
-    const counterId = req.user.counterId;
+    try {
+        const counterId = req.user.counterId;
 
-    if (!counterId) {
-        return res.status(400).json({
+        if (!counterId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Tài khoản chưa được gán quầy'
+            });
+        }
+
+        const ticket = await ticketService.recallTicket(req.params.id, counterId, req.user?._id);
+        const counter = await Counter.findById(counterId).select('name');
+
+        await speakTicketIfTtsEnabled(ticket.displayNumber, counter?.name || 'quầy hiện tại');
+
+        res.json({
+            success: true,
+            data: ticket,
+            message: `Đã gọi lại số ${ticket.formattedNumber}`
+        });
+    } catch (error) {
+        const { statusCode, message } = buildTicketActionErrorPayload(error, 'Không thể gọi lại ticket');
+
+        res.status(statusCode).json({
             success: false,
-            message: 'Tài khoản chưa được gán quầy'
+            message
         });
     }
-
-    const ticket = await ticketService.recallTicket(req.params.id, counterId, req.user?._id);
-    const counter = await Counter.findById(counterId).select('name');
-
-    await speakTicketIfTtsEnabled(ticket.displayNumber, counter?.name || 'quầy hiện tại');
-
-    res.json({
-        success: true,
-        data: ticket,
-        message: `Đã gọi lại số ${ticket.formattedNumber}`
-    });
 };
 
 exports.recallProcessingTicket = async (req, res) => {
-    const counterId = req.user.counterId;
+    try {
+        const counterId = req.user.counterId;
 
-    if (!counterId) {
-        return res.status(400).json({
+        if (!counterId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Tài khoản chưa được gán quầy'
+            });
+        }
+
+        const ticket = await ticketService.recallProcessingTicket(
+            req.params.id,
+            counterId,
+            req.user?._id
+        );
+        const counter = await Counter.findById(counterId).select('name');
+
+        logger.success(`Đã gọi lại vé đang xử lý ${ticket.formattedNumber}`);
+        await speakTicketIfTtsEnabled(ticket.displayNumber, counter?.name || 'quầy hiện tại');
+
+        res.json({
+            success: true,
+            data: ticket,
+            message: `Đã gọi lại vé đang xử lý ${ticket.formattedNumber}`
+        });
+    } catch (error) {
+        const { statusCode, message } = buildTicketActionErrorPayload(error, 'Không thể gọi lại ticket đang xử lý');
+
+        res.status(statusCode).json({
             success: false,
-            message: 'Tài khoản chưa được gán quầy'
+            message
         });
     }
-
-    const ticket = await ticketService.recallProcessingTicket(
-        req.params.id,
-        counterId,
-        req.user?._id
-    );
-    const counter = await Counter.findById(counterId).select('name');
-
-    logger.success(`Đã gọi lại vé đang xử lý ${ticket.formattedNumber}`);
-    await speakTicketIfTtsEnabled(ticket.displayNumber, counter?.name || 'quầy hiện tại');
-
-    res.json({
-        success: true,
-        data: ticket,
-        message: `Đã gọi lại vé đang xử lý ${ticket.formattedNumber}`
-    });
 };
 
 exports.cancelRecallTicket = async (req, res) => {
-    const counterId = req.user.counterId;
+    try {
+        const counterId = req.user.counterId;
 
-    if (!counterId) {
-        return res.status(400).json({
+        if (!counterId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Tài khoản chưa được gán quầy'
+            });
+        }
+
+        const ticket = await ticketService.cancelRecallTicket(
+            req.params.id,
+            counterId,
+            req.user?._id,
+            req.body?.reason
+        );
+
+        res.json({
+            success: true,
+            data: ticket,
+            message: `Đã hủy ticket recall số ${ticket.formattedNumber}`
+        });
+    } catch (error) {
+        const { statusCode, message } = buildTicketActionErrorPayload(error, 'Không thể hủy ticket recall');
+
+        res.status(statusCode).json({
             success: false,
-            message: 'Tài khoản chưa được gán quầy'
+            message
         });
     }
-
-    const ticket = await ticketService.cancelRecallTicket(
-        req.params.id,
-        counterId,
-        req.user?._id,
-        req.body?.reason
-    );
-
-    res.json({
-        success: true,
-        data: ticket,
-        message: `Đã hủy ticket recall số ${ticket.formattedNumber}`
-    });
 };
 
 exports.getCounterDisplay = async (req, res) => {

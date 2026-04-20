@@ -288,6 +288,46 @@ const ensureCounterActive = async (counterId) => {
     return counter;
 };
 
+const formatMongoFieldName = (fieldName = '') =>
+    String(fieldName)
+        .split('.')
+        .pop()
+        .replace(/_/g, ' ');
+
+const mapTicketPersistenceError = (error, fallbackMessage = 'Có lỗi khi cập nhật ticket') => {
+    if (error instanceof ApiError) {
+        return error;
+    }
+
+    if (error?.name === 'ValidationError') {
+        const message = Object.values(error.errors || {})
+            .map((item) => item.message)
+            .filter(Boolean)
+            .join('; ');
+
+        return new ApiError(400, message || 'Dữ liệu ticket không hợp lệ');
+    }
+
+    if (error?.name === 'CastError') {
+        return new ApiError(400, `${error.path || 'Dữ liệu'} không hợp lệ`);
+    }
+
+    if (error?.code === 11000) {
+        const duplicatedFields = Object.keys(error.keyPattern || error.keyValue || {});
+        const duplicatedFieldLabel = duplicatedFields.length > 0
+            ? duplicatedFields.map(formatMongoFieldName).join(', ')
+            : 'dữ liệu';
+
+        return new ApiError(409, `Lỗi database: ${duplicatedFieldLabel} đã tồn tại`);
+    }
+
+    if (error?.name === 'MongoServerError' || error?.name === 'MongoError' || error?.name === 'MongooseError') {
+        return new ApiError(500, `Lỗi database: ${error.message || fallbackMessage}`);
+    }
+
+    return error;
+};
+
 const refreshCounterCurrentTicket = async (counterId) => {
     if (!counterId) {
         return;
@@ -850,18 +890,24 @@ const recallTicket = async (ticketId, counterId, staffId = null) => {
     const accessScope = await getServiceAccessScope(counterId, staffId);
     ensureStaffHasAccessibleServices(accessScope);
 
-    const ticket = await Ticket.findOne({
-        _id: ticketId,
-        status: TicketStatus.WAITING,
-        isRecall: true,
-        recallCounterId: counterId,
-        serviceId: { $in: accessScope.allowedServiceIds }
-    })
+    const ticket = await Ticket.findById(ticketId)
         .populate('serviceId', 'name code prefixNumber')
         .populate('queueCounterId', 'number');
 
     if (!ticket) {
-        throw new ApiError(404, 'Không tìm thấy ticket trong danh sách cần gọi lại');
+        throw new ApiError(404, 'Ticket không tồn tại');
+    }
+
+    if (ticket.status !== TicketStatus.WAITING) {
+        throw new ApiError(400, 'Ticket không ở trạng thái chờ để gọi lại');
+    }
+
+    if (!ticket.isRecall || String(ticket.recallCounterId) !== String(counterId)) {
+        throw new ApiError(400, 'Ticket không nằm trong danh sách gọi lại của quầy hiện tại');
+    }
+
+    if (staffId) {
+        await assertStaffCanHandleService(staffId, counterId, ticket.serviceId?._id || ticket.serviceId);
     }
 
     ticket.isRecall = false;
@@ -878,10 +924,14 @@ const recallTicket = async (ticketId, counterId, staffId = null) => {
         isActive: true
     });
 
-    ticket.serviceCounterId = serviceCounter?._id || null;
-    await ticket.save();
-    counter.currentTicketId = ticket._id;
-    await counter.save();
+    try {
+        ticket.serviceCounterId = serviceCounter?._id || null;
+        await ticket.save();
+        counter.currentTicketId = ticket._id;
+        await counter.save();
+    } catch (error) {
+        throw mapTicketPersistenceError(error, 'Không thể gọi lại ticket');
+    }
 
     await emitTicketCalled(ticket, counter, 'recall-ticket');
 
@@ -917,17 +967,24 @@ const recallProcessingTicket = async (ticketId, counterId, staffId = null) => {
     const accessScope = await getServiceAccessScope(counterId, staffId);
     ensureStaffHasAccessibleServices(accessScope);
 
-    const ticket = await Ticket.findOne({
-        _id: ticketId,
-        counterId,
-        status: TicketStatus.PROCESSING,
-        serviceId: { $in: accessScope.allowedServiceIds }
-    })
+    const ticket = await Ticket.findById(ticketId)
         .populate('serviceId', 'name code prefixNumber')
         .populate('queueCounterId', 'number');
 
     if (!ticket) {
-        throw new ApiError(404, 'Không tìm thấy ticket đang xử lý để gọi lại');
+        throw new ApiError(404, 'Ticket không tồn tại');
+    }
+
+    if (ticket.status !== TicketStatus.PROCESSING) {
+        throw new ApiError(400, 'Ticket không ở trạng thái xử lý để gọi lại');
+    }
+
+    if (String(ticket.counterId) !== String(counterId)) {
+        throw new ApiError(403, 'Ticket không thuộc quầy hiện tại');
+    }
+
+    if (staffId) {
+        await assertStaffCanHandleService(staffId, counterId, ticket.serviceId?._id || ticket.serviceId);
     }
 
     if (staffId && ticket.staffId && String(ticket.staffId) !== String(staffId)) {
@@ -966,21 +1023,29 @@ const recallProcessingTicket = async (ticketId, counterId, staffId = null) => {
 };
 
 const cancelRecallTicket = async (ticketId, counterId, staffId = null, reason = '') => {
+    await ensureCounterActive(counterId);
+
     const accessScope = await getServiceAccessScope(counterId, staffId);
     ensureStaffHasAccessibleServices(accessScope);
 
-    const ticket = await Ticket.findOne({
-        _id: ticketId,
-        status: TicketStatus.WAITING,
-        isRecall: true,
-        recallCounterId: counterId,
-        serviceId: { $in: accessScope.allowedServiceIds }
-    })
+    const ticket = await Ticket.findById(ticketId)
         .populate('serviceId', 'name code prefixNumber')
         .populate('queueCounterId', 'number');
 
     if (!ticket) {
-        throw new ApiError(404, 'Không tìm thấy ticket trong danh sách cần gọi lại');
+        throw new ApiError(404, 'Ticket không tồn tại');
+    }
+
+    if (ticket.status !== TicketStatus.WAITING) {
+        throw new ApiError(400, 'Ticket không ở trạng thái chờ để hủy gọi lại');
+    }
+
+    if (!ticket.isRecall || String(ticket.recallCounterId) !== String(counterId)) {
+        throw new ApiError(400, 'Ticket không nằm trong danh sách gọi lại của quầy hiện tại');
+    }
+
+    if (staffId) {
+        await assertStaffCanHandleService(staffId, counterId, ticket.serviceId?._id || ticket.serviceId);
     }
 
     ticket.isRecall = false;
@@ -997,7 +1062,11 @@ const cancelRecallTicket = async (ticketId, counterId, staffId = null, reason = 
         ticket.note = reason;
     }
 
-    await ticket.save();
+    try {
+        await ticket.save();
+    } catch (error) {
+        throw mapTicketPersistenceError(error, 'Không thể hủy ticket recall');
+    }
 
     if (global.io) {
         const presentation = buildTicketPresentation(ticket);
