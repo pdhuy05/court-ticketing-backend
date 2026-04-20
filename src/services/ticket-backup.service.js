@@ -1,5 +1,6 @@
 const fs = require('fs/promises');
 const path = require('path');
+const Backup = require('../models/backup.model');
 
 const BACKUP_DIR = path.join(process.cwd(), 'backups', 'ticket-resets');
 
@@ -22,20 +23,35 @@ const writeBackup = async ({ type, label, payload }) => {
   const fileName = createBackupFileName({ type, label });
   const absolutePath = path.join(BACKUP_DIR, fileName);
 
-  await fs.writeFile(
-    absolutePath,
-    JSON.stringify(
-      {
-        ...payload,
-        backupType: type,
-        backupLabel: label,
-        backedUpAt: new Date().toISOString()
-      },
-      null,
-      2
-    ),
-    'utf8'
+  const content = JSON.stringify(
+    {
+      ...payload,
+      backupType: type,
+      backupLabel: label,
+      backedUpAt: new Date().toISOString()
+    },
+    null,
+    2
   );
+
+  await fs.writeFile(absolutePath, content, 'utf8');
+
+  const fileSize = Buffer.byteLength(content, 'utf8');
+
+  try {
+    await Backup.create({
+      fileName,
+      backupType: type,
+      backupLabel: label,
+      ticketCount: payload?.totals?.ticketCount || 0,
+      filePath: path.relative(process.cwd(), absolutePath),
+      fileSize,
+      createdBy: payload?.actor || null,
+      criteria: payload?.criteria || null
+    });
+  } catch (error) {
+    console.error(`Lưu backup record vào DB thất bại: ${error.message}`);
+  }
 
   return {
     fileName,
