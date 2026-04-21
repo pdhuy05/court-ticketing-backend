@@ -55,7 +55,7 @@ const getStaffById = async (id) => {
 };
 
 const createStaff = async (data) => {
-  const { username, password, fullName, counterId } = data;
+  const { username, password, fullName, counterId, isActive } = data;
 
   const existing = await User.findOne({ username });
   if (existing) {

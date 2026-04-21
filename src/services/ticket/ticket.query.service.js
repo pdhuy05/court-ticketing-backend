@@ -152,9 +152,11 @@ const getCounterDisplay = async (counterId) => {
     const serviceRelations = await ServiceCounter.find({
         counterId,
         isActive: true
-    }).populate('serviceId', 'name code prefixNumber');
+    }).populate('serviceId', 'name code prefixNumber isActive');
 
-    const serviceIds = serviceRelations.map((relation) => relation.serviceId._id);
+    // [SỬA lỗi 3] Lọc bỏ dịch vụ đã bị tắt
+    const activeServiceRelations = serviceRelations.filter(r => r.serviceId?.isActive === true);
+    const serviceIds = activeServiceRelations.map((relation) => relation.serviceId._id);
 
     const waitingTickets = await Ticket.find({
         queueCounterId: counterId,

@@ -130,6 +130,10 @@ const createTicket = async ({ serviceId, name, phone, counterId = null }) => {
         throw new ApiError(404, 'Không tìm thấy dịch vụ');
     }
 
+    if (!service.isActive) {
+        throw new ApiError(400, `Dịch vụ ${service.name} đã bị vô hiệu hóa, không thể lấy số`);
+    }
+
     const { issueCounter, availableCounters } = await resolveIssueCounter(serviceId, counterId);
     const nextNumber = await getNextCounterNumber(issueCounter._id);
     const formattedNumber = formatQueueNumber(nextNumber);
@@ -204,30 +208,44 @@ const callNext = async (counterId, staffId = null) => {
         throw new ApiError(400, 'Quầy chưa được gán dịch vụ');
     }
 
-    const nextTicket = await Ticket.findOneAndUpdate(
-        {
+    let nextTicket = null;
+
+    while (!nextTicket) {
+        const candidateTicket = await Ticket.findOne({
             queueCounterId: counterId,
             serviceId: { $in: accessScope.allowedServiceIds },
             status: TicketStatus.WAITING,
             counterId: null,
             isRecall: false
-        },
-        {
-            status: TicketStatus.PROCESSING,
-            counterId,
-            recalledAt: null
-        },
-        { sort: { createdAt: 1, number: 1 }, returnDocument: 'after' }
-    )
-        .populate('serviceId', 'name code prefixNumber')
-        .populate('queueCounterId', 'number');
+        })
+            .sort({ createdAt: 1, number: 1 })
+            .populate('serviceId', 'name code prefixNumber')
+            .populate('queueCounterId', 'number');
 
-    if (!nextTicket) {
-        throw new ApiError(404, 'Không có ticket đang chờ trong danh sách dịch vụ được phân quyền');
-    }
+        if (!candidateTicket) {
+            throw new ApiError(404, 'Không có ticket đang chờ trong danh sách dịch vụ được phân quyền');
+        }
 
-    if (staffId) {
-        await assertStaffCanHandleService(staffId, counterId, nextTicket.serviceId._id);
+        if (staffId) {
+            await assertStaffCanHandleService(staffId, counterId, candidateTicket.serviceId._id);
+        }
+
+        nextTicket = await Ticket.findOneAndUpdate(
+            {
+                _id: candidateTicket._id,
+                status: TicketStatus.WAITING,
+                counterId: null,
+                isRecall: false
+            },
+            {
+                status: TicketStatus.PROCESSING,
+                counterId,
+                recalledAt: null
+            },
+            { returnDocument: 'after' }
+        )
+            .populate('serviceId', 'name code prefixNumber')
+            .populate('queueCounterId', 'number');
     }
 
     const serviceCounter = await ServiceCounter.findOne({
@@ -510,6 +528,8 @@ const cancelRecallTicket = async (ticketId, counterId, staffId = null, reason = 
 };
 
 const completeTicket = async (id, counterId = null, staffId = null) => {
+    if (counterId) await ensureCounterActive(counterId);
+
     const ticket = await Ticket.findById(id)
         .populate('serviceId', 'name code prefixNumber')
         .populate('queueCounterId', 'number');
@@ -570,6 +590,8 @@ const completeTicket = async (id, counterId = null, staffId = null) => {
 };
 
 const skipTicket = async (id, reason = '', counterId, staffId = null) => {
+    if (counterId) await ensureCounterActive(counterId);
+
     const ticket = await Ticket.findById(id)
         .populate('serviceId', 'name code prefixNumber')
         .populate('queueCounterId', 'number');

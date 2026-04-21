@@ -265,7 +265,8 @@ exports.toggleActive = async (id) => {
         counterId: null,
         staffId: null,
         serviceCounterId: null,
-        processingAt: null
+        processingAt: null,
+        calledAt: null
       }
     );
     await Counter.findByIdAndUpdate(counter._id, { currentTicketId: null });

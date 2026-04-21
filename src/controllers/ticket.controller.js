@@ -158,12 +158,14 @@ exports.getTicketByQR = asyncHandler(async (req, res) => {
 });
 
 exports.callNext = asyncHandler(async (req, res) => {
-    if (req.user?.counterId && String(req.user.counterId) !== req.body.counterId) {
+    const counterId = ensureAssignedCounterId(req);
+
+    if (req.body.counterId && String(counterId) !== String(req.body.counterId)) {
         throw new ApiError(403, 'Bạn chỉ được phép gọi số cho quầy được gán');
     }
 
     const { nextTicket, counter } = await ticketService.callNext(
-        req.body.counterId,
+        counterId,
         req.user?._id
     );
 
