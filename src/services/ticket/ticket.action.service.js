@@ -62,34 +62,36 @@ const ensureCounterActive = async (counterId) => {
 };
 
 const resolveIssueCounter = async (serviceId, requestedCounterId = null) => {
-    const relations = await ServiceCounter.find({
-        serviceId,
-        isActive: true
-    }).populate('counterId');
+  const relations = await ServiceCounter.find({
+    serviceId,
+    isActive: true
+  }).populate('counterId');
 
-    if (relations.length === 0) {
-        throw new ApiError(400, 'Dịch vụ này hiện chưa có quầy phục vụ.');
-    }
+  const activeRelations = relations.filter(r => r.counterId?.isActive === true);
 
-    if (requestedCounterId) {
-        const matchedRelation = relations.find((relation) => (
-            String(relation.counterId?._id || relation.counterId) === String(requestedCounterId)
-        ));
+  if (activeRelations.length === 0) {
+    throw new ApiError(400, 'Dịch vụ này hiện chưa có quầy phục vụ.');
+  }
 
-        if (!matchedRelation?.counterId?.isActive) {
-            throw new ApiError(400, 'Quầy được chọn không phục vụ dịch vụ này hoặc đã bị khóa');
-        }
+  if (requestedCounterId) {
+    const matchedRelation = activeRelations.find((relation) => (
+      String(relation.counterId?._id || relation.counterId) === String(requestedCounterId)
+    ));
 
-        return {
-            issueCounter: matchedRelation.counterId,
-            availableCounters: relations
-        };
+    if (!matchedRelation?.counterId?.isActive) {
+      throw new ApiError(400, 'Quầy được chọn không phục vụ dịch vụ này hoặc đã bị khóa');
     }
 
     return {
-        issueCounter: getPrimaryCounter(relations),
-        availableCounters: relations
+      issueCounter: matchedRelation.counterId,
+      availableCounters: activeRelations  
     };
+  }
+
+  return {
+    issueCounter: getPrimaryCounter(activeRelations),  
+    availableCounters: activeRelations               
+  };
 };
 
 const getNextCounterNumber = async (counterId) => {

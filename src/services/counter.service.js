@@ -247,21 +247,31 @@ exports.delete = async (id) => {
 
 exports.toggleActive = async (id) => {
   const counter = await Counter.findById(id);
-  
-  if (!counter) {
-    throw new ApiError(404, 'Không tìm thấy quầy');
-  }
-  
+  if (!counter) throw new ApiError(404, 'Không tìm thấy quầy');
+
   counter.isActive = !counter.isActive;
   await counter.save();
-  
+
   await ServiceCounter.updateMany(
     { counterId: counter._id },
     { isActive: counter.isActive }
   );
 
+  if (!counter.isActive) {
+    await Ticket.updateMany(
+      { counterId: counter._id, status: TicketStatus.PROCESSING },
+      {
+        status: TicketStatus.WAITING,
+        counterId: null,
+        staffId: null,
+        serviceCounterId: null,
+        processingAt: null
+      }
+    );
+    await Counter.findByIdAndUpdate(counter._id, { currentTicketId: null });
+  }
+
   await emitDashboardUpdateSafe('counter-toggled');
-  
   return counter;
 };
 
