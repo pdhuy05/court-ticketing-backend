@@ -1,4 +1,5 @@
 const authService = require('../services/auth.service');
+const asyncHandler = require('../utils/asyncHandler');
 
 exports.login = async (req, res) => {
     const { username, password } = req.body;
@@ -9,3 +10,7 @@ exports.login = async (req, res) => {
         data: result 
     });
 };
+
+Object.keys(module.exports).forEach((key) => {
+    module.exports[key] = asyncHandler(module.exports[key]);
+});

@@ -1,5 +1,6 @@
 const statisticsService = require('../services/statistics.service');
 const ApiError = require('../utils/ApiError');
+const asyncHandler = require('../utils/asyncHandler');
 
 exports.getDailyStatistics = async (req, res) => {
   const { date } = req.query;
@@ -30,3 +31,7 @@ exports.getStatisticsRange = async (req, res) => {
     data: list
   });
 };
+
+Object.keys(module.exports).forEach((key) => {
+  module.exports[key] = asyncHandler(module.exports[key]);
+});

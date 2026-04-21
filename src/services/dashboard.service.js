@@ -4,6 +4,7 @@ const Counter = require('../models/counter.model');
 const User = require('../models/user.model');
 const ServiceCounter = require('../models/serviceCounter.model');
 const { TicketStatus } = require('../constants/enums');
+const { emitToRoom, hasIO } = require('../utils/socketEmitter');
 
 const ADMIN_DASHBOARD_ROOM = 'admin-dashboard';
 const ADMIN_DASHBOARD_EVENT = 'admin-dashboard:update';
@@ -584,13 +585,13 @@ const getReport = async (options = {}) => {
 };
 
 const emitDashboardUpdate = async (reason = 'updated') => {
-  if (!global.io) {
+  if (!hasIO()) {
     return null;
   }
 
   const data = await getOverview();
 
-  global.io.to(ADMIN_DASHBOARD_ROOM).emit(ADMIN_DASHBOARD_EVENT, {
+  emitToRoom(ADMIN_DASHBOARD_ROOM, ADMIN_DASHBOARD_EVENT, {
     reason,
     generatedAt: data.generatedAt,
     data

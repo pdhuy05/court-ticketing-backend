@@ -1,4 +1,5 @@
 const settingService = require('../../services/setting.service');
+const asyncHandler = require('../../utils/asyncHandler');
 
 exports.patchTtsEnabled = async (req, res) => {
   const value = await settingService.setTtsEnabled(req.body.enabled);
@@ -22,3 +23,7 @@ exports.getTtsEnabled = async (req, res) => {
     }
   });
 };
+
+Object.keys(module.exports).forEach((key) => {
+  module.exports[key] = asyncHandler(module.exports[key]);
+});

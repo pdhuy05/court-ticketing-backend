@@ -1,4 +1,5 @@
 const CounterService = require('../services/counter.service');
+const asyncHandler = require('../utils/asyncHandler');
 
 exports.getAll = async (req, res) => {
   const counters = await CounterService.getAll();
@@ -96,3 +97,7 @@ exports.getAllStats = async (req, res) => {
     count: stats.length
   });
 };
+
+Object.keys(module.exports).forEach((key) => {
+  module.exports[key] = asyncHandler(module.exports[key]);
+});

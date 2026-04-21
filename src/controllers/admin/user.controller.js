@@ -1,4 +1,5 @@
 const staffService = require('../../services/staff.service');
+const asyncHandler = require('../../utils/asyncHandler');
 
 exports.getAllStaff = async (req, res) => {
   const staffs = await staffService.getAllStaff();
@@ -66,3 +67,7 @@ exports.removeCounter = async (req, res, next) => {
     message: 'Đã gỡ quầy khỏi nhân viên thành công' 
   });
 };
+
+Object.keys(module.exports).forEach((key) => {
+  module.exports[key] = asyncHandler(module.exports[key]);
+});

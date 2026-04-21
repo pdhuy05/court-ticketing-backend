@@ -1,6 +1,7 @@
 const Printer = require('../models/printer.model');
 const printerService = require('../services/printer.service');
 const Ticket = require('../models/ticket.model');
+const asyncHandler = require('../utils/asyncHandler');
 
 exports.getAll = async (req, res, next) => {
   const printers = await Printer.find().sort({ createdAt: -1 });
@@ -163,3 +164,7 @@ exports.getStatus = async (req, res, next) => {
     }
   });
 };
+
+Object.keys(module.exports).forEach((key) => {
+  module.exports[key] = asyncHandler(module.exports[key]);
+});

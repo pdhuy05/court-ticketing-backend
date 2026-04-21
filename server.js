@@ -5,6 +5,7 @@ const app = require("./src/app");
 const database = require("./src/config/database");
 const ticketService = require("./src/services/ticket.service");
 const User = require("./src/models/user.model");
+const { setIO } = require("./src/utils/socketEmitter");
 
 database();
 
@@ -157,7 +158,7 @@ io.on('connection', (socket) => {
   });
 });
 
-global.io = io;
+setIO(io);
 
 server.listen(config.port, () => {
   console.log(`

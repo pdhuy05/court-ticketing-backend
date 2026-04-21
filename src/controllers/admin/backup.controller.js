@@ -1,4 +1,5 @@
 const backupService = require('../../services/backup.service');
+const asyncHandler = require('../../utils/asyncHandler');
 
 exports.getBackupList = async (req, res) => {
     const backups = await backupService.getBackupList();
@@ -34,3 +35,7 @@ exports.deleteBackup = async (req, res) => {
         message: `Đã xoá backup: ${result.fileName}`
     });
 };
+
+Object.keys(module.exports).forEach((key) => {
+    module.exports[key] = asyncHandler(module.exports[key]);
+});

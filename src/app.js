@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const ApiError = require("./utils/ApiError");
 const ServicesRoute = require("./routers/service.route");
 const CountersRoute = require("./routers/counter.route");
 const TicketsRoute = require("./routers/ticket.route");
@@ -12,6 +13,38 @@ const AdminSettingsRoute = require("./routers/admin/settings.route");
 const AdminBackupRoute = require("./routers/admin/backup.route");
 const StatisticsRoute = require("./routers/statistics.route");
 const { notifySystemError } = require("./services/admin-notification.service");
+
+const normalizeError = (err) => {
+  if (err instanceof ApiError || err?.statusCode) {
+    return err;
+  }
+
+  if (err?.name === 'ValidationError') {
+    const message = Object.values(err.errors || {})
+      .map((item) => item.message)
+      .filter(Boolean)
+      .join('; ');
+
+    return new ApiError(400, message || 'Dữ liệu không hợp lệ');
+  }
+
+  if (err?.name === 'CastError') {
+    return new ApiError(400, `${err.path || 'Dữ liệu'} không hợp lệ`);
+  }
+
+  if (err?.code === 11000) {
+    const duplicatedFields = Object.keys(err.keyPattern || err.keyValue || {});
+    const fieldLabel = duplicatedFields.length > 0 ? duplicatedFields.join(', ') : 'dữ liệu';
+
+    return new ApiError(409, `Lỗi database: ${fieldLabel} đã tồn tại`);
+  }
+
+  if (err?.name === 'MongoServerError' || err?.name === 'MongoError' || err?.name === 'MongooseError') {
+    return new ApiError(500, `Lỗi database: ${err.message || 'Database error'}`);
+  }
+
+  return new ApiError(500, err?.message || 'Internal Server Error');
+};
 
 
 const app = express();
@@ -33,18 +66,20 @@ app.use("/api/admin/backups", AdminBackupRoute);
 app.use("/api/statistics", StatisticsRoute);
 
 app.use((err, req, res, next) => {
+  const normalizedError = normalizeError(err);
+
   notifySystemError({
     title: 'API lỗi',
-    message: err.message || 'Internal Server Error',
+    message: normalizedError.message || 'Internal Server Error',
     source: `${req.method} ${req.originalUrl}`,
     meta: {
-      statusCode: err.statusCode || 500
+      statusCode: normalizedError.statusCode || 500
     }
   });
 
-  res.status(err.statusCode || 500).json({
+  res.status(normalizedError.statusCode || 500).json({
     success: false,
-    message: err.message || 'Internal Server Error',
+    message: normalizedError.message || 'Internal Server Error',
   });
 });
 

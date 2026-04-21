@@ -1,4 +1,5 @@
 const Service = require('../services/service.service');
+const asyncHandler = require('../utils/asyncHandler');
 
 exports.getAllService = async (req, res, next) => {
   const services = await Service.getAll();
@@ -90,3 +91,7 @@ exports.getStats = async (req, res, next) => {
     data: stats
   });
 };
+
+Object.keys(module.exports).forEach((key) => {
+  module.exports[key] = asyncHandler(module.exports[key]);
+});

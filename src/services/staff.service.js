@@ -70,7 +70,7 @@ const createStaff = async (data) => {
     fullName,
     role: 'staff',
     counterId,
-    isActive: true
+    isActive: isActive !== undefined ? isActive : true
   });
 
   await emitDashboardUpdateSafe('staff-created');

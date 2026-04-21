@@ -1,9 +1,10 @@
 const { ADMIN_DASHBOARD_ROOM } = require('./dashboard.service');
+const { emitToRoom, hasIO } = require('../utils/socketEmitter');
 
 const ADMIN_NOTIFICATION_EVENT = 'admin-notification:new';
 
 const emitAdminNotification = (payload) => {
-  if (!global.io) {
+  if (!hasIO()) {
     return null;
   }
 
@@ -18,7 +19,7 @@ const emitAdminNotification = (payload) => {
     createdAt: new Date().toISOString()
   };
 
-  global.io.to(ADMIN_DASHBOARD_ROOM).emit(ADMIN_NOTIFICATION_EVENT, notification);
+  emitToRoom(ADMIN_DASHBOARD_ROOM, ADMIN_NOTIFICATION_EVENT, notification);
 
   return notification;
 };
