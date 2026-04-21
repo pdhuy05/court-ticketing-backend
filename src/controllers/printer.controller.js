@@ -23,6 +23,18 @@ exports.getById = async (req, res, next) => {
   res.json({ success: true, data: printer });
 };
 
+const checkDuplicateDefault = async (isDefault, excludeId = null) => {
+  if (!isDefault) return;
+
+  const query = { isDefault: true };
+  if (excludeId) query._id = { $ne: excludeId };
+
+  const existingDefault = await Printer.findOne(query);
+  if (existingDefault) {
+    throw new Error(`Máy in "${existingDefault.name}" đang được đặt làm mặc định. Vui lòng bỏ mặc định máy đó trước.`);
+  }
+};
+
 exports.create = async (req, res, next) => {
   const { name, code, type, connection, location, isActive, isDefault } = req.body;
   
@@ -33,6 +45,8 @@ exports.create = async (req, res, next) => {
       message: `Mã máy in '${code}' đã tồn tại` 
     });
   }
+
+  await checkDuplicateDefault(isDefault);
   
   const printer = await Printer.create({
     name, code, type, connection, location, isActive, isDefault
@@ -50,8 +64,12 @@ exports.create = async (req, res, next) => {
 };
 
 exports.update = async (req, res, next) => {
+  const { id } = req.params;
+
+  await checkDuplicateDefault(req.body.isDefault, id);
+
   const printer = await Printer.findByIdAndUpdate(
-    req.params.id,
+    id,
     req.body,
     { returnDocument: 'after', runValidators: true }
   );

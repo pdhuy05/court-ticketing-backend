@@ -34,7 +34,6 @@ const ConnectPrint = {
   BLUETOOTH: 'bluetooth' 
 };
 
-
 module.exports = {
   TicketStatus,
   ServiceCode,

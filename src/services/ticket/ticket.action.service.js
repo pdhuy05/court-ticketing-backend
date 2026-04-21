@@ -28,7 +28,7 @@ const {
     emitWaitingRoomNewTicket
 } = require('./ticket.socket');
 
-const MAX_RECALL_SKIP_COUNT = 3;
+const MAX_RECALL_SKIP_COUNT = 2;
 
 const getServiceAccessScope = async (counterId, staffId = null) => {
     return getStaffServiceAccess(staffId, counterId);
@@ -41,6 +41,7 @@ const ensureStaffHasAccessibleServices = (accessScope) => {
 };
 
 const canAccessService = (serviceIds, serviceId) => serviceIds.includes(String(serviceId));
+
 
 const markTicketAsCalled = (ticket, calledTime = new Date()) => {
     if (!ticket.calledAt) {
@@ -225,6 +226,10 @@ const callNext = async (counterId, staffId = null) => {
         throw new ApiError(404, 'Không có ticket đang chờ trong danh sách dịch vụ được phân quyền');
     }
 
+    if (staffId) {
+        await assertStaffCanHandleService(staffId, counterId, nextTicket.serviceId._id);
+    }
+
     const serviceCounter = await ServiceCounter.findOne({
         serviceId: nextTicket.serviceId._id,
         counterId,
@@ -280,6 +285,10 @@ const callById = async (ticketId, counterId, staffId = null) => {
     if (!canAccessService(accessScope.allowedServiceIds, ticket.serviceId?._id || ticket.serviceId)) {
         const serviceName = ticket.serviceId?.name || 'không xác định';
         throw new ApiError(403, `Bạn không có quyền xử lý dịch vụ ${serviceName}`);
+    }
+
+    if (staffId) {
+        await assertStaffCanHandleService(staffId, counterId, ticket.serviceId._id);
     }
 
     const belongsToCounter = ticket.isRecall
