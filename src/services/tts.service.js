@@ -73,7 +73,6 @@ const playAudio = (filePath) => new Promise((resolve, reject) => {
   }
 
   exec(command, { timeout: TTS_TIMEOUT_MS }, (error) => {
-    // Dọn file tạm sau khi phát
     fs.unlink(filePath, () => {});
 
     if (error) {

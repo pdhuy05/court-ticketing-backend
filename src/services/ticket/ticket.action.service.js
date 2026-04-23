@@ -690,7 +690,7 @@ const backToWaiting = async (ticketId, counterId, staffId = null, position = 'fr
         await assertStaffCanHandleService(staffId, counterId, ticket.serviceId?._id || ticket.serviceId);
     }
 
-    const priorityTime = position === 'back' ? new Date() : new Date(0);
+    const priorityTime = new Date();
     const previousCounterId = ticket.counterId;
     const returnedToWaitingAt = new Date();
 
