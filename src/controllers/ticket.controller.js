@@ -232,6 +232,22 @@ exports.skip = asyncHandler(async (req, res) => {
     });
 });
 
+exports.backToWaiting = asyncHandler(async (req, res) => {
+    const counterId = ensureAssignedCounterId(req);
+    const ticket = await ticketService.backToWaiting(
+        req.params.id,
+        counterId,
+        req.user?._id,
+        req.body?.position || 'front'
+    );
+
+    res.json({
+        success: true,
+        data: ticket,
+        message: `Đã trả số ${ticket.formattedNumber} về hàng chờ`
+    });
+});
+
 exports.getRecallList = asyncHandler(async (req, res) => {
     const counterId = ensureAssignedCounterId(req);
     const recallList = await ticketService.getRecallList(counterId, req.user?._id);

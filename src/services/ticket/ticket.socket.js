@@ -211,6 +211,33 @@ const emitTicketSkipped = (ticket, currentCounterId) => {
     }
 };
 
+const emitTicketBackToWaiting = (ticket, counter, position) => {
+    if (!hasIO()) {
+        return;
+    }
+
+    const presentation = buildTicketPresentation(ticket);
+
+    emitToRoom('waiting-room', 'ticket-back-to-waiting', {
+        ticketId: ticket._id,
+        number: ticket.number,
+        formattedNumber: presentation.formattedNumber,
+        displayNumber: presentation.displayNumber,
+        customerName: ticket.name,
+        serviceName: ticket.serviceId?.name,
+        counterId: counter._id,
+        counterName: counter.name,
+        position,
+        returnedAt: new Date()
+    });
+
+    emitToRoom(`counter-${counter._id}`, 'ticket-finished', {
+        ticketId: ticket._id,
+        formattedNumber: presentation.formattedNumber,
+        reason: 'back-to-waiting'
+    });
+};
+
 const emitTicketsResetDay = ({ date, deletedCount, lastIssuedByCounter, counterIds }) => {
     if (!hasIO()) {
         return;
@@ -250,6 +277,7 @@ module.exports = {
     emitStaffDisplayUpdateForCounters,
     emitTicketCalled,
     emitTicketCompleted,
+    emitTicketBackToWaiting,
     emitTicketProcessingRecalled,
     emitTicketRecallCancelled,
     emitTicketRecalled,

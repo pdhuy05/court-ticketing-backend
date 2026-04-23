@@ -64,6 +64,10 @@ const skipTicketSchema = Joi.object({
     reason: Joi.string().optional().max(500)
 });
 
+const backToWaitingSchema = Joi.object({
+    position: Joi.string().valid('front', 'back').default('front')
+});
+
 module.exports = {
     ticketIdParamSchema: idParamSchema,
     counterDisplayParamsSchema: Joi.object({
@@ -76,6 +80,7 @@ module.exports = {
     callByIdSchema,
     completeTicketSchema,
     cancelTicketSchema,
+    backToWaitingSchema,
     skipTicketSchema,
     recallTicketParamsSchema: idParamSchema,
     cancelRecallTicketSchema: Joi.object({

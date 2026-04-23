@@ -11,6 +11,7 @@ const {
   createTicketSchema,
   callNextSchema,
   callByIdSchema,
+  backToWaitingSchema,
   skipTicketSchema
 } = require('../validations/ticket.validation');
 const TicketController = require("../controllers/ticket.controller");
@@ -35,6 +36,7 @@ router.post("/:id/recall", authMiddleware, staffOnly, counterStaff, validate(rec
 router.post("/:id/recall-processing", authMiddleware, staffOnly, counterStaff, validate(recallTicketParamsSchema, 'params'), TicketController.recallProcessingTicket);
 router.patch("/:id/cancel-recall", authMiddleware, staffOnly, counterStaff, validate(recallTicketParamsSchema, 'params'), validate(cancelRecallTicketSchema), TicketController.cancelRecallTicket);
 router.patch("/:id/complete", authMiddleware, staffOnly, counterStaff, validate(ticketIdParamSchema, 'params'), TicketController.complete);
+router.patch("/:id/back", authMiddleware, staffOnly, counterStaff, validate(ticketIdParamSchema, 'params'), validate(backToWaitingSchema), TicketController.backToWaiting);
 router.patch("/:id/skip", authMiddleware, staffOnly, counterStaff, validate(ticketIdParamSchema, 'params'), validate(skipTicketSchema), TicketController.skip);
 
 module.exports = router;

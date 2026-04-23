@@ -19,6 +19,7 @@ const {
 const { getLastIssuedByCounter } = require('./ticket.query.service');
 const {
     emitStaffDisplayUpdateForCounters,
+    emitTicketBackToWaiting,
     emitTicketCalled,
     emitTicketCompleted,
     emitTicketProcessingRecalled,
@@ -664,7 +665,85 @@ const skipTicket = async (id, reason = '', counterId, staffId = null) => {
     };
 };
 
+const backToWaiting = async (ticketId, counterId, staffId = null, position = 'front') => {
+    const counter = await ensureCounterActive(counterId);
+    const accessScope = await getServiceAccessScope(counterId, staffId);
+    ensureStaffHasAccessibleServices(accessScope);
+
+    const ticket = await Ticket.findById(ticketId)
+        .populate('serviceId', 'name code prefixNumber')
+        .populate('queueCounterId', 'number');
+
+    if (!ticket) {
+        throw new ApiError(404, 'Không tìm thấy ticket');
+    }
+
+    if (ticket.status !== TicketStatus.PROCESSING) {
+        throw new ApiError(400, `Ticket đang ở trạng thái ${ticket.status}, không thể trả về hàng chờ. Chỉ áp dụng với ticket đang xử lý`);
+    }
+
+    if (String(ticket.counterId) !== String(counterId)) {
+        throw new ApiError(403, 'Bạn chỉ được phép trả ticket của quầy được gán về hàng chờ');
+    }
+
+    if (staffId) {
+        await assertStaffCanHandleService(staffId, counterId, ticket.serviceId?._id || ticket.serviceId);
+    }
+
+    const priorityTime = position === 'back' ? new Date() : new Date(0);
+    const previousCounterId = ticket.counterId;
+    const returnedToWaitingAt = new Date();
+
+    ticket.status = TicketStatus.WAITING;
+    ticket.counterId = null;
+    ticket.staffId = null;
+    ticket.serviceCounterId = null;
+    ticket.processingAt = null;
+    ticket.isRecall = false;
+    ticket.recalledAt = null;
+    ticket.recallCounterId = null;
+    ticket.createdAt = priorityTime;
+    ticket.set('returnedToWaitingAt', returnedToWaitingAt, { strict: false });
+
+    await ticket.save();
+    await Ticket.updateOne(
+        { _id: ticket._id },
+        {
+            $set: {
+                createdAt: priorityTime,
+                returnedToWaitingAt
+            }
+        },
+        {
+            strict: false,
+            timestamps: false
+        }
+    );
+
+    ticket.createdAt = priorityTime;
+    ticket.set('returnedToWaitingAt', returnedToWaitingAt, { strict: false });
+
+    await refreshCounterCurrentTicket(previousCounterId);
+
+    emitTicketBackToWaiting(ticket, counter, position);
+
+    await emitStaffDisplayUpdateForCounters([previousCounterId], 'ticket-back-to-waiting', {
+        ticketId: ticket._id
+    });
+
+    await emitDashboardUpdateSafe('ticket-back-to-waiting');
+
+    const presentation = buildTicketPresentation(ticket);
+
+    return {
+        ...ticket.toObject(),
+        formattedNumber: presentation.formattedNumber,
+        displayNumber: presentation.displayNumber
+    };
+};
+
 module.exports = {
+    backToWaiting,
     callById,
     callNext,
     cancelRecallTicket,
