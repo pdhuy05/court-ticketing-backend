@@ -318,6 +318,16 @@ const callById = async (ticketId, counterId, staffId = null) => {
         throw new ApiError(403, `Ticket không thuộc danh sách xử lý của quầy ${counter.name}`);
     }
 
+    const existingProcessing = await Ticket.findOne({
+        counterId,
+        status: TicketStatus.PROCESSING
+    }).populate('serviceId', 'name code prefixNumber');
+
+    if (existingProcessing) {
+        const presentation = buildTicketPresentation(existingProcessing);
+        throw new ApiError(400, `Quầy đang xử lý vé ${presentation.formattedNumber}. Vui lòng hoàn thành hoặc bỏ qua vé hiện tại trước`);
+    }
+
     const serviceCounter = await ServiceCounter.findOne({
         serviceId: ticket.serviceId._id,
         counterId,
