@@ -23,6 +23,7 @@ router.get("/waiting", TicketController.getAllWaiting);
 router.get("/qr/:qrData", TicketController.getTicketByQR);
 router.get("/counters/:counterId/display", validate(counterDisplayParamsSchema, 'params'), TicketController.getCounterDisplay);
 router.post("/", validate(createTicketSchema), TicketController.create);
+router.post("/:id/print", validate(ticketIdParamSchema, 'params'), TicketController.printTicket);
 
 // ====================================
 // STAFF ROUTES 

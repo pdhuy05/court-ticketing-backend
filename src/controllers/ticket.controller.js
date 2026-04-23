@@ -4,10 +4,12 @@ const settingService = require('../services/setting.service');
 const { speakCallTicket } = require('../services/tts.service');
 const Printer = require('../models/printer.model');
 const Counter = require('../models/counter.model');
+const Ticket = require('../models/ticket.model');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const logger = require('../utils/Logger');
 const { emitAdminNotificationSafe } = require('../services/admin-notification.service');
+const { buildTicketPresentation } = require('../services/ticket/ticket.helpers');
 
 const ensureAssignedCounterId = (req) => {
     const counterId = req.user?.counterId;
@@ -87,8 +89,6 @@ exports.create = asyncHandler(async (req, res) => {
     const result = await ticketService.createTicket(req.body);
     result.ticket.displayNumber = result.ticketNumberDisplay;
 
-    const shouldPrint = req.body.autoPrint !== false;
-
     const ticketData = {
         _id: result.ticket._id,
         number: result.ticket.number,
@@ -115,25 +115,38 @@ exports.create = asyncHandler(async (req, res) => {
         number: counter.number
     }));
 
-    if (shouldPrint) {
-        queueAutoPrintTicket({
-            ticket: result.ticket,
-            service: result.service,
-            ticketNumberDisplay: result.ticketNumberDisplay
-        });
-    }
-
     res.status(201).json({
         success: true,
         data: ticketData,
         service: serviceData,
         availableCounters: availableCountersData,
-        printRequested: shouldPrint,
-        printStatus: shouldPrint ? 'queued' : 'disabled',
-        printMessage: shouldPrint
-            ? 'Lệnh in đã được đưa vào xử lý nền'
-            : 'Tắt tự động in cho request này',
         message: `Đã cấp số ${result.ticketNumberDisplay} cho dịch vụ ${result.service.name}`
+    });
+});
+
+exports.printTicket = asyncHandler(async (req, res) => {
+    const ticket = await Ticket.findById(req.params.id)
+        .populate('serviceId', 'code name prefixNumber')
+        .populate('queueCounterId', 'code name number')
+        .populate('counterId', 'code name number');
+
+    if (!ticket) {
+        throw new ApiError(404, 'Không tìm thấy vé');
+    }
+
+    const presentation = buildTicketPresentation(ticket);
+    ticket.displayNumber = presentation.displayNumber || ticket.ticketNumber;
+
+    queueAutoPrintTicket({
+        ticket,
+        service: ticket.serviceId,
+        ticketNumberDisplay: ticket.displayNumber || ticket.ticketNumber
+    });
+
+    res.json({
+        success: true,
+        message: `Đã gửi lệnh in vé ${ticket.ticketNumber}`,
+        printStatus: 'queued'
     });
 });
 

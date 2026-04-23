@@ -30,8 +30,7 @@ const createTicketSchema = Joi.object({
             'string.empty': 'Số điện thoại không được để trống',
             'string.pattern.base': 'Số điện thoại phải gồm ít nhất 8 chữ số'
         }),
-    counterId: objectId.optional(),
-    autoPrint: Joi.boolean().default(true)
+    counterId: objectId.optional()
 });
 
 const callNextSchema = Joi.object({
