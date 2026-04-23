@@ -11,6 +11,11 @@ const settingSchema = new mongoose.Schema(
     value: {
       type: mongoose.Schema.Types.Mixed,
       required: true
+    },
+    description: {
+      type: String,
+      trim: true,
+      default: null
     }
   },
   {

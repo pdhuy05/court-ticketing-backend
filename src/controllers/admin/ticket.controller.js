@@ -7,7 +7,7 @@ exports.resetTicketsByDate = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     data: result,
-    message: `Đã reset ${result.deletedCount} ticket của ngày ${result.date}`
+    message: `Đã reset dữ liệu ngày ${result.date} cho ${result.counterCount} quầy`
   });
 });
 
@@ -17,6 +17,6 @@ exports.resetAllTickets = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     data: result,
-    message: `Đã reset toàn bộ ${result.deletedCount} ticket trong hệ thống`
+    message: `Đã reset bộ đếm của ${result.resetCount} quầy trong hệ thống`
   });
 });
