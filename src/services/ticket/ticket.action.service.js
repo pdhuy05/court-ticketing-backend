@@ -690,7 +690,6 @@ const backToWaiting = async (ticketId, counterId, staffId = null, position = 'fr
         await assertStaffCanHandleService(staffId, counterId, ticket.serviceId?._id || ticket.serviceId);
     }
 
-    const priorityTime = new Date();
     const previousCounterId = ticket.counterId;
     const returnedToWaitingAt = new Date();
 
@@ -702,25 +701,15 @@ const backToWaiting = async (ticketId, counterId, staffId = null, position = 'fr
     ticket.isRecall = false;
     ticket.recalledAt = null;
     ticket.recallCounterId = null;
-    ticket.createdAt = priorityTime;
     ticket.set('returnedToWaitingAt', returnedToWaitingAt, { strict: false });
 
     await ticket.save();
     await Ticket.updateOne(
         { _id: ticket._id },
-        {
-            $set: {
-                createdAt: priorityTime,
-                returnedToWaitingAt
-            }
-        },
-        {
-            strict: false,
-            timestamps: false
-        }
+        { $set: { returnedToWaitingAt } },
+        { strict: false, timestamps: false }
     );
 
-    ticket.createdAt = priorityTime;
     ticket.set('returnedToWaitingAt', returnedToWaitingAt, { strict: false });
 
     await refreshCounterCurrentTicket(previousCounterId);
