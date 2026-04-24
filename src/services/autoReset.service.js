@@ -5,19 +5,10 @@ const {
   seedAutoResetDefaults
 } = require('./setting.service');
 const { resetTicketsByDate } = require('./ticket');
+const { pad, getDateString, getCurrentHHMM } = require('../utils/dateTime.util');
 
 let _intervalId = null;
 let _lastResetDate = null;
-
-const pad = (value) => String(value).padStart(2, '0');
-
-const getDateString = (date) => {
-  const year = date.getFullYear();
-  const month = pad(date.getMonth() + 1);
-  const day = pad(date.getDate());
-
-  return `${year}-${month}-${day}`;
-};
 
 const getTodayString = () => getDateString(new Date());
 
@@ -25,11 +16,6 @@ const getYesterdayString = () => {
   const date = new Date();
   date.setDate(date.getDate() - 1);
   return getDateString(date);
-};
-
-const getCurrentHHMM = () => {
-  const now = new Date();
-  return `${pad(now.getHours())}:${pad(now.getMinutes())}`;
 };
 
 const runAutoReset = async () => {
