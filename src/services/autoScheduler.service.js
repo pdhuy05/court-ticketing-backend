@@ -1,26 +1,12 @@
 const logger = require('../utils/Logger');
 const { getShiftAutoStartTime, seedShiftDefaults } = require('./setting.service');
 const { autoStartAllShifts, runServiceScheduler } = require('./shift.service');
+const { pad, getDateString, getCurrentHHMM } = require('../utils/dateTime.util');
 
 let _shiftIntervalId = null;
 let _serviceIntervalId = null;
 let _lastAutoStartDate = null;
 let _lastRunMinute = null;
-
-const pad = (value) => String(value).padStart(2, '0');
-
-const getDateString = (date) => {
-  const year = date.getFullYear();
-  const month = pad(date.getMonth() + 1);
-  const day = pad(date.getDate());
-
-  return `${year}-${month}-${day}`;
-};
-
-const getCurrentHHMM = () => {
-  const now = new Date();
-  return `${pad(now.getHours())}:${pad(now.getMinutes())}`;
-};
 
 const runAutoShiftStart = async () => {
   try {

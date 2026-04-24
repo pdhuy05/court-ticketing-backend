@@ -33,9 +33,7 @@ const {
 
 const MAX_RECALL_SKIP_COUNT = 2;
 
-const getServiceAccessScope = async (counterId, staffId = null) => {
-    return getStaffServiceAccess(staffId, counterId);
-};
+
 
 const ensureStaffHasAccessibleServices = (accessScope) => {
     if (accessScope.serviceRestrictionConfigured && accessScope.allowedServiceIds.length === 0) {
