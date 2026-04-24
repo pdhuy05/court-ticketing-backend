@@ -4,7 +4,6 @@ const router = express.Router();
 const { authMiddleware, adminOnly } = require('../../middlewares/auth.middleware');
 const validate = require('../../middlewares/validate.middleware');
 const {
-  patchSelfManageEnabledSchema,
   patchAutoStartTimeSchema,
   patchReminderMinutesSchema,
   adminEndShiftSchema,
@@ -14,7 +13,6 @@ const {
 const AdminShiftController = require('../../controllers/admin/shift.controller');
 
 router.get('/settings', authMiddleware, adminOnly, AdminShiftController.getShiftSettings);
-router.patch('/settings/self-manage', authMiddleware, adminOnly, validate(patchSelfManageEnabledSchema), AdminShiftController.patchSelfManageEnabled);
 router.patch('/settings/auto-start-time', authMiddleware, adminOnly, validate(patchAutoStartTimeSchema), AdminShiftController.patchAutoStartTime);
 router.patch('/settings/reminder-minutes', authMiddleware, adminOnly, validate(patchReminderMinutesSchema), AdminShiftController.patchReminderMinutes);
 router.get('/staff', authMiddleware, adminOnly, AdminShiftController.getAllStaffShiftStatus);

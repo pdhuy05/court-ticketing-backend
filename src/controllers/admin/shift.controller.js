@@ -7,15 +7,6 @@ exports.getShiftSettings = async (req, res) => {
   res.json({ success: true, data });
 };
 
-exports.patchSelfManageEnabled = async (req, res) => {
-  const value = await settingService.setShiftSelfManageEnabled(req.body.enabled);
-  res.json({
-    success: true,
-    data: { selfManageEnabled: value },
-    message: value ? 'Đã bật tính năng tự quản lý ca' : 'Đã tắt tính năng tự quản lý ca'
-  });
-};
-
 exports.patchAutoStartTime = async (req, res) => {
   const value = await settingService.setShiftAutoStartTime(req.body.time);
   res.json({

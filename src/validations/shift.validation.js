@@ -1,9 +1,5 @@
 const Joi = require('joi');
 
-const patchSelfManageEnabledSchema = Joi.object({
-  enabled: Joi.boolean().required()
-});
-
 const patchAutoStartTimeSchema = Joi.object({
   time: Joi.string()
     .pattern(/^\d{2}:\d{2}$/)
@@ -40,7 +36,6 @@ const toggleScheduleSchema = Joi.object({
 });
 
 module.exports = {
-  patchSelfManageEnabledSchema,
   patchAutoStartTimeSchema,
   patchReminderMinutesSchema,
   adminEndShiftSchema,

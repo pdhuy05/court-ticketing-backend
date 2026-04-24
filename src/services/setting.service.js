@@ -3,7 +3,6 @@ const Setting = require('../models/setting.model');
 const TTS_ENABLED_KEY = 'tts_enabled';
 const AUTO_RESET_ENABLED_KEY = 'auto_reset_enabled';
 const AUTO_RESET_TIME_KEY = 'auto_reset_time';
-const SHIFT_SELF_MANAGE_ENABLED_KEY = 'shift_self_manage_enabled';
 const SHIFT_AUTO_START_TIME_KEY = 'shift_auto_start_time';
 const SHIFT_REMINDER_MINUTES_KEY = 'shift_reminder_minutes';
 
@@ -143,21 +142,6 @@ const getAutoResetSettings = async () => {
   return { enabled, time };
 };
 
-const isShiftSelfManageEnabled = async () => {
-  const rawValue = await getSetting(SHIFT_SELF_MANAGE_ENABLED_KEY, true);
-  return toBoolean(rawValue, true);
-};
-
-const setShiftSelfManageEnabled = async (enabled) => {
-  const value = Boolean(enabled);
-  await setSetting(
-    SHIFT_SELF_MANAGE_ENABLED_KEY,
-    value,
-    'Cho phép staff tự đóng/mở ca làm việc'
-  );
-  return value;
-};
-
 const getShiftAutoStartTime = async () => {
   const rawValue = await getSetting(SHIFT_AUTO_START_TIME_KEY, '07:30');
   const value = typeof rawValue === 'string' ? rawValue : '07:30';
@@ -201,28 +185,15 @@ const setShiftReminderMinutes = async (minutes) => {
 };
 
 const getShiftSettings = async () => {
-  const [selfManageEnabled, autoStartTime, reminderMinutes] = await Promise.all([
-    isShiftSelfManageEnabled(),
+  const [autoStartTime, reminderMinutes] = await Promise.all([
     getShiftAutoStartTime(),
     getShiftReminderMinutes()
   ]);
 
-  return { selfManageEnabled, autoStartTime, reminderMinutes };
+  return { autoStartTime, reminderMinutes };
 };
 
 const seedShiftDefaults = async () => {
-  await Setting.findOneAndUpdate(
-    { key: SHIFT_SELF_MANAGE_ENABLED_KEY },
-    {
-      $setOnInsert: {
-        key: SHIFT_SELF_MANAGE_ENABLED_KEY,
-        value: true,
-        description: 'Cho phép staff tự đóng/mở ca làm việc'
-      }
-    },
-    { upsert: true, runValidators: true }
-  );
-
   await Setting.findOneAndUpdate(
     { key: SHIFT_AUTO_START_TIME_KEY },
     {
@@ -253,7 +224,6 @@ module.exports = {
   AUTO_RESET_TIME_KEY,
   SHIFT_AUTO_START_TIME_KEY,
   SHIFT_REMINDER_MINUTES_KEY,
-  SHIFT_SELF_MANAGE_ENABLED_KEY,
   TTS_ENABLED_KEY,
   getAutoResetSettings,
   getAutoResetTime,
@@ -263,7 +233,6 @@ module.exports = {
   getShiftSettings,
   isTtsEnabled,
   isAutoResetEnabled,
-  isShiftSelfManageEnabled,
   seedAutoResetDefaults,
   seedShiftDefaults,
   setAutoResetEnabled,
@@ -271,6 +240,5 @@ module.exports = {
   setSetting,
   setShiftAutoStartTime,
   setShiftReminderMinutes,
-  setShiftSelfManageEnabled,
   setTtsEnabled
 };
