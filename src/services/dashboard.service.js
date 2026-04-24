@@ -94,7 +94,7 @@ const getSummary = async (range) => {
     }),
     Ticket.countDocuments({
       status: TicketStatus.SKIPPED,
-      updatedAt: { $gte: start, $lt: end }
+      skippedAt: { $gte: start, $lt: end }
     }),
     Ticket.aggregate([
       {
@@ -370,7 +370,7 @@ const getReportSummary = async (range) => {
       status: TicketStatus.COMPLETED
     }),
     Ticket.countDocuments({
-      updatedAt: { $gte: start, $lt: end },
+      skippedAt: { $gte: start, $lt: end },
       status: TicketStatus.SKIPPED
     }),
     Ticket.aggregate([
@@ -430,7 +430,7 @@ const getServiceReport = async (range) => {
         Ticket.countDocuments({
           serviceId: service._id,
           status: TicketStatus.SKIPPED,
-          updatedAt: { $gte: start, $lt: end }
+          skippedAt: { $gte: start, $lt: end }
         }),
         Ticket.countDocuments({
           serviceId: service._id,
@@ -479,7 +479,7 @@ const getCounterReport = async (range, overloadThreshold = DEFAULT_OVERLOAD_THRE
         Ticket.countDocuments({
           counterId: counter._id,
           status: TicketStatus.SKIPPED,
-          updatedAt: { $gte: start, $lt: end }
+          skippedAt: { $gte: start, $lt: end }
         }),
         serviceIds.length
           ? Ticket.countDocuments({

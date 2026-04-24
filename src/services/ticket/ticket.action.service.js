@@ -33,7 +33,15 @@ const {
 
 const MAX_RECALL_SKIP_COUNT = 2;
 
-const getServiceAccessScope = (counterId, staffId = null) => getStaffServiceAccess(staffId, counterId);
+const getServiceAccessScope = async (counterId, staffId = null) => {
+    return getStaffServiceAccess(staffId, counterId);
+};
+
+const ensureStaffHasAccessibleServices = (accessScope) => {
+    if (accessScope.serviceRestrictionConfigured && accessScope.allowedServiceIds.length === 0) {
+        throw new ApiError(403, 'Nhân viên chưa được gán dịch vụ nào tại quầy hiện tại');
+    }
+};
 
 const canAccessService = (serviceIds, serviceId) => serviceIds.includes(String(serviceId));
 
@@ -262,7 +270,7 @@ const createTicket = async ({ serviceId, name, phone, counterId = null }) => {
 const callNext = async (counterId, staffId = null) => {
     const counter = await ensureCounterActive(counterId);
 
-    const accessScope = await getServiceAccessScope(counterId, staffId);
+    const accessScope = await getStaffServiceAccess(staffId, counterId);
     ensureStaffHasAccessibleServices(accessScope);
 
     if (accessScope.allowedServiceIds.length === 0) {
@@ -273,7 +281,12 @@ const callNext = async (counterId, staffId = null) => {
 
     let nextTicket = null;
 
+    let retries = 0;
+    const MAX_RETRIES = 5;
     while (!nextTicket) {
+        if (retries++ >= MAX_RETRIES) {
+            throw new ApiError(409, 'Không thể gọi số do xung đột dữ liệu, vui lòng thử lại');
+        }
         const candidateTicket = await Ticket.findOne({
             queueCounterId: counterId,
             serviceId: { $in: accessScope.allowedServiceIds },
@@ -347,7 +360,7 @@ const callNext = async (counterId, staffId = null) => {
 
 const callById = async (ticketId, counterId, staffId = null) => {
     const counter = await ensureCounterActive(counterId);
-    const accessScope = await getServiceAccessScope(counterId, staffId);
+    const accessScope = await getStaffServiceAccess(staffId, counterId);
     ensureStaffHasAccessibleServices(accessScope);
 
     const ticket = await Ticket.findById(ticketId)
@@ -425,7 +438,7 @@ const callById = async (ticketId, counterId, staffId = null) => {
 const recallTicket = async (ticketId, counterId, staffId = null) => {
     const counter = await ensureCounterActive(counterId);
 
-    const accessScope = await getServiceAccessScope(counterId, staffId);
+    const accessScope = await getStaffServiceAccess(staffId, counterId);
     ensureStaffHasAccessibleServices(accessScope);
 
     const ticket = await Ticket.findById(ticketId)
@@ -490,7 +503,7 @@ const recallTicket = async (ticketId, counterId, staffId = null) => {
 
 const recallProcessingTicket = async (ticketId, counterId, staffId = null) => {
     const counter = await ensureCounterActive(counterId);
-    const accessScope = await getServiceAccessScope(counterId, staffId);
+    const accessScope = await getStaffServiceAccess(staffId, counterId);
     ensureStaffHasAccessibleServices(accessScope);
 
     const ticket = await Ticket.findById(ticketId)
@@ -538,7 +551,7 @@ const recallProcessingTicket = async (ticketId, counterId, staffId = null) => {
 const cancelRecallTicket = async (ticketId, counterId, staffId = null, reason = '') => {
     await ensureCounterActive(counterId);
 
-    const accessScope = await getServiceAccessScope(counterId, staffId);
+    const accessScope = await getStaffServiceAccess(staffId, counterId);
     ensureStaffHasAccessibleServices(accessScope);
 
     const ticket = await Ticket.findById(ticketId)
@@ -733,7 +746,7 @@ const skipTicket = async (id, reason = '', counterId, staffId = null) => {
 
 const backToWaiting = async (ticketId, counterId, staffId = null, position = 'front') => {
     const counter = await ensureCounterActive(counterId);
-    const accessScope = await getServiceAccessScope(counterId, staffId);
+    const accessScope = await getStaffServiceAccess(staffId, counterId);
     ensureStaffHasAccessibleServices(accessScope);
 
     const ticket = await Ticket.findById(ticketId)
@@ -767,16 +780,23 @@ const backToWaiting = async (ticketId, counterId, staffId = null, position = 'fr
     ticket.isRecall = false;
     ticket.recalledAt = null;
     ticket.recallCounterId = null;
-    ticket.set('returnedToWaitingAt', returnedToWaitingAt, { strict: false });
-
-    await ticket.save();
     await Ticket.updateOne(
         { _id: ticket._id },
-        { $set: { returnedToWaitingAt } },
-        { strict: false, timestamps: false }
+        { $set: {
+            status: TicketStatus.WAITING,
+            counterId: null,
+            staffId: null,
+            serviceCounterId: null,
+            processingAt: null,
+            isRecall: false,
+            recalledAt: null,
+            recallCounterId: null,
+            returnedToWaitingAt
+        } },
+        { timestamps: false }
     );
 
-    ticket.set('returnedToWaitingAt', returnedToWaitingAt, { strict: false });
+    ticket.returnedToWaitingAt = returnedToWaitingAt;
 
     await refreshCounterCurrentTicket(previousCounterId);
 

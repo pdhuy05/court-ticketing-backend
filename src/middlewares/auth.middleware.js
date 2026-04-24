@@ -15,7 +15,6 @@ const authMiddleware = async (req, res, next) => {
     }
 
     req.user = user;
-    req.user.role = decoded.role;
     next();
   } catch (error) {
     return res.status(401).json({ success: false, message: 'Token không hợp lệ hoặc đã hết hạn' });

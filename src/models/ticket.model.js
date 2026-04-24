@@ -138,6 +138,14 @@ const TicketSchema = new mongoose.Schema({
   skipCount: { 
     type: Number, 
     default: 0 
+  },
+
+  returnedToWaitingAt: { type: Date, default: null },
+
+  note: {
+    type: String,
+    default: null,
+    trim: true
   }
 }, {
   timestamps: true
