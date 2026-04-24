@@ -235,8 +235,11 @@ exports.delete = async (id) => {
   if (!counter) {
     throw new ApiError(404, 'Không tìm thấy quầy');
   }
-  
-  await ServiceCounter.deleteMany({ counterId: counter._id });
+
+  const assignedCount = await ServiceCounter.countDocuments({ counterId: counter._id });
+  if (assignedCount > 0) {
+    throw new ApiError(400, `Không thể xóa quầy đang có ${assignedCount} dịch vụ được gán. Vui lòng gỡ hết dịch vụ trước khi xóa.`);
+  }
   
   await counter.deleteOne();
 
