@@ -1,8 +1,11 @@
+const mongoose = require('mongoose');
+const { emitDashboardUpdateSafe } = require('./dashboard.service');
 const User = require('../models/user.model');
 const Ticket = require('../models/ticket.model');
+const Service = require('../models/service.model');
+const ServiceSchedule = require('../models/serviceSchedule.model');
 const { TicketStatus, ShiftAction } = require('../constants/enums');
 const ApiError = require('../utils/ApiError');
-const { isShiftSelfManageEnabled } = require('./setting.service');
 
 const findStaffById = async (staffId) => {
   const staff = await User.findById(staffId);
@@ -12,14 +15,6 @@ const findStaffById = async (staffId) => {
   }
 
   return staff;
-};
-
-const assertShiftSelfManageEnabled = async () => {
-  const selfManageEnabled = await isShiftSelfManageEnabled();
-
-  if (!selfManageEnabled) {
-    throw new ApiError(403, 'Tính năng tự quản lý ca đang bị tắt bởi admin');
-  }
 };
 
 const countActiveTicketsForStaff = async (staffId, counterId) => {
@@ -62,7 +57,10 @@ const updateShiftStatus = async (staff, action, { reason = '', waitingTicketsCou
   }
 
   appendShiftLog(staff, action, { reason, waitingTicketsCount });
+  
   await staff.save();
+
+  await emitDashboardUpdateSafe('shift-updated');
 
   return {
     onDuty: staff.onDuty,
@@ -72,47 +70,76 @@ const updateShiftStatus = async (staff, action, { reason = '', waitingTicketsCou
   };
 };
 
-const startShift = async (staffId) => {
-  await assertShiftSelfManageEnabled();
-
-  const staff = await findStaffById(staffId);
-
-  if (staff.onDuty) {
-    throw new ApiError(400, 'Bạn đang trong ca làm việc, không thể bắt đầu ca mới');
+const normalizeScheduleServiceId = (serviceId) => {
+  if (serviceId === 'ALL') {
+    return 'ALL';
   }
 
-  const result = await updateShiftStatus(staff, ShiftAction.START);
+  if (!mongoose.Types.ObjectId.isValid(String(serviceId))) {
+    throw new ApiError(400, 'serviceId không hợp lệ');
+  }
 
-  return {
-    onDuty: result.onDuty,
-    lastShiftStart: result.lastShiftStart,
-    message: 'Bắt đầu ca làm việc thành công'
-  };
+  return new mongoose.Types.ObjectId(String(serviceId));
 };
 
-const endShift = async (staffId, { reason = '' } = {}) => {
-  await assertShiftSelfManageEnabled();
+const isAllServicesSchedule = (serviceId) => String(serviceId) === 'ALL';
 
-  const staff = await findStaffById(staffId);
-
-  if (!staff.onDuty) {
-    throw new ApiError(400, 'Bạn không đang trong ca làm việc');
+const populateScheduleService = async (schedule) => {
+  if (!schedule) {
+    return null;
   }
 
-  const waitingTicketsCount = staff.counterId
-    ? await countActiveTicketsForStaff(staffId, staff.counterId)
-    : 0;
+  const scheduleObject = typeof schedule.toObject === 'function'
+    ? schedule.toObject()
+    : { ...schedule };
 
-  const result = await updateShiftStatus(staff, ShiftAction.END, {
-    reason,
-    waitingTicketsCount
-  });
+  if (isAllServicesSchedule(scheduleObject.serviceId)) {
+    return scheduleObject;
+  }
+
+  const service = await Service.findById(scheduleObject.serviceId)
+    .select('code name isActive isOpen')
+    .lean();
+
+  scheduleObject.serviceId = service || scheduleObject.serviceId;
+
+  return scheduleObject;
+};
+
+const updateServicesOpenState = async (serviceId, isOpen) => {
+  if (isAllServicesSchedule(serviceId)) {
+    const result = await Service.updateMany({}, { $set: { isOpen } });
+
+    await emitDashboardUpdateSafe('service-schedule-updated');
+
+    return {
+      serviceId: 'ALL',
+      isOpen,
+      matchedCount: result.matchedCount ?? result.modifiedCount ?? 0,
+      modifiedCount: result.modifiedCount ?? 0
+    };
+  }
+
+  const service = await Service.findByIdAndUpdate(
+    serviceId,
+    { $set: { isOpen } },
+    { returnDocument: 'after', runValidators: true }
+  )
+    .select('code name isActive isOpen')
+    .lean();
+
+  if (!service) {
+    throw new ApiError(404, 'Không tìm thấy dịch vụ');
+  }
+
+  await emitDashboardUpdateSafe('service-schedule-updated');
 
   return {
-    onDuty: result.onDuty,
-    lastShiftEnd: result.lastShiftEnd,
-    waitingTicketsCount,
-    message: 'Kết thúc ca làm việc thành công'
+    serviceId: service._id,
+    service,
+    isOpen: service.isOpen,
+    matchedCount: 1,
+    modifiedCount: 1
   };
 };
 
@@ -149,6 +176,14 @@ const getStaffByShiftStatus = async (onDuty = null) => {
     .lean();
 };
 
+const getAllSchedules = async () => {
+  const schedules = await ServiceSchedule.find()
+    .sort({ createdAt: -1, updatedAt: -1 })
+    .lean();
+
+  return Promise.all(schedules.map(populateScheduleService));
+};
+
 const getShiftHistoryByStaff = async (staffId, limit = 50) => {
   const staff = await User.findById(staffId)
     .select('fullName username shiftHistory onDuty lastShiftStart lastShiftEnd')
@@ -174,6 +209,125 @@ const getShiftHistoryByStaff = async (staffId, limit = 50) => {
     lastShiftStart: staff.lastShiftStart,
     lastShiftEnd: staff.lastShiftEnd,
     history
+  };
+};
+
+const upsertSchedule = async ({ serviceId, openTime, closeTime, isEnabled = true }) => {
+  const normalizedServiceId = normalizeScheduleServiceId(serviceId);
+
+  if (!isAllServicesSchedule(normalizedServiceId)) {
+    const service = await Service.findById(normalizedServiceId).select('_id');
+
+    if (!service) {
+      throw new ApiError(404, 'Không tìm thấy dịch vụ');
+    }
+  }
+
+  const schedule = await ServiceSchedule.findOneAndUpdate(
+    { serviceId: normalizedServiceId },
+    {
+      $set: {
+        serviceId: normalizedServiceId,
+        openTime,
+        closeTime,
+        isEnabled: Boolean(isEnabled)
+      }
+    },
+    {
+      upsert: true,
+      returnDocument: 'after',
+      runValidators: true
+    }
+  ).lean();
+
+  return populateScheduleService(schedule);
+};
+
+const deleteSchedule = async (serviceId) => {
+  const normalizedServiceId = normalizeScheduleServiceId(serviceId);
+  const result = await ServiceSchedule.deleteOne({ serviceId: normalizedServiceId });
+
+  return {
+    serviceId: normalizedServiceId,
+    deletedCount: result.deletedCount || 0
+  };
+};
+
+const setScheduleEnabled = async (serviceId, isEnabled) => {
+  const normalizedServiceId = normalizeScheduleServiceId(serviceId);
+  const schedule = await ServiceSchedule.findOneAndUpdate(
+    { serviceId: normalizedServiceId },
+    { $set: { isEnabled: Boolean(isEnabled) } },
+    { returnDocument: 'after', runValidators: true }
+  ).lean();
+
+  if (!schedule) {
+    throw new ApiError(404, 'Không tìm thấy lịch dịch vụ');
+  }
+
+  return populateScheduleService(schedule);
+};
+
+const applyScheduleNow = async (serviceId) => {
+  const normalizedServiceId = normalizeScheduleServiceId(serviceId);
+  const schedule = await ServiceSchedule.findOne({
+    serviceId: normalizedServiceId
+  }).lean();
+
+  if (!schedule) {
+    throw new ApiError(404, 'Không tìm thấy lịch dịch vụ');
+  }
+
+  if (!schedule.isEnabled) {
+    return {
+      serviceId: normalizedServiceId,
+      skipped: true,
+      reason: 'Schedule is disabled'
+    };
+  }
+
+  const now = new Date();
+  const currentHHMM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+  if (currentHHMM === schedule.openTime) {
+    return updateServicesOpenState(normalizedServiceId, true);
+  }
+
+  if (currentHHMM === schedule.closeTime) {
+    return updateServicesOpenState(normalizedServiceId, false);
+  }
+
+  return {
+    serviceId: normalizedServiceId,
+    skipped: true,
+    reason: 'Current time does not match schedule'
+  };
+};
+
+const runServiceScheduler = async () => {
+  const schedules = await ServiceSchedule.find({ isEnabled: true }).lean();
+  const now = new Date();
+  const currentHHMM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const results = [];
+
+  for (const schedule of schedules) {
+    const normalizedServiceId = normalizeScheduleServiceId(schedule.serviceId);
+
+    if (currentHHMM === schedule.openTime) {
+      results.push(await updateServicesOpenState(normalizedServiceId, true));
+      continue;
+    }
+
+    if (currentHHMM === schedule.closeTime) {
+      results.push(await updateServicesOpenState(normalizedServiceId, false));
+    }
+  }
+
+  return {
+    runAt: now.toISOString(),
+    processedCount: schedules.length,
+    updatedCount: results.length,
+    results
   };
 };
 
@@ -218,11 +372,19 @@ const adminEndShift = async (staffId, { reason = 'Admin kết thúc ca thủ cô
 };
 
 module.exports = {
-  startShift,
-  endShift,
+  appendShiftLog,
   autoStartAllShifts,
+  countActiveTicketsForStaff,
+  deleteSchedule,
+  findStaffById,
+  getAllSchedules,
   getStaffByShiftStatus,
   getShiftHistoryByStaff,
   adminStartShift,
-  adminEndShift
+  adminEndShift,
+  applyScheduleNow,
+  runServiceScheduler,
+  setScheduleEnabled,
+  updateShiftStatus,
+  upsertSchedule
 };

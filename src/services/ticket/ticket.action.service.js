@@ -191,6 +191,10 @@ const createTicket = async ({ serviceId, name, phone, counterId = null }) => {
         throw new ApiError(400, `Dịch vụ ${service.name} đã bị vô hiệu hóa, không thể lấy số`);
     }
 
+    if (!service.isOpen) {
+        throw new ApiError(400, `Dịch vụ ${service.name} hiện đang tạm đóng. Vui lòng quay lại sau.`);
+    }
+
     const { issueCounter, availableCounters } = await resolveIssueCounter(serviceId, counterId);
     const nextNumber = await getNextCounterNumber(issueCounter._id);
     const formattedNumber = formatQueueNumber(nextNumber);

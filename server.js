@@ -5,7 +5,7 @@ const app = require("./src/app");
 const database = require("./src/config/database");
 const ticketService = require("./src/services/ticket.service");
 const autoResetScheduler = require("./src/services/autoReset.service");
-const autoShiftService = require('./src/services/autoShift.service');
+const autoSchedulerService = require('./src/services/autoScheduler.service');
 const User = require("./src/models/user.model");
 const { setIO } = require("./src/utils/socketEmitter");
 
@@ -166,8 +166,8 @@ server.listen(config.port, () => {
   autoResetScheduler.start().catch((error) => {
     console.error(`Khởi động auto reset thất bại: ${error.message}`);
   });
-  autoShiftService.start().catch((error) => {
-    console.error(`Khởi động auto shift thất bại: ${error.message}`);
+  autoSchedulerService.start().catch((error) => {
+    console.error(`Khởi động auto scheduler thất bại: ${error.message}`);
   });
   console.log(`
 \x1b[42m\x1b[30m ✓ \x1b[0m \x1b[36mServer\x1b[0m: Khởi động thành công!

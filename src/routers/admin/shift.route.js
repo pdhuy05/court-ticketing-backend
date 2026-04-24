@@ -7,7 +7,9 @@ const {
   patchSelfManageEnabledSchema,
   patchAutoStartTimeSchema,
   patchReminderMinutesSchema,
-  adminEndShiftSchema
+  adminEndShiftSchema,
+  upsertServiceScheduleSchema,
+  toggleScheduleSchema
 } = require('../../validations/shift.validation');
 const AdminShiftController = require('../../controllers/admin/shift.controller');
 
@@ -21,5 +23,9 @@ router.get('/staff/off-duty', authMiddleware, adminOnly, AdminShiftController.ge
 router.get('/staff/:staffId/history', authMiddleware, adminOnly, AdminShiftController.getStaffShiftHistory);
 router.post('/staff/:staffId/start', authMiddleware, adminOnly, AdminShiftController.adminStartShift);
 router.post('/staff/:staffId/end', authMiddleware, adminOnly, validate(adminEndShiftSchema), AdminShiftController.adminEndShift);
+router.get('/service-schedules', authMiddleware, adminOnly, AdminShiftController.getServiceSchedules);
+router.post('/service-schedules', authMiddleware, adminOnly, validate(upsertServiceScheduleSchema), AdminShiftController.upsertServiceSchedule);
+router.delete('/service-schedules/:serviceId', authMiddleware, adminOnly, AdminShiftController.deleteServiceSchedule);
+router.patch('/service-schedules/:serviceId/toggle', authMiddleware, adminOnly, validate(toggleScheduleSchema), AdminShiftController.toggleServiceSchedule);
 
 module.exports = router;

@@ -1,39 +1,50 @@
-# Shift Management FE Guide
+# Shift Management and Service Schedule FE Guide
 
-Tai lieu nay huong dan frontend tich hop tinh nang quan ly ca lam viec cho staff va admin.
+Tai lieu nay huong dan frontend tich hop phien ban moi cua tinh nang shift management.
 
-Muc tieu:
+Ban nay KHONG con cho staff tu mo ca / dong ca.
 
-- FE co the lam du man hinh staff shift va admin shift settings
-- FE biet ro endpoint nao dung cho ai
-- FE xu ly dung cac trang thai `onDuty` va `offDuty`
-- FE tranh bi sai flow khi staff chua mo ca nhung van bam thao tac ticket
+Frontend can hieu dung 2 nhom chuc nang:
 
-## 1. Tong quan nghiep vu
+- Admin quan ly trang thai ca cua staff
+- Admin quan ly lich mo / dong cua service theo gio
 
-Backend da them tinh nang shift management voi 2 nhom chuc nang:
+Muc tieu cua tai lieu:
 
-- Staff tu mo ca va dong ca
-- Admin xem trang thai ca, xem lich su ca, force mo/dong ca, cau hinh auto start
+- FE biet ro API nao con dung, API nao da bo
+- FE co the lam man hinh admin nhanh, dung nghiep vu
+- FE xu ly dung cac trang thai `onDuty` cua staff va `isOpen` cua service
+- FE tranh nham voi ban cu co route `/api/shift/*` cho staff
 
-Rule quan trong:
+## 1. Thay doi lon trong nghiep vu
 
-1. Staff co the co 2 trang thai:
-   - `onDuty = true`: dang trong ca
-   - `onDuty = false`: da ket thuc ca
-2. Neu staff `offDuty`, backend se chan cac API thao tac ticket nhu:
-   - `call-next`
-   - `call-by-id`
-   - `recall`
-   - `complete`
-   - `skip`
-   - `back-to-waiting`
-3. Khi tao ticket moi cho mot service, backend chi phan bo vao quay co staff dang `onDuty` cho service do
-4. Neu khong co staff nao dang `onDuty` cho service, backend se bao service tam ngung
+So voi ban cu:
 
-## 2. Field moi FE se gap
+- da xoa toan bo staff APIs:
+  - `GET /api/shift/status`
+  - `GET /api/shift/history`
+  - `POST /api/shift/start`
+  - `POST /api/shift/end`
+- da xoa route mount `/api/shift`
+- staff khong tu thao tac ca nua
+- chi admin moi co quyen:
+  - xem trang thai ca
+  - xem lich su ca
+  - force mo ca / dong ca cho staff
+  - cau hinh gio auto start shift
+  - cau hinh schedule mo / dong service
 
-Backend da bo sung tren user cac field:
+Ngoai ra backend da them:
+
+- model `ServiceSchedule`
+- field `isOpen` trong service
+- scheduler tu dong mo / dong service theo `openTime` va `closeTime`
+
+## 2. Field FE can biet
+
+### 2.1 Tren User
+
+Staff van co cac field:
 
 - `onDuty: boolean`
 - `lastShiftStart: string | null`
@@ -51,176 +62,64 @@ type ShiftLog = {
 };
 ```
 
-## 3. Staff APIs
+### 2.2 Tren Service
 
-Tat ca API staff deu can:
+Service da co them:
 
-```text
-Authorization: Bearer <staff_token>
+- `isOpen: boolean`
+
+Y nghia:
+
+- `true`: service dang mo, co the cap so neu cac dieu kien khac hop le
+- `false`: service dang tam dong, backend se chan tao ticket moi
+
+### 2.3 Tren ServiceSchedule
+
+Kieu du lieu frontend can dung:
+
+```ts
+type ServiceSchedule = {
+  _id: string;
+  serviceId:
+    | 'ALL'
+    | {
+        _id: string;
+        code: string;
+        name: string;
+        isActive: boolean;
+        isOpen: boolean;
+      };
+  openTime: string;
+  closeTime: string;
+  isEnabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
 ```
 
-### 3.1 Xem trang thai ca hien tai
+Luu y:
 
-`GET /api/shift/status`
+- neu `serviceId = 'ALL'` thi rule ap dung cho tat ca service
+- neu `serviceId` la object thi rule ap dung cho mot service cu the
+- moi service chi co toi da 1 schedule
 
-Response:
+## 3. API con dung cho Admin
 
-```json
-{
-  "success": true,
-  "data": {
-    "staffId": "662f...",
-    "fullName": "Nguyen Van A",
-    "username": "staff01",
-    "onDuty": true,
-    "lastShiftStart": "2026-04-24T00:35:00.000Z",
-    "lastShiftEnd": "2026-04-23T10:10:00.000Z"
-  }
-}
-```
-
-FE dung API nay de:
-
-- render nut `Bat dau ca` hoac `Ket thuc ca`
-- hien badge `Dang trong ca` / `Ngoai ca`
-- hien thong tin lan mo ca gan nhat va lan dong ca gan nhat
-
-### 3.2 Bat dau ca
-
-`POST /api/shift/start`
-
-Body:
-
-```json
-{}
-```
-
-Response thanh cong:
-
-```json
-{
-  "success": true,
-  "data": {
-    "onDuty": true,
-    "lastShiftStart": "2026-04-24T00:35:00.000Z",
-    "message": "Bắt đầu ca làm việc thành công"
-  },
-  "message": "Bắt đầu ca làm việc thành công"
-}
-```
-
-Loi co the gap:
-
-- `403`: `Tính năng tự quản lý ca đang bị tắt bởi admin`
-- `400`: `Bạn đang trong ca làm việc, không thể bắt đầu ca mới`
-- `404`: `Không tìm thấy nhân viên`
-
-FE nen:
-
-- disable nut khi request dang pending
-- sau khi thanh cong, refetch `GET /api/shift/status`
-- sau khi thanh cong, refetch man hinh staff ticket neu dang mo
-
-### 3.3 Ket thuc ca
-
-`POST /api/shift/end`
-
-Body:
-
-```json
-{
-  "reason": "Ra ngoai trong 30 phut"
-}
-```
-
-`reason` la optional, toi da 500 ky tu.
-
-Response thanh cong:
-
-```json
-{
-  "success": true,
-  "data": {
-    "onDuty": false,
-    "lastShiftEnd": "2026-04-24T04:50:00.000Z",
-    "waitingTicketsCount": 3,
-    "message": "Kết thúc ca làm việc thành công"
-  },
-  "message": "Kết thúc ca làm việc thành công"
-}
-```
-
-Y nghia `waitingTicketsCount`:
-
-- so ticket con lien quan den quay cua staff tai thoi diem dong ca
-- FE co the dung de hien modal xac nhan sau khi dong ca thanh cong
-
-Loi co the gap:
-
-- `403`: `Tính năng tự quản lý ca đang bị tắt bởi admin`
-- `400`: `Bạn không đang trong ca làm việc`
-
-FE goi y UX:
-
-1. Bam nut `Ket thuc ca`
-2. Mo modal nhap ly do optional
-3. Goi API
-4. Neu thanh cong:
-   - hien toast thanh cong
-   - cap nhat trang thai thanh `offDuty`
-   - khoa cac nut thao tac ticket
-
-### 3.4 Xem lich su ca cua chinh minh
-
-`GET /api/shift/history?limit=50`
-
-Response:
-
-```json
-{
-  "success": true,
-  "data": {
-    "staffId": "662f...",
-    "fullName": "Nguyen Van A",
-    "username": "staff01",
-    "onDuty": false,
-    "lastShiftStart": "2026-04-24T00:35:00.000Z",
-    "lastShiftEnd": "2026-04-24T04:50:00.000Z",
-    "history": [
-      {
-        "action": "end",
-        "timestamp": "2026-04-24T04:50:00.000Z",
-        "reason": "Ra ngoai trong 30 phut",
-        "waitingTicketsCount": 3
-      },
-      {
-        "action": "start",
-        "timestamp": "2026-04-24T00:35:00.000Z",
-        "reason": "",
-        "waitingTicketsCount": 0
-      }
-    ]
-  }
-}
-```
-
-FE nen render:
-
-- timeline hoac table lich su
-- cot `Hanh dong`
-- cot `Thoi gian`
-- cot `Ly do`
-- cot `So ticket con lai`
-
-## 4. Admin APIs
-
-Tat ca API admin deu can:
+Tat ca API trong tai lieu nay deu can:
 
 ```text
 Authorization: Bearer <admin_token>
 ```
 
-### 4.1 Lay cau hinh shift
+Base path chinh:
+
+```text
+/api/admin/shift
+```
+
+## 4. Nhom API quan ly shift staff
+
+### 4.1 Lay settings shift
 
 `GET /api/admin/shift/settings`
 
@@ -237,37 +136,14 @@ Response:
 }
 ```
 
-FE nen dung de render form setting:
+Luu y cho FE:
 
-- switch `Cho phep staff tu quan ly ca`
-- input time `Tu dong mo ca`
-- input number `Nhac nho truoc khi ket thuc ca`
+- hien tai backend van tra `selfManageEnabled`
+- nhung staff khong con route self-manage
+- FE admin van co the hien field nay neu team muon giu trang settings hien tai
+- neu muon UI gon, co the xem no la setting du phong
 
-### 4.2 Bat/tat staff tu quan ly ca
-
-`PATCH /api/admin/shift/settings/self-manage`
-
-Body:
-
-```json
-{
-  "enabled": true
-}
-```
-
-Response:
-
-```json
-{
-  "success": true,
-  "data": {
-    "selfManageEnabled": true
-  },
-  "message": "Đã bật tính năng tự quản lý ca"
-}
-```
-
-### 4.3 Cap nhat gio tu dong mo ca
+### 4.2 Cap nhat gio auto mo ca staff
 
 `PATCH /api/admin/shift/settings/auto-start-time`
 
@@ -279,27 +155,23 @@ Body:
 }
 ```
 
-Rule:
-
-- dung dinh dang `HH:MM`
-- vi du hop le: `07:30`, `16:45`
-
-Loi validation:
+Response:
 
 ```json
 {
-  "success": false,
-  "message": "Validation error",
-  "errors": [
-    {
-      "field": "time",
-      "message": "Thời gian phải theo định dạng HH:MM"
-    }
-  ]
+  "success": true,
+  "data": {
+    "autoStartTime": "07:30"
+  },
+  "message": "Đã cập nhật thời gian tự động mở ca thành 07:30"
 }
 ```
 
-### 4.4 Cap nhat so phut nhac nho
+Validation:
+
+- phai theo dinh dang `HH:MM`
+
+### 4.3 Cap nhat reminder minutes
 
 `PATCH /api/admin/shift/settings/reminder-minutes`
 
@@ -311,12 +183,24 @@ Body:
 }
 ```
 
-Rule:
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "reminderMinutes": 15
+  },
+  "message": "Đã cập nhật thời gian nhắc nhở thành 15 phút"
+}
+```
+
+Validation:
 
 - la so nguyen
-- tu `0` den `120`
+- trong khoang `0 - 120`
 
-### 4.5 Lay danh sach staff va trang thai ca
+### 4.4 Danh sach staff theo trang thai ca
 
 Co 3 API:
 
@@ -328,11 +212,11 @@ Response item:
 
 ```json
 {
-  "_id": "662f...",
+  "_id": "662f0c...",
   "fullName": "Nguyen Van A",
   "username": "staff01",
   "counterId": {
-    "_id": "6611...",
+    "_id": "6611ab...",
     "name": "Quay tiep nhan 1",
     "number": 1
   },
@@ -342,27 +226,60 @@ Response item:
 }
 ```
 
-FE goi y:
+FE nen render:
 
-- Tab `Tat ca`
-- Tab `Dang trong ca`
-- Tab `Ngoai ca`
-- Co search theo `fullName`, `username`, `counter`
+- table staff
+- filter `Tat ca`, `Dang trong ca`, `Ngoai ca`
+- search theo `fullName`, `username`, `counter`
+- badge:
+  - `onDuty = true` -> `Dang trong ca`
+  - `onDuty = false` -> `Ngoai ca`
 
-### 4.6 Lay lich su ca cua staff
+### 4.5 Lay lich su ca cua 1 staff
 
 `GET /api/admin/shift/staff/:staffId/history?limit=50`
 
-Response cung format voi API staff history.
+Response:
 
-FE nen mo drawer / modal chi tiet staff:
+```json
+{
+  "success": true,
+  "data": {
+    "staffId": "662f0c...",
+    "fullName": "Nguyen Van A",
+    "username": "staff01",
+    "onDuty": false,
+    "lastShiftStart": "2026-04-24T00:35:00.000Z",
+    "lastShiftEnd": "2026-04-24T04:50:00.000Z",
+    "history": [
+      {
+        "action": "end",
+        "timestamp": "2026-04-24T04:50:00.000Z",
+        "reason": "Admin ket thuc ca thu cong",
+        "waitingTicketsCount": 2
+      },
+      {
+        "action": "start",
+        "timestamp": "2026-04-24T00:35:00.000Z",
+        "reason": "Admin mo ca thu cong",
+        "waitingTicketsCount": 0
+      }
+    ]
+  }
+}
+```
 
-- thong tin staff
-- counter hien tai
-- trang thai hien tai
-- lich su start/end gan nhat
+FE nen dung:
 
-### 4.7 Admin force mo ca
+- drawer hoac modal chi tiet staff
+- timeline hoac table lich su
+- hien ro:
+  - hanh dong
+  - thoi gian
+  - ly do
+  - so ticket con lai khi dong ca
+
+### 4.6 Admin force mo ca cho staff
 
 `POST /api/admin/shift/staff/:staffId/start`
 
@@ -385,7 +302,12 @@ Response:
 }
 ```
 
-### 4.8 Admin force dong ca
+Loi co the gap:
+
+- `404`: `Không tìm thấy nhân viên`
+- `400`: `Nhân viên đang trong ca làm việc`
+
+### 4.7 Admin force dong ca cho staff
 
 `POST /api/admin/shift/staff/:staffId/end`
 
@@ -393,7 +315,7 @@ Body:
 
 ```json
 {
-  "reason": "Admin ket thuc ca do het gio"
+  "reason": "Het gio lam viec"
 }
 ```
 
@@ -411,63 +333,249 @@ Response:
 }
 ```
 
-## 5. Staff ticket screen can doi gi
+Y nghia `waitingTicketsCount`:
 
-Do backend da them guard `staffOnDuty`, FE staff man hinh xu ly ticket can doi nhu sau:
+- so ticket con lai tai quay cua staff vao luc dong ca
+- FE co the hien them canh bao trong toast hoac modal neu > 0
 
-### 5.1 Neu staff dang `onDuty`
+Loi co the gap:
 
-Cho phep dung binh thuong:
+- `404`: `Không tìm thấy nhân viên`
+- `400`: `Nhân viên không đang trong ca làm việc`
 
-- `Call next`
-- `Call by id`
-- `Recall`
-- `Complete`
-- `Skip`
-- `Back to waiting`
+## 5. Nhom API quan ly service schedule
 
-### 5.2 Neu staff dang `offDuty`
+Day la nhom API moi quan trong nhat cho FE admin.
 
-Nen:
+### 5.1 Lay danh sach service schedules
 
-- disable tat ca action button cua ticket
-- hien banner canh bao o dau man hinh
-- hien CTA `Bat dau ca`
+`GET /api/admin/shift/service-schedules`
 
-Text goi y:
+Response:
 
-```text
-Ban chua bat dau ca lam viec. Vui long mo ca truoc khi thao tac ticket.
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "_id": "6630...",
+      "serviceId": "ALL",
+      "openTime": "07:30",
+      "closeTime": "17:00",
+      "isEnabled": true,
+      "createdAt": "2026-04-24T01:00:00.000Z",
+      "updatedAt": "2026-04-24T01:00:00.000Z"
+    },
+    {
+      "_id": "6631...",
+      "serviceId": {
+        "_id": "6615...",
+        "code": "TV",
+        "name": "TU VAN",
+        "isActive": true,
+        "isOpen": true
+      },
+      "openTime": "08:00",
+      "closeTime": "16:30",
+      "isEnabled": true,
+      "createdAt": "2026-04-24T01:05:00.000Z",
+      "updatedAt": "2026-04-24T01:05:00.000Z"
+    }
+  ]
+}
 ```
 
-### 5.3 Neu FE van goi API ticket khi `offDuty`
+FE can xu ly 2 truong hop:
 
-Backend se tra:
+- `serviceId === 'ALL'`
+- `serviceId` la object service
+
+Goi y hien thi:
+
+- neu `serviceId === 'ALL'` -> hien label `Tat ca dich vu`
+- nguoc lai -> hien `serviceId.name`
+
+### 5.2 Tao hoac cap nhat 1 service schedule
+
+`POST /api/admin/shift/service-schedules`
+
+Body cho rule ALL:
+
+```json
+{
+  "serviceId": "ALL",
+  "openTime": "07:30",
+  "closeTime": "17:00",
+  "isEnabled": true
+}
+```
+
+Body cho rule 1 service:
+
+```json
+{
+  "serviceId": "6615b0d4f4e7b7e0b1234567",
+  "openTime": "08:00",
+  "closeTime": "16:30",
+  "isEnabled": true
+}
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "_id": "6631...",
+    "serviceId": {
+      "_id": "6615...",
+      "code": "TV",
+      "name": "TU VAN",
+      "isActive": true,
+      "isOpen": true
+    },
+    "openTime": "08:00",
+    "closeTime": "16:30",
+    "isEnabled": true,
+    "createdAt": "2026-04-24T01:05:00.000Z",
+    "updatedAt": "2026-04-24T01:05:00.000Z"
+  },
+  "message": "Đã lưu lịch dịch vụ thành công"
+}
+```
+
+Rule nghiep vu:
+
+- 1 service chi co toi da 1 schedule
+- goi lai API voi cung `serviceId` se la update, khong tao ban ghi moi
+- `serviceId` co the la:
+  - `'ALL'`
+  - ObjectId string cua service
+
+Validation:
+
+- `serviceId` bat buoc
+- `openTime` bat buoc dung `HH:MM`
+- `closeTime` bat buoc dung `HH:MM`
+- `isEnabled` mac dinh `true`
+
+### 5.3 Xoa service schedule
+
+`DELETE /api/admin/shift/service-schedules/:serviceId`
+
+Vi du:
+
+```text
+DELETE /api/admin/shift/service-schedules/ALL
+DELETE /api/admin/shift/service-schedules/6615b0d4f4e7b7e0b1234567
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "serviceId": "ALL",
+    "deletedCount": 1
+  },
+  "message": "Đã xóa lịch dịch vụ thành công"
+}
+```
+
+FE nen:
+
+- confirm truoc khi xoa
+- refetch danh sach sau khi xoa
+
+### 5.4 Bat / tat service schedule
+
+`PATCH /api/admin/shift/service-schedules/:serviceId/toggle`
+
+Body:
+
+```json
+{
+  "isEnabled": false
+}
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "_id": "6631...",
+    "serviceId": {
+      "_id": "6615...",
+      "code": "TV",
+      "name": "TU VAN",
+      "isActive": true,
+      "isOpen": true
+    },
+    "openTime": "08:00",
+    "closeTime": "16:30",
+    "isEnabled": false,
+    "createdAt": "2026-04-24T01:05:00.000Z",
+    "updatedAt": "2026-04-24T02:00:00.000Z"
+  },
+  "message": "Đã tắt lịch dịch vụ"
+}
+```
+
+Y nghia:
+
+- rule van ton tai
+- scheduler se bo qua rule neu `isEnabled = false`
+- day KHONG phai xoa rule
+
+## 6. Hieu dung scheduler de FE thiet ke UI dung
+
+Backend co 2 scheduler chay song song:
+
+### 6.1 Auto mo ca staff
+
+- moi 60 giay backend check `autoStartTime`
+- neu dung gio thi bat `onDuty = true` cho tat ca staff dang `offDuty`
+
+### 6.2 Auto mo / dong service
+
+- moi 60 giay backend check tat ca `service schedules` dang `isEnabled = true`
+- neu gio hien tai = `openTime` -> set `isOpen = true`
+- neu gio hien tai = `closeTime` -> set `isOpen = false`
+
+Luu y quan trong cho FE:
+
+- backend chua co websocket event rieng cho schedule
+- FE nen refetch data bang HTTP sau khi user save / toggle / delete schedule
+- neu can realtime dashboard, FE co the poll nhe theo chu ky phu hop
+
+## 7. Public flow bi anh huong nhu the nao
+
+Khi nguoi dung lay so ticket:
+
+- backend se check `service.isActive`
+- backend se check `service.isOpen`
+- backend se check con staff `onDuty` cho service do hay khong
+
+Neu service dang dong, backend co the tra:
 
 ```json
 {
   "success": false,
-  "message": "Bạn chưa bắt đầu ca làm việc. Vui lòng mở ca trước khi tiếp tục"
+  "message": "Dịch vụ TU VAN hiện đang tạm đóng. Vui lòng quay lại sau."
 }
 ```
 
 Status:
 
 ```text
-403
+400
 ```
 
-FE can:
-
-- khong hien generic error nhu loi server
-- chuyen thanh warning/business error
-- neu hop ly thi mo modal shift hoac redirect ve man hinh shift
-
-## 6. Man hinh tao ticket cong khai can doi gi
-
-Khi nguoi dan tao ticket moi, backend se kiem tra service do co staff dang `onDuty` hay khong.
-
-Neu khong co staff dang trong ca, backend co the tra:
+Neu service khong co staff dang trong ca, backend co the tra:
 
 ```json
 {
@@ -482,32 +590,76 @@ Status:
 400
 ```
 
-FE public can:
+FE public nen:
 
-- hien thong bao ro rang la service tam thoi khong phuc vu
-- khong bao loi ky thuat
-- goi y nguoi dung chon dich vu khac neu co
+- hien day la business error
+- thong bao than thien cho nguoi dung
+- neu man hinh co danh sach service, nen disable hoac danh dau service dang dong neu co du lieu `isOpen`
 
-## 7. Goi y state cho frontend
+## 8. Goi y UI cho FE admin
 
-### 7.1 State staff shift
+Nen tach thanh 3 khu ro rang.
 
-```ts
-type StaffShiftState = {
-  loading: boolean;
-  submitting: boolean;
-  data: {
-    staffId: string;
-    fullName: string;
-    username: string;
-    onDuty: boolean;
-    lastShiftStart: string | null;
-    lastShiftEnd: string | null;
-  } | null;
-};
-```
+### 8.1 Khu Shift Settings
 
-### 7.2 State admin shift settings
+Truong goi y:
+
+- `Auto open shift time`
+- `Reminder minutes`
+- co the giu them `Self manage enabled` neu can tuong thich UI cu
+
+Goi y UX:
+
+- form rieng cho settings
+- save tung field hoac save theo block deu duoc
+
+### 8.2 Khu Staff Shift Monitor
+
+Bang staff nen co:
+
+- Ho ten
+- Username
+- Quay dang gan
+- Trang thai ca
+- Last shift start
+- Last shift end
+- Action:
+  - `Mo ca`
+  - `Dong ca`
+  - `Xem lich su`
+
+Khi bam `Dong ca`:
+
+- mo modal nhap `reason` optional
+- submit xong refetch list va history neu dang mo
+
+### 8.3 Khu Service Schedule Manager
+
+Bang schedule nen co:
+
+- Service
+- Open time
+- Close time
+- Enabled / Disabled
+- Service current state neu co:
+  - voi rule service cu the co the hien them `serviceId.isOpen`
+- Action:
+  - `Sua`
+  - `Bat/Tat`
+  - `Xoa`
+
+Form tao/sua nen co:
+
+- select service:
+  - option `Tat ca dich vu`
+  - option tung service
+- time picker `openTime`
+- time picker `closeTime`
+- switch `isEnabled`
+
+## 9. Goi y state cho frontend
+
+### 9.1 Shift settings
 
 ```ts
 type ShiftSettingsState = {
@@ -521,177 +673,196 @@ type ShiftSettingsState = {
 };
 ```
 
-### 7.3 State history
+### 9.2 Staff shift list
 
 ```ts
-type ShiftHistoryState = {
-  loading: boolean;
-  data: {
-    staffId: string;
-    fullName: string;
-    username: string;
-    onDuty: boolean;
-    lastShiftStart: string | null;
-    lastShiftEnd: string | null;
-    history: Array<{
-      action: 'start' | 'end';
-      timestamp: string;
-      reason: string;
-      waitingTicketsCount: number;
-    }>;
-  } | null;
+type StaffShiftItem = {
+  _id: string;
+  fullName: string;
+  username: string;
+  counterId: null | {
+    _id: string;
+    name: string;
+    number: number;
+  };
+  onDuty: boolean;
+  lastShiftStart: string | null;
+  lastShiftEnd: string | null;
 };
 ```
 
-## 8. Goi y UI cho FE
+### 9.3 Shift history
 
-### 8.1 Staff page
+```ts
+type StaffShiftHistory = {
+  staffId: string;
+  fullName: string;
+  username: string;
+  onDuty: boolean;
+  lastShiftStart: string | null;
+  lastShiftEnd: string | null;
+  history: Array<{
+    action: 'start' | 'end';
+    timestamp: string;
+    reason: string;
+    waitingTicketsCount: number;
+  }>;
+};
+```
 
-Nen co:
+### 9.4 Service schedules
 
-- 1 card tong quan ca hien tai
-- 1 badge trang thai
-- 1 nut chinh:
-  - neu `onDuty = false`: `Bat dau ca`
-  - neu `onDuty = true`: `Ket thuc ca`
-- 1 block thong tin:
-  - lan mo ca gan nhat
-  - lan dong ca gan nhat
-- 1 tab hoac section `Lich su ca`
+```ts
+type ServiceScheduleItem = {
+  _id: string;
+  serviceId:
+    | 'ALL'
+    | {
+        _id: string;
+        code: string;
+        name: string;
+        isActive: boolean;
+        isOpen: boolean;
+      };
+  openTime: string;
+  closeTime: string;
+  isEnabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+```
 
-### 8.2 Admin page
+## 10. Goi y hook / service cho FE
 
-Nen tach thanh 2 khu:
+Neu FE dung React, co the tach:
 
-#### A. Shift settings
+- `useShiftSettings()`
+- `useUpdateAutoStartTime()`
+- `useUpdateReminderMinutes()`
+- `useStaffShiftList(filter)`
+- `useStaffShiftHistory(staffId, limit)`
+- `useAdminStartShift()`
+- `useAdminEndShift()`
+- `useServiceSchedules()`
+- `useUpsertServiceSchedule()`
+- `useDeleteServiceSchedule()`
+- `useToggleServiceSchedule()`
 
-- switch `Cho phep staff tu quan ly ca`
-- time picker `Gio tu dong mo ca`
-- number input `So phut nhac nho`
-- nut save tung dong hoac save all
+## 11. Mapping text hien thi
 
-#### B. Staff shift monitor
-
-- table staff
-- filter theo:
-  - tat ca
-  - dang trong ca
-  - ngoai ca
-- action:
-  - `Mo ca`
-  - `Dong ca`
-  - `Xem lich su`
-
-## 9. Flow de FE implement
-
-### 9.1 Flow staff login vao man hinh ticket
-
-1. Login thanh cong
-2. Goi `GET /api/shift/status`
-3. Neu `onDuty = false`:
-   - khoa cac nut ticket action
-   - hien CTA `Bat dau ca`
-4. Neu `onDuty = true`:
-   - load ticket display binh thuong
-
-### 9.2 Flow staff bam `Bat dau ca`
-
-1. Goi `POST /api/shift/start`
-2. Neu thanh cong:
-   - update local state `onDuty = true`
-   - refetch `GET /api/shift/status`
-   - refetch staff display / recall list neu dang o man hinh ticket
-
-### 9.3 Flow staff bam `Ket thuc ca`
-
-1. Mo modal nhap ly do
-2. Goi `POST /api/shift/end`
-3. Neu thanh cong:
-   - update `onDuty = false`
-   - disable ticket actions
-   - hien toast co `waitingTicketsCount` neu > 0
-
-### 9.4 Flow admin force control
-
-1. Admin vao trang shift monitor
-2. Goi `GET /api/admin/shift/staff`
-3. Chon 1 staff
-4. Bam `Mo ca` hoac `Dong ca`
-5. Sau khi thanh cong:
-   - refetch list
-   - refetch history neu drawer dang mo
-
-## 10. Mapping text hien thi
-
-FE co the map:
-
-- `action = start` -> `Bat dau ca`
-- `action = end` -> `Ket thuc ca`
-
-Badge:
+### 11.1 Staff shift status
 
 - `onDuty = true` -> `Dang trong ca`
 - `onDuty = false` -> `Ngoai ca`
 
-## 11. Validation va loi FE can xu ly
+### 11.2 Shift action history
 
-### 11.1 Validation form admin
+- `action = start` -> `Mo ca`
+- `action = end` -> `Dong ca`
 
-- `time` phai theo `HH:MM`
-- `minutes` phai la so nguyen trong khoang `0-120`
+### 11.3 Schedule state
+
+- `isEnabled = true` -> `Dang ap dung`
+- `isEnabled = false` -> `Da tat`
+
+### 11.4 Service current open state
+
+- `isOpen = true` -> `Dang mo`
+- `isOpen = false` -> `Tam dong`
+
+## 12. Validation va loi FE can xu ly
+
+### 12.1 Validation
+
+- `time`, `openTime`, `closeTime` phai dung dinh dang `HH:MM`
+- `minutes` phai trong khoang `0 - 120`
 - `reason` toi da `500` ky tu
+- `serviceId` phai la:
+  - `'ALL'`
+  - hoac ObjectId hop le
 
-### 11.2 Cac loi business quan trong
+### 12.2 Business errors quan trong
 
-- `Tính năng tự quản lý ca đang bị tắt bởi admin`
-- `Bạn đang trong ca làm việc, không thể bắt đầu ca mới`
-- `Bạn không đang trong ca làm việc`
-- `Bạn chưa bắt đầu ca làm việc. Vui lòng mở ca trước khi tiếp tục`
+- `Không tìm thấy nhân viên`
+- `Nhân viên đang trong ca làm việc`
+- `Nhân viên không đang trong ca làm việc`
+- `Không tìm thấy dịch vụ`
+- `Không tìm thấy lịch dịch vụ`
+- `Dịch vụ ... hiện đang tạm đóng. Vui lòng quay lại sau.`
 - `Dịch vụ này hiện không có nhân viên đang làm ca. Vui lòng quay lại sau.`
 
-FE nen map cac loi nay thanh toast/business alert than thien, khong coi la loi he thong.
+FE nen hien nhung loi nay duoi dang toast / alert nghiep vu, khong bao chung la `Server error`.
 
-## 12. Goi y hook/service cho FE
+## 13. Flow FE nen implement
 
-Neu FE dung React, co the tach:
+### 13.1 Flow admin vao trang shift
 
-- `useMyShiftStatus()`
-- `useMyShiftHistory(limit)`
-- `useStartShift()`
-- `useEndShift()`
-- `useAdminShiftSettings()`
-- `useAdminShiftStaffList(filter)`
-- `useAdminShiftHistory(staffId, limit)`
-- `useAdminStartShift()`
-- `useAdminEndShift()`
+1. Goi `GET /api/admin/shift/settings`
+2. Goi `GET /api/admin/shift/staff`
+3. Goi `GET /api/admin/shift/service-schedules`
+4. Render 3 khu:
+   - settings
+   - staff shift monitor
+   - service schedule manager
 
-## 13. Checklist tich hop cho FE
+### 13.2 Flow admin force mo / dong ca
 
-- Co man hinh staff shift status
-- Co nut start shift
-- Co modal end shift
-- Co lich su ca cua staff
-- Ticket action bi disable khi staff `offDuty`
-- Co man hinh admin shift settings
-- Co table monitor staff on duty / off duty
-- Co action force start / force end cho admin
-- Co xu ly loi business dung thong diep
-- Co format thoi gian local time o FE
+1. Chon 1 staff trong table
+2. Bam `Mo ca` hoac `Dong ca`
+3. Neu dong ca, mo modal nhap ly do optional
+4. Goi API
+5. Sau khi thanh cong:
+   - refetch list staff
+   - refetch history neu drawer dang mo
 
-## 14. Luu y quan trong
+### 13.3 Flow admin tao / sua schedule
 
-1. `GET /api/shift/status` hien tai lay du lieu tu `req.user` trong token-auth request context. Sau khi start/end shift thanh cong, FE nen refetch thay vi chi tin vao state cu.
-2. Backend chua co socket event rieng cho shift, nen FE hien tai nen refetch bang HTTP sau moi thao tac start/end.
-3. Khi staff `offDuty`, public ticket create co the bi anh huong vi service khong con staff dang ca. FE public nen hien thong bao than thien cho nguoi dung cuoi.
-4. `reminderMinutes` hien da co setting API, nhung backend chua phat event nhac nho rieng. FE co the chi can render va luu setting truoc.
+1. Bam `Them lich` hoac `Sua`
+2. Chon:
+   - `Tat ca dich vu`
+   - hoac 1 service cu the
+3. Nhap `openTime`
+4. Nhap `closeTime`
+5. Chon `isEnabled`
+6. Submit `POST /api/admin/shift/service-schedules`
+7. Refetch schedule list
 
-## 15. De xuat thu tu lam FE
+### 13.4 Flow toggle schedule
 
-Neu muon implement nhanh va an toan, nen lam theo thu tu:
+1. Bat / tat switch tren row
+2. Goi `PATCH /api/admin/shift/service-schedules/:serviceId/toggle`
+3. Refetch row hoac refetch ca list
 
-1. Staff shift status + start/end shift
-2. Disable ticket actions khi `offDuty`
-3. Admin settings shift
-4. Admin staff monitor + force start/end
-5. Staff/admin shift history
+### 13.5 Flow xoa schedule
+
+1. Bam `Xoa`
+2. Confirm
+3. Goi `DELETE /api/admin/shift/service-schedules/:serviceId`
+4. Refetch list
+
+## 14. Checklist tich hop
+
+- Da xoa toan bo man hinh staff self shift neu FE tung co
+- Da bo cac call toi `/api/shift/*`
+- Da co man hinh admin shift settings
+- Da co list staff on-duty / off-duty
+- Da co action force start / force end cho staff
+- Da co drawer / modal xem shift history
+- Da co CRUD service schedule
+- Da xu ly rule `serviceId = 'ALL'`
+- Da xu ly state `isEnabled`
+- Da xu ly state `service.isOpen`
+- Da hien thong bao business error dung cho public create ticket
+
+## 15. Luu y de tranh nham
+
+1. Ban nay chi admin thao tac shift, staff khong co route rieng nua.
+2. `service schedule` va `staff shift` la 2 khai niem khac nhau:
+   - `staff shift` -> quan ly `onDuty`
+   - `service schedule` -> quan ly `isOpen`
+3. Service chi cap so duoc khi ca 2 dieu kien deu hop le:
+   - service dang `isOpen = true`
+   - co staff dang `onDuty` cho service do
+4. Scheduler chay theo phut, khong phai realtime tung giay.
+5. Sau moi thao tac admin, FE nen refetch thay vi chi patch local state, de tranh lech voi scheduler backend.
 

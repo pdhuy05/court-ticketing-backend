@@ -24,6 +24,10 @@ const ServiceSchema = new mongoose.Schema({
     type: Boolean, 
     default: ActiveStatus.ACTIVE 
   },
+  isOpen: {
+    type: Boolean,
+    default: true
+  },
   description: { 
     type: String, 
     default: '' 

@@ -69,6 +69,30 @@ exports.adminEndShift = async (req, res) => {
   res.json({ success: true, data, message: 'Đã kết thúc ca cho nhân viên' });
 };
 
+exports.getServiceSchedules = async (req, res) => {
+  const data = await shiftService.getAllSchedules();
+  res.json({ success: true, data });
+};
+
+exports.upsertServiceSchedule = async (req, res) => {
+  const data = await shiftService.upsertSchedule(req.body);
+  res.json({ success: true, data, message: 'Đã lưu lịch dịch vụ thành công' });
+};
+
+exports.deleteServiceSchedule = async (req, res) => {
+  const data = await shiftService.deleteSchedule(req.params.serviceId);
+  res.json({ success: true, data, message: 'Đã xóa lịch dịch vụ thành công' });
+};
+
+exports.toggleServiceSchedule = async (req, res) => {
+  const data = await shiftService.setScheduleEnabled(req.params.serviceId, req.body.isEnabled);
+  res.json({
+    success: true,
+    data,
+    message: req.body.isEnabled ? 'Đã bật lịch dịch vụ' : 'Đã tắt lịch dịch vụ'
+  });
+};
+
 Object.keys(module.exports).forEach((key) => {
   module.exports[key] = asyncHandler(module.exports[key]);
 });
