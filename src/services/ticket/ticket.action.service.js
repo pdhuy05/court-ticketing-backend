@@ -1,13 +1,15 @@
 const Ticket = require('../../models/ticket.model');
 const Service = require('../../models/service.model');
 const Counter = require('../../models/counter.model');
+const User = require('../../models/user.model');
 const ServiceCounter = require('../../models/serviceCounter.model');
 const CounterSequence = require('../../models/counterSequence.model');
+const StaffService = require('../../models/staffService.model');
 const { TicketStatus } = require('../../constants/enums');
 const ApiError = require('../../utils/ApiError');
 const { emitDashboardUpdateSafe } = require('../dashboard.service');
 const { generateQRData } = require('../../utils/qrData.util');
-const { getStaffServiceAccess, assertStaffCanHandleService } = require('../staff-permission.service');
+const { getStaffServiceAccess, assertStaffCanHandleService, ensureStaffHasAccessibleServices } = require('../staff-permission.service');
 const {
     buildTicketPresentation,
     extractCounterIdsFromRelations,
@@ -31,15 +33,7 @@ const {
 
 const MAX_RECALL_SKIP_COUNT = 2;
 
-const getServiceAccessScope = async (counterId, staffId = null) => {
-    return getStaffServiceAccess(staffId, counterId);
-};
-
-const ensureStaffHasAccessibleServices = (accessScope) => {
-    if (accessScope.serviceRestrictionConfigured && accessScope.allowedServiceIds.length === 0) {
-        throw new ApiError(403, 'Nhân viên chưa được gán dịch vụ nào tại quầy hiện tại');
-    }
-};
+const getServiceAccessScope = (counterId, staffId = null) => getStaffServiceAccess(staffId, counterId);
 
 const canAccessService = (serviceIds, serviceId) => serviceIds.includes(String(serviceId));
 
@@ -75,6 +69,42 @@ const ensureNoProcessingTicket = async (counterId) => {
     }
 };
 
+const getAvailableCounterRelationsForOnDutyStaff = async (serviceId, relations) => {
+    const activeStaffServices = await StaffService.find({
+        serviceId,
+        isActive: true
+    })
+        .select('staffId')
+        .lean();
+
+    const staffIds = [...new Set(
+        activeStaffServices
+            .map((assignment) => String(assignment.staffId))
+            .filter(Boolean)
+    )];
+
+    if (staffIds.length === 0) {
+        return [];
+    }
+
+    const onDutyUsers = await User.find({
+        _id: { $in: staffIds },
+        role: 'staff',
+        isActive: true,
+        onDuty: true
+    })
+        .select('counterId')
+        .lean();
+
+    const onDutyCounterIdSet = new Set(
+        onDutyUsers
+            .map((user) => (user.counterId ? String(user.counterId) : null))
+            .filter(Boolean)
+    );
+
+    return relations.filter((relation) => onDutyCounterIdSet.has(String(relation.counterId?._id || relation.counterId)));
+};
+
 const resolveIssueCounter = async (serviceId, requestedCounterId = null) => {
   const relations = await ServiceCounter.find({
     serviceId,
@@ -87,24 +117,38 @@ const resolveIssueCounter = async (serviceId, requestedCounterId = null) => {
     throw new ApiError(400, 'Dịch vụ này hiện chưa có quầy phục vụ.');
   }
 
+  const filteredRelations = await getAvailableCounterRelationsForOnDutyStaff(serviceId, activeRelations);
+
+  if (filteredRelations.length === 0) {
+    throw new ApiError(400, 'Dịch vụ này hiện không có nhân viên đang làm ca. Vui lòng quay lại sau.');
+  }
+
   if (requestedCounterId) {
-    const matchedRelation = activeRelations.find((relation) => (
+    const matchedRelation = filteredRelations.find((relation) => (
       String(relation.counterId?._id || relation.counterId) === String(requestedCounterId)
     ));
 
     if (!matchedRelation?.counterId?.isActive) {
+      const requestedCounterExists = activeRelations.some((relation) => (
+        String(relation.counterId?._id || relation.counterId) === String(requestedCounterId)
+      ));
+
+      if (requestedCounterExists) {
+        throw new ApiError(400, 'Quầy được chọn hiện không có nhân viên đang làm ca cho dịch vụ này');
+      }
+
       throw new ApiError(400, 'Quầy được chọn không phục vụ dịch vụ này hoặc đã bị khóa');
     }
 
     return {
       issueCounter: matchedRelation.counterId,
-      availableCounters: activeRelations  
+      availableCounters: filteredRelations
     };
   }
 
   return {
-    issueCounter: getPrimaryCounter(activeRelations),  
-    availableCounters: activeRelations               
+    issueCounter: getPrimaryCounter(filteredRelations),
+    availableCounters: filteredRelations
   };
 };
 

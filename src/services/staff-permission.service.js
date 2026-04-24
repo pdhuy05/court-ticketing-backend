@@ -67,6 +67,12 @@ const getStaffServiceAccess = async (staffId, counterId) => {
   };
 };
 
+const ensureStaffHasAccessibleServices = (accessScope) => {
+  if (accessScope.serviceRestrictionConfigured && accessScope.allowedServiceIds.length === 0) {
+    throw new ApiError(403, 'Nhân viên chưa được gán dịch vụ nào tại quầy hiện tại');
+  }
+};
+
 const ensureStaffAssignable = async (staffId) => {
   const staff = await User.findOne({ _id: staffId, role: 'staff' }).select('counterId fullName username');
 
@@ -188,6 +194,7 @@ const assertStaffCanHandleService = async (staffId, counterId, serviceId) => {
 module.exports = {
   getCounterServiceRelations,
   getStaffServiceAccess,
+  ensureStaffHasAccessibleServices,
   assignServicesToStaff,
   getStaffServiceSummary,
   assertStaffCanHandleService

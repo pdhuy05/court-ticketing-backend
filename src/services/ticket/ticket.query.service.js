@@ -5,21 +5,13 @@ const CounterSequence = require('../../models/counterSequence.model');
 const { TicketStatus } = require('../../constants/enums');
 const ApiError = require('../../utils/ApiError');
 const { verifyQRData } = require('../../utils/qrData.util');
-const { getStaffServiceAccess } = require('../staff-permission.service');
+const { getStaffServiceAccess, ensureStaffHasAccessibleServices } = require('../staff-permission.service');
 const {
     buildTicketPresentation,
     formatCounterDisplayNumber
 } = require('./ticket.helpers');
 
-const getServiceAccessScope = async (counterId, staffId = null) => {
-    return getStaffServiceAccess(staffId, counterId);
-};
-
-const ensureStaffHasAccessibleServices = (accessScope) => {
-    if (accessScope.serviceRestrictionConfigured && accessScope.allowedServiceIds.length === 0) {
-        throw new ApiError(403, 'Nhân viên chưa được gán dịch vụ nào tại quầy hiện tại');
-    }
-};
+const getServiceAccessScope = (counterId, staffId = null) => getStaffServiceAccess(staffId, counterId);
 
 const getRecallList = async (counterId, staffId = null) => {
     const accessScope = await getServiceAccessScope(counterId, staffId);

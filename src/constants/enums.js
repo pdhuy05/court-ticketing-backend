@@ -34,10 +34,16 @@ const ConnectPrint = {
   BLUETOOTH: 'bluetooth' 
 };
 
+const ShiftAction = {
+  START: 'start',
+  END: 'end'
+};
+
 module.exports = {
   TicketStatus,
   ServiceCode,
   ServiceName,
   ActiveStatus,
-  ConnectPrint
+  ConnectPrint,
+  ShiftAction
 };

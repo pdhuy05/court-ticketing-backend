@@ -43,4 +43,15 @@ const counterStaff = (req, res, next) => {
   next();
 };
 
-module.exports = { authMiddleware, adminOnly, staffOnly, counterStaff };
+const staffOnDuty = (req, res, next) => {
+  if (req.user.role === 'staff' && !req.user.onDuty) {
+    return res.status(403).json({
+      success: false,
+      message: 'Bạn chưa bắt đầu ca làm việc. Vui lòng mở ca trước khi tiếp tục'
+    });
+  }
+
+  next();
+};
+
+module.exports = { authMiddleware, adminOnly, staffOnly, counterStaff, staffOnDuty };
