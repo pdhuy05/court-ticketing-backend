@@ -170,6 +170,6 @@ server.listen(config.port, () => {
 \x1b[90m  ├─ URL: \x1b[0m\x1b[33mhttp://localhost:${config.port}\x1b[0m
 \x1b[90m  ├─ Port: \x1b[0m${config.port}
 \x1b[90m  ├─ Time: \x1b[0m${new Date().toLocaleString()}
-\x1b[90m  └─ Developer: \x1b[0m\x1b[35m[HuyPham]\x1b[0m \x1b[35m[KhanhPhuong]\x1b[0m \x1b[35m[CEO Nguyen Cao Tri]\x1b[0m
+\x1b[90m  └─ Developer: \x1b[0m\x1b[35m[HuyPham]\x1b[0m \x1b[35m[KhanhPhuong]\x1b[0m
 `);
 });

@@ -116,14 +116,10 @@ exports.create = async (data) => {
 };
 
 exports.update = async (id, data) => {
-  const { name, number, isActive, note } = data;
+  const { name, number, isActive, note, serviceIds } = data;
   
   const updateData = { name, number, isActive, note };
   Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
-  
-  if (Object.keys(updateData).length === 0) {
-    throw new ApiError(400, 'Không có dữ liệu để cập nhật');
-  }
   
   if (number) {
     const existingNumber = await Counter.findOne({ number, _id: { $ne: id } });
@@ -140,6 +136,22 @@ exports.update = async (id, data) => {
   
   if (!counter) {
     throw new ApiError(404, 'Không tìm thấy quầy');
+  }
+
+  // Nếu có truyền serviceIds (kể cả mảng rỗng) thì cập nhật lại danh sách service
+  if (serviceIds !== undefined) {
+    if (serviceIds.length > 0) {
+      const services = await Service.find({ _id: { $in: serviceIds } });
+      if (services.length !== serviceIds.length) {
+        throw new ApiError(400, 'Một số dịch vụ không tồn tại');
+      }
+    }
+
+    await ServiceCounter.deleteMany({ counterId: counter._id });
+
+    for (const serviceId of serviceIds) {
+      await ServiceCounter.create({ serviceId, counterId: counter._id, isActive: true });
+    }
   }
   
   const serviceRelations = await ServiceCounter.find({ 

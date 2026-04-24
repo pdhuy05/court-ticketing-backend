@@ -50,7 +50,15 @@ const updateCounterSchema = Joi.object({
   name: Joi.string().trim().max(100).optional(),
   number: Joi.number().integer().min(1).optional(),
   note: Joi.string().allow('', null).optional(),
-  isActive: Joi.boolean().optional()
+  isActive: Joi.boolean().optional(),
+  serviceIds: Joi.array()
+    .items(objectId)
+    .min(0)
+    .optional()
+    .unique()
+    .messages({
+      'string.pattern.base': 'ID dịch vụ không hợp lệ'
+    })
 }).min(1);
 
 const addServicesSchema = Joi.object({
