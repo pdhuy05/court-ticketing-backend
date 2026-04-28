@@ -6,7 +6,7 @@ const { TicketStatus } = require('../constants/enums');
 const ApiError = require('../utils/ApiError');
 const { emitDashboardUpdateSafe } = require('./dashboard.service');
 
-const assertNoPendingTicketsForCounterServices = async (counterId, serviceIds, errorContext) => {
+const assertCanRemoveServicesFromCounter = async (counterId, serviceIds) => {
   const normalizedServiceIds = (serviceIds || []).filter(Boolean);
 
   if (normalizedServiceIds.length === 0) {
@@ -27,9 +27,10 @@ const assertNoPendingTicketsForCounterServices = async (counterId, serviceIds, e
   ]);
 
   if (waitingCount > 0 || processingCount > 0) {
+    const pendingCount = waitingCount + processingCount;
     throw new ApiError(
       400,
-      `${errorContext}. Hiện còn ${waitingCount} vé đang chờ và ${processingCount} vé đang xử lý.`
+      `Không thể xóa dịch vụ ra khỏi quầy vì còn ${pendingCount} vé.`
     );
   }
 };
@@ -196,11 +197,7 @@ exports.update = async (id, data) => {
       .map((relation) => String(relation.serviceId))
       .filter((existingServiceId) => !normalizedServiceIds.includes(existingServiceId));
 
-    await assertNoPendingTicketsForCounterServices(
-      counter._id,
-      removedServiceIds,
-      'Không thể gỡ dịch vụ khỏi quầy vì vẫn còn vé tồn đọng của các dịch vụ bị loại bỏ'
-    );
+    await assertCanRemoveServicesFromCounter(counter._id, removedServiceIds);
 
     await ServiceCounter.deleteMany({ counterId: counter._id });
 
@@ -276,25 +273,7 @@ exports.removeService = async (id, serviceId) => {
     throw new ApiError(404, 'Không tìm thấy quầy');
   }
 
-  const [waitingCount, processingCount] = await Promise.all([
-    Ticket.countDocuments({
-      queueCounterId: counter._id,
-      serviceId,
-      status: TicketStatus.WAITING
-    }),
-    Ticket.countDocuments({
-      counterId: counter._id,
-      serviceId,
-      status: TicketStatus.PROCESSING
-    })
-  ]);
-
-  if (waitingCount > 0 || processingCount > 0) {
-    throw new ApiError(
-      400,
-      `Không thể gỡ dịch vụ khỏi quầy vì còn ${waitingCount} vé đang chờ và ${processingCount} vé đang xử lý cho dịch vụ này.`
-    );
-  }
+  await assertCanRemoveServicesFromCounter(counter._id, [serviceId]);
   
   const deleted = await ServiceCounter.findOneAndDelete({
     serviceId,
