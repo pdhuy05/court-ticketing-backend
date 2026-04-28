@@ -18,6 +18,8 @@ const formatLocalDateKey = (startDate) => [
   String(startDate.getDate()).padStart(2, '0')
 ].join('-');
 
+const getTicketActor = (ticket) => ticket.completedByStaffId || ticket.staffId || null;
+
 /**
  * Tính và lưu thống kê theo ngày (upsert theo date YYYY-MM-DD).
  * @param {Date} startDate - đầu ngày (inclusive)
@@ -33,6 +35,7 @@ const calculateDailyStatistics = async (startDate, endDate, actor = null) => {
     .populate('serviceId', 'code name')
     .populate('counterId', 'name number')
     .populate('staffId', 'fullName username')
+    .populate('completedByStaffId', 'fullName username')
     .lean();
 
   const totalTickets = tickets.length;
@@ -100,11 +103,11 @@ const calculateDailyStatistics = async (startDate, endDate, actor = null) => {
   }
   byCounter.sort((a, b) => (a.counterNumber || 0) - (b.counterNumber || 0));
 
-  const withStaff = tickets.filter((t) => t.staffId?._id || t.staffId);
+  const withStaff = tickets.filter((t) => getTicketActor(t)?._id || getTicketActor(t));
   const byStaffMap = new Map();
   for (const t of withStaff) {
-    const u = t.staffId;
-    const uid = String(u?._id || t.staffId);
+    const u = getTicketActor(t);
+    const uid = String(u?._id || u);
     if (!byStaffMap.has(uid)) {
       byStaffMap.set(uid, []);
     }
@@ -113,10 +116,10 @@ const calculateDailyStatistics = async (startDate, endDate, actor = null) => {
 
   const byStaff = [];
   for (const [, list] of byStaffMap) {
-    const u = list[0].staffId;
+    const u = getTicketActor(list[0]);
     const completedList = list.filter((x) => x.status === TicketStatus.COMPLETED);
     byStaff.push({
-      staffId: u?._id || list[0].staffId,
+      staffId: u?._id || u,
       staffName: u?.fullName || '',
       username: u?.username || '',
       processedCount: completedList.length,

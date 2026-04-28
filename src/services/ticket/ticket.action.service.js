@@ -664,6 +664,7 @@ const completeTicket = async (ticketId, counterId = null, staffId = null) => {
     ticket.isRecall = false;
     ticket.recalledAt = null;
     ticket.recallCounterId = null;
+    ticket.completedByStaffId = ticket.staffId;
     ticket.staffId = null;
     ticket.processingDuration = getDurationInSeconds(
         ticket.calledAt || ticket.processingAt || ticket.createdAt,
