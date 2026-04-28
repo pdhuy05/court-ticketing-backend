@@ -273,17 +273,24 @@ const getStaffDisplay = async (counterId, staffId = null) => {
         .populate('queueCounterId', 'number')
         .sort({ createdAt: 1, number: 1 });
 
-    const currentTicket = await Ticket.findOne({
+    // Lấy TẤT CẢ ticket đang xử lý trong quầy (không lọc theo staffId).
+    // Một quầy có thể có nhiều nhân viên cùng phục vụ các dịch vụ khác nhau,
+    // màn hình display công cộng cần hiển thị đầy đủ tất cả.
+    const processingTickets = await Ticket.find({
         counterId,
-        ...(staffId ? { staffId } : {}),
         status: TicketStatus.PROCESSING,
         serviceId: { $in: accessScope.allowedServiceIds }
     })
         .populate('serviceId', 'name code prefixNumber')
         .populate('queueCounterId', 'number')
-        .sort({ processingAt: -1, updatedAt: -1 });
+        .sort({ processingAt: 1, updatedAt: 1 });
 
     const formatTicket = (ticket) => buildTicketPresentation(ticket, counter);
+
+    // currentTicket: ticket processing đầu tiên (hoặc của chính staff nếu cần giao diện nhân viên)
+    const currentTicket = staffId
+        ? (processingTickets.find(t => String(t.staffId) === String(staffId)) || processingTickets[0] || null)
+        : (processingTickets[0] || null);
 
     return {
         counter: {
@@ -298,6 +305,7 @@ const getStaffDisplay = async (counterId, staffId = null) => {
         assignedServices: accessScope.assignedServices,
         serviceRestrictionConfigured: accessScope.serviceRestrictionConfigured,
         currentTicket: currentTicket ? formatTicket(currentTicket) : null,
+        processingTickets: processingTickets.map(formatTicket),
         waitingTickets: waitingTickets.map(formatTicket),
         recallTickets: await getRecallList(counterId, staffId),
         totalWaiting: waitingTickets.length
