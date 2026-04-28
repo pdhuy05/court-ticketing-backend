@@ -6,6 +6,34 @@ const { TicketStatus } = require('../constants/enums');
 const ApiError = require('../utils/ApiError');
 const { emitDashboardUpdateSafe } = require('./dashboard.service');
 
+const assertNoPendingTicketsForCounterServices = async (counterId, serviceIds, errorContext) => {
+  const normalizedServiceIds = (serviceIds || []).filter(Boolean);
+
+  if (normalizedServiceIds.length === 0) {
+    return;
+  }
+
+  const [waitingCount, processingCount] = await Promise.all([
+    Ticket.countDocuments({
+      queueCounterId: counterId,
+      serviceId: { $in: normalizedServiceIds },
+      status: TicketStatus.WAITING
+    }),
+    Ticket.countDocuments({
+      counterId,
+      serviceId: { $in: normalizedServiceIds },
+      status: TicketStatus.PROCESSING
+    })
+  ]);
+
+  if (waitingCount > 0 || processingCount > 0) {
+    throw new ApiError(
+      400,
+      `${errorContext}. Hiện còn ${waitingCount} vé đang chờ và ${processingCount} vé đang xử lý.`
+    );
+  }
+};
+
 const attachServicesToCounters = async (counters, serviceFields) => {
   if (!counters.length) {
     return [];
@@ -141,16 +169,31 @@ exports.update = async (id, data) => {
 
   // Nếu có truyền serviceIds (kể cả mảng rỗng) thì cập nhật lại danh sách service
   if (serviceIds !== undefined) {
-    if (serviceIds.length > 0) {
-      const services = await Service.find({ _id: { $in: serviceIds } });
-      if (services.length !== serviceIds.length) {
+    const normalizedServiceIds = [...new Set((serviceIds || []).map(String))];
+    if (normalizedServiceIds.length > 0) {
+      const services = await Service.find({ _id: { $in: normalizedServiceIds } });
+      if (services.length !== normalizedServiceIds.length) {
         throw new ApiError(400, 'Một số dịch vụ không tồn tại');
       }
     }
 
+    const currentRelations = await ServiceCounter.find({
+      counterId: counter._id
+    }).select('serviceId');
+
+    const removedServiceIds = currentRelations
+      .map((relation) => String(relation.serviceId))
+      .filter((existingServiceId) => !normalizedServiceIds.includes(existingServiceId));
+
+    await assertNoPendingTicketsForCounterServices(
+      counter._id,
+      removedServiceIds,
+      'Không thể gỡ dịch vụ khỏi quầy vì vẫn còn vé tồn đọng của các dịch vụ bị loại bỏ'
+    );
+
     await ServiceCounter.deleteMany({ counterId: counter._id });
 
-    for (const serviceId of serviceIds) {
+    for (const serviceId of normalizedServiceIds) {
       await ServiceCounter.create({ serviceId, counterId: counter._id, isActive: true });
     }
   }
@@ -221,6 +264,26 @@ exports.removeService = async (id, serviceId) => {
   if (!counter) {
     throw new ApiError(404, 'Không tìm thấy quầy');
   }
+
+  const [waitingCount, processingCount] = await Promise.all([
+    Ticket.countDocuments({
+      queueCounterId: counter._id,
+      serviceId,
+      status: TicketStatus.WAITING
+    }),
+    Ticket.countDocuments({
+      counterId: counter._id,
+      serviceId,
+      status: TicketStatus.PROCESSING
+    })
+  ]);
+
+  if (waitingCount > 0 || processingCount > 0) {
+    throw new ApiError(
+      400,
+      `Không thể gỡ dịch vụ khỏi quầy vì còn ${waitingCount} vé đang chờ và ${processingCount} vé đang xử lý cho dịch vụ này.`
+    );
+  }
   
   const deleted = await ServiceCounter.findOneAndDelete({
     serviceId,
@@ -238,6 +301,8 @@ exports.removeService = async (id, serviceId) => {
   
   const counterObj = counter.toObject();
   counterObj.services = serviceRelations.map(rel => rel.serviceId);
+
+  await emitDashboardUpdateSafe('counter-service-removed');
   
   return counterObj;
 };
@@ -249,7 +314,25 @@ exports.delete = async (id) => {
     throw new ApiError(404, 'Không tìm thấy quầy');
   }
 
-  const assignedCount = await ServiceCounter.countDocuments({ counterId: counter._id });
+  const [waitingCount, processingCount, assignedCount] = await Promise.all([
+    Ticket.countDocuments({
+      queueCounterId: counter._id,
+      status: TicketStatus.WAITING
+    }),
+    Ticket.countDocuments({
+      counterId: counter._id,
+      status: TicketStatus.PROCESSING
+    }),
+    ServiceCounter.countDocuments({ counterId: counter._id })
+  ]);
+
+  if (waitingCount > 0 || processingCount > 0) {
+    throw new ApiError(
+      400,
+      `Không thể xóa quầy vì còn ${waitingCount} vé đang chờ và ${processingCount} vé đang xử lý.`
+    );
+  }
+
   if (assignedCount > 0) {
     throw new ApiError(400, `Không thể xóa quầy đang có ${assignedCount} dịch vụ được gán. Vui lòng gỡ hết dịch vụ trước khi xóa.`);
   }

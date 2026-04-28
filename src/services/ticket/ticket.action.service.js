@@ -57,14 +57,26 @@ const ensureCounterActive = async (counterId) => {
     return counter;
 };
 
-const ensureNoProcessingTicket = async (counterId) => {
-    const existingProcessing = await Ticket.findOne({
-        counterId,
-        status: TicketStatus.PROCESSING
-    }).populate('serviceId', 'name code prefixNumber');
+const ensureNoProcessingTicket = async (counterId, staffId = null) => {
+    const query = staffId
+        ? {
+            staffId,
+            status: TicketStatus.PROCESSING
+        }
+        : {
+            counterId,
+            status: TicketStatus.PROCESSING
+        };
+
+    const existingProcessing = await Ticket.findOne(query)
+        .populate('serviceId', 'name code prefixNumber');
 
     if (existingProcessing) {
         const presentation = buildTicketPresentation(existingProcessing);
+        if (staffId) {
+            throw new ApiError(400, `Nhân viên đang xử lý vé ${presentation.formattedNumber}. Vui lòng hoàn thành hoặc bỏ qua vé hiện tại trước`);
+        }
+
         throw new ApiError(400, `Quầy đang xử lý vé ${presentation.formattedNumber}. Vui lòng hoàn thành hoặc bỏ qua vé hiện tại trước`);
     }
 };
@@ -269,7 +281,7 @@ const callNext = async (counterId, staffId = null) => {
         throw new ApiError(400, 'Quầy chưa được gán dịch vụ');
     }
 
-    await ensureNoProcessingTicket(counterId);
+    await ensureNoProcessingTicket(counterId, staffId);
 
     let nextTicket = null;
 
@@ -409,7 +421,7 @@ const callById = async (ticketId, counterId, staffId = null) => {
         throw new ApiError(403, `Ticket không thuộc danh sách xử lý của quầy ${counter.name}`);
     }
 
-    await ensureNoProcessingTicket(counterId);
+    await ensureNoProcessingTicket(counterId, staffId);
 
     const serviceCounter = await ServiceCounter.findOne({
         serviceId: ticket.serviceId._id,
@@ -477,7 +489,7 @@ const recallTicket = async (ticketId, counterId, staffId = null) => {
         await assertStaffCanHandleService(staffId, counterId, ticket.serviceId?._id || ticket.serviceId);
     }
 
-    await ensureNoProcessingTicket(counterId);
+    await ensureNoProcessingTicket(counterId, staffId);
 
     ticket.isRecall = false;
     ticket.recalledAt = null;
