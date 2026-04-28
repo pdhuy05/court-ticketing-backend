@@ -145,7 +145,6 @@ const getCounterDisplay = async (counterId) => {
         isActive: true
     }).populate('serviceId', 'name code prefixNumber isActive');
 
-    // [SỬA lỗi 3] Lọc bỏ dịch vụ đã bị tắt
     const activeServiceRelations = serviceRelations.filter(r => r.serviceId?.isActive === true);
     const serviceIds = activeServiceRelations.map((relation) => relation.serviceId._id);
 

@@ -31,15 +31,9 @@ const {
     emitWaitingRoomNewTicket
 } = require('./ticket.socket');
 
-const MAX_RECALL_SKIP_COUNT = 2;
-
-
-
-const ensureStaffHasAccessibleServices = (accessScope) => {
-    if (accessScope.serviceRestrictionConfigured && accessScope.allowedServiceIds.length === 0) {
-        throw new ApiError(403, 'Nhân viên chưa được gán dịch vụ nào tại quầy hiện tại');
-    }
-};
+// A ticket is eligible for recall only after the first skip.
+// The second skip finalizes the ticket as SKIPPED.
+const MAX_RECALLABLE_SKIP_COUNT = 1;
 
 const canAccessService = (serviceIds, serviceId) => serviceIds.includes(String(serviceId));
 
@@ -268,7 +262,7 @@ const createTicket = async ({ serviceId, name, phone, counterId = null }) => {
 const callNext = async (counterId, staffId = null) => {
     const counter = await ensureCounterActive(counterId);
 
-    const accessScope = await getStaffServiceAccess(staffId, counterId);
+    let accessScope = await getStaffServiceAccess(staffId, counterId);
     ensureStaffHasAccessibleServices(accessScope);
 
     if (accessScope.allowedServiceIds.length === 0) {
@@ -281,17 +275,25 @@ const callNext = async (counterId, staffId = null) => {
 
     let retries = 0;
     const MAX_RETRIES = 5;
+    const excludedTicketIds = new Set();
     while (!nextTicket) {
         if (retries++ >= MAX_RETRIES) {
             throw new ApiError(409, 'Không thể gọi số do xung đột dữ liệu, vui lòng thử lại');
         }
-        const candidateTicket = await Ticket.findOne({
+
+        const candidateQuery = {
             queueCounterId: counterId,
             serviceId: { $in: accessScope.allowedServiceIds },
             status: TicketStatus.WAITING,
             counterId: null,
             isRecall: false
-        })
+        };
+
+        if (excludedTicketIds.size > 0) {
+            candidateQuery._id = { $nin: [...excludedTicketIds] };
+        }
+
+        const candidateTicket = await Ticket.findOne(candidateQuery)
             .sort({ createdAt: 1, number: 1 })
             .populate('serviceId', 'name code prefixNumber')
             .populate('queueCounterId', 'number');
@@ -301,7 +303,23 @@ const callNext = async (counterId, staffId = null) => {
         }
 
         if (staffId) {
-            await assertStaffCanHandleService(staffId, counterId, candidateTicket.serviceId._id);
+            try {
+                await assertStaffCanHandleService(staffId, counterId, candidateTicket.serviceId._id);
+            } catch (error) {
+                if (error instanceof ApiError && (error.statusCode === 403 || error.statusCode === 404)) {
+                    excludedTicketIds.add(String(candidateTicket._id));
+                    accessScope = await getStaffServiceAccess(staffId, counterId);
+                    ensureStaffHasAccessibleServices(accessScope);
+
+                    if (accessScope.allowedServiceIds.length === 0) {
+                        throw new ApiError(400, 'Quầy chưa được gán dịch vụ');
+                    }
+
+                    continue;
+                }
+
+                throw error;
+            }
         }
 
         nextTicket = await Ticket.findOneAndUpdate(
@@ -605,10 +623,10 @@ const cancelRecallTicket = async (ticketId, counterId, staffId = null, reason = 
     };
 };
 
-const completeTicket = async (id, counterId = null, staffId = null) => {
+const completeTicket = async (ticketId, counterId = null, staffId = null) => {
     if (counterId) await ensureCounterActive(counterId);
 
-    const ticket = await Ticket.findById(id)
+    const ticket = await Ticket.findById(ticketId)
         .populate('serviceId', 'name code prefixNumber')
         .populate('queueCounterId', 'number');
 
@@ -667,10 +685,10 @@ const completeTicket = async (id, counterId = null, staffId = null) => {
     };
 };
 
-const skipTicket = async (id, reason = '', counterId, staffId = null) => {
+const skipTicket = async (ticketId, reason = '', counterId, staffId = null) => {
     if (counterId) await ensureCounterActive(counterId);
 
-    const ticket = await Ticket.findById(id)
+    const ticket = await Ticket.findById(ticketId)
         .populate('serviceId', 'name code prefixNumber')
         .populate('queueCounterId', 'number');
 
@@ -699,7 +717,7 @@ const skipTicket = async (id, reason = '', counterId, staffId = null) => {
     ticket.serviceCounterId = null;
     ticket.processingAt = null;
 
-    if (ticket.skipCount >= MAX_RECALL_SKIP_COUNT) {
+    if (ticket.skipCount > MAX_RECALLABLE_SKIP_COUNT) {
         ticket.isRecall = false;
         ticket.recalledAt = null;
         ticket.recallCounterId = null;
@@ -778,23 +796,8 @@ const backToWaiting = async (ticketId, counterId, staffId = null, position = 'fr
     ticket.isRecall = false;
     ticket.recalledAt = null;
     ticket.recallCounterId = null;
-    await Ticket.updateOne(
-        { _id: ticket._id },
-        { $set: {
-            status: TicketStatus.WAITING,
-            counterId: null,
-            staffId: null,
-            serviceCounterId: null,
-            processingAt: null,
-            isRecall: false,
-            recalledAt: null,
-            recallCounterId: null,
-            returnedToWaitingAt
-        } },
-        { timestamps: false }
-    );
-
     ticket.returnedToWaitingAt = returnedToWaitingAt;
+    await ticket.save();
 
     await refreshCounterCurrentTicket(previousCounterId);
 

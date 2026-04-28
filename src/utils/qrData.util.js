@@ -2,11 +2,11 @@ const jwt = require('jsonwebtoken');
 const ApiError = require('./ApiError');
 
 const getQRSecret = () => {
-  if (!process.env.JWT_SECRET) {
-    throw new ApiError(500, 'Thiếu cấu hình JWT_SECRET');
+  if (!process.env.QR_SECRET) {
+    throw new ApiError(500, 'Thiếu cấu hình QR_SECRET');
   }
 
-  return process.env.JWT_SECRET;
+  return process.env.QR_SECRET;
 };
 
 const getQRExpiresIn = () => process.env.JWT_EXPIRES_IN || process.env.JWT_EXPIRE || '24h';
