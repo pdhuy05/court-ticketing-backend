@@ -43,12 +43,51 @@ const UserSchema = new mongoose.Schema(
     lastLoginAt: {
       type: Date,
       default: null
-    }
+    },
+
+    onDuty: {
+      type: Boolean,
+      default: true
+    },
+
+    lastShiftStart: {
+      type: Date,
+      default: null
+    },
+
+    lastShiftEnd: {
+      type: Date,
+      default: null
+    },
+
+    shiftHistory: [
+      {
+        action: {
+          type: String,
+          enum: ['start', 'end'],
+          required: true
+        },
+        timestamp: {
+          type: Date,
+          required: true
+        },
+        reason: {
+          type: String,
+          default: ''
+        },
+        waitingTicketsCount: {
+          type: Number,
+          default: 0
+        }
+      }
+    ]
   },
   {
     timestamps: true
   }
 );
+
+UserSchema.index({ onDuty: 1, role: 1 });
 
 UserSchema.pre('save', async function () {
   if (!this.isModified('password')) {

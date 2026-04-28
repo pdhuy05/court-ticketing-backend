@@ -5,6 +5,7 @@ const app = require("./src/app");
 const database = require("./src/config/database");
 const ticketService = require("./src/services/ticket.service");
 const autoResetScheduler = require("./src/services/autoReset.service");
+const autoSchedulerService = require('./src/services/autoScheduler.service');
 const User = require("./src/models/user.model");
 const { setIO } = require("./src/utils/socketEmitter");
 
@@ -165,11 +166,15 @@ server.listen(config.port, () => {
   autoResetScheduler.start().catch((error) => {
     console.error(`Khởi động auto reset thất bại: ${error.message}`);
   });
+  autoSchedulerService.start().catch((error) => {
+    console.error(`Khởi động auto scheduler thất bại: ${error.message}`);
+  });
   console.log(`
 \x1b[42m\x1b[30m ✓ \x1b[0m \x1b[36mServer\x1b[0m: Khởi động thành công!
 \x1b[90m  ├─ URL: \x1b[0m\x1b[33mhttp://localhost:${config.port}\x1b[0m
 \x1b[90m  ├─ Port: \x1b[0m${config.port}
 \x1b[90m  ├─ Time: \x1b[0m${new Date().toLocaleString()}
 \x1b[90m  └─ Developer: \x1b[0m\x1b[35m[HuyPham]\x1b[0m \x1b[35m[KhanhPhuong]\x1b[0m
+\x1b[90m  └─ Copyright: \x1b[0m\x1b[32m© 2026 Phạm Đình Huy & Trần Phương Khánh\x1b[0m
 `);
 });

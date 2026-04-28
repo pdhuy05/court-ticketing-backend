@@ -5,19 +5,12 @@ const CounterSequence = require('../../models/counterSequence.model');
 const { TicketStatus } = require('../../constants/enums');
 const ApiError = require('../../utils/ApiError');
 const { verifyQRData } = require('../../utils/qrData.util');
-const { getStaffServiceAccess } = require('../staff-permission.service');
+const { getStaffServiceAccess, ensureStaffHasAccessibleServices } = require('../staff-permission.service');
 const {
     buildTicketPresentation,
     formatCounterDisplayNumber
 } = require('./ticket.helpers');
 
-
-
-const ensureStaffHasAccessibleServices = (accessScope) => {
-    if (accessScope.serviceRestrictionConfigured && accessScope.allowedServiceIds.length === 0) {
-        throw new ApiError(403, 'Nhân viên chưa được gán dịch vụ nào tại quầy hiện tại');
-    }
-};
 
 const getRecallList = async (counterId, staffId = null) => {
     const accessScope = await getStaffServiceAccess(staffId, counterId);
@@ -152,7 +145,6 @@ const getCounterDisplay = async (counterId) => {
         isActive: true
     }).populate('serviceId', 'name code prefixNumber isActive');
 
-    // [SỬA lỗi 3] Lọc bỏ dịch vụ đã bị tắt
     const activeServiceRelations = serviceRelations.filter(r => r.serviceId?.isActive === true);
     const serviceIds = activeServiceRelations.map((relation) => relation.serviceId._id);
 

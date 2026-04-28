@@ -227,10 +227,10 @@ exports.complete = asyncHandler(async (req, res) => {
 
 exports.skip = asyncHandler(async (req, res) => {
     const { reason } = req.body || {};
-    const { id } = req.params;
+    const ticketId = req.params.id;
     const counterId = req.user?.counterId;
 
-    const ticket = await ticketService.skipTicket(id, reason, counterId, req.user?._id);
+    const ticket = await ticketService.skipTicket(ticketId, reason, counterId, req.user?._id);
 
     logger.warning(`Đã bỏ qua số ${ticket.formattedNumber} - Lý do: ${reason || 'Khách vắng mặt '}`);
 

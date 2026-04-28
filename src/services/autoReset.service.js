@@ -72,7 +72,6 @@ const stop = () => {
 };
 
 module.exports = {
-  getCurrentHHMM,
   getTodayString,
   getYesterdayString,
   start,

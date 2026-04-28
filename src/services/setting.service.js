@@ -3,6 +3,8 @@ const Setting = require('../models/setting.model');
 const TTS_ENABLED_KEY = 'tts_enabled';
 const AUTO_RESET_ENABLED_KEY = 'auto_reset_enabled';
 const AUTO_RESET_TIME_KEY = 'auto_reset_time';
+const SHIFT_AUTO_START_TIME_KEY = 'shift_auto_start_time';
+const SHIFT_REMINDER_MINUTES_KEY = 'shift_reminder_minutes';
 
 const toBoolean = (raw, defaultValue = true) => {
   if (raw === undefined || raw === null) {
@@ -140,18 +142,103 @@ const getAutoResetSettings = async () => {
   return { enabled, time };
 };
 
+const getShiftAutoStartTime = async () => {
+  const rawValue = await getSetting(SHIFT_AUTO_START_TIME_KEY, '07:30');
+  const value = typeof rawValue === 'string' ? rawValue : '07:30';
+  return isValidTimeString(value) ? value : '07:30';
+};
+
+const setShiftAutoStartTime = async (time) => {
+  if (!isValidTimeString(time)) {
+    throw new Error('Thời gian tự động mở ca không hợp lệ, phải theo định dạng HH:MM');
+  }
+
+  await setSetting(
+    SHIFT_AUTO_START_TIME_KEY,
+    time,
+    'Thời gian tự động mở ca cho tất cả staff (HH:MM)'
+  );
+
+  return time;
+};
+
+const getShiftReminderMinutes = async () => {
+  const rawValue = await getSetting(SHIFT_REMINDER_MINUTES_KEY, 15);
+  const value = Number(rawValue);
+  return Number.isFinite(value) && value >= 0 ? value : 15;
+};
+
+const setShiftReminderMinutes = async (minutes) => {
+  const value = Number(minutes);
+
+  if (!Number.isFinite(value) || value < 0 || value > 120) {
+    throw new Error('Thời gian nhắc nhở phải từ 0 đến 120 phút');
+  }
+
+  await setSetting(
+    SHIFT_REMINDER_MINUTES_KEY,
+    value,
+    'Số phút nhắc nhở trước khi kết thúc ca'
+  );
+
+  return value;
+};
+
+const getShiftSettings = async () => {
+  const [autoStartTime, reminderMinutes] = await Promise.all([
+    getShiftAutoStartTime(),
+    getShiftReminderMinutes()
+  ]);
+
+  return { autoStartTime, reminderMinutes };
+};
+
+const seedShiftDefaults = async () => {
+  await Setting.findOneAndUpdate(
+    { key: SHIFT_AUTO_START_TIME_KEY },
+    {
+      $setOnInsert: {
+        key: SHIFT_AUTO_START_TIME_KEY,
+        value: '07:30',
+        description: 'Thời gian tự động mở ca cho tất cả staff (HH:MM)'
+      }
+    },
+    { upsert: true, runValidators: true }
+  );
+
+  await Setting.findOneAndUpdate(
+    { key: SHIFT_REMINDER_MINUTES_KEY },
+    {
+      $setOnInsert: {
+        key: SHIFT_REMINDER_MINUTES_KEY,
+        value: 15,
+        description: 'Số phút nhắc nhở trước khi kết thúc ca'
+      }
+    },
+    { upsert: true, runValidators: true }
+  );
+};
+
 module.exports = {
   AUTO_RESET_ENABLED_KEY,
   AUTO_RESET_TIME_KEY,
+  SHIFT_AUTO_START_TIME_KEY,
+  SHIFT_REMINDER_MINUTES_KEY,
   TTS_ENABLED_KEY,
   getAutoResetSettings,
   getAutoResetTime,
   getSetting,
+  getShiftAutoStartTime,
+  getShiftReminderMinutes,
+  getShiftSettings,
   isTtsEnabled,
   isAutoResetEnabled,
   seedAutoResetDefaults,
+  seedShiftDefaults,
   setAutoResetEnabled,
   setAutoResetTime,
   setSetting,
+  setShiftAutoStartTime,
+  setShiftReminderMinutes,
   setTtsEnabled
 };

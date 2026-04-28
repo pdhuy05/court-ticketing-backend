@@ -6,24 +6,39 @@ const { TicketStatus } = require('../constants/enums');
 const ApiError = require('../utils/ApiError');
 const { emitDashboardUpdateSafe } = require('./dashboard.service');
 
+const attachServicesToCounters = async (counters, serviceFields) => {
+  if (!counters.length) {
+    return [];
+  }
+
+  const counterIds = counters.map((counter) => counter._id);
+  const serviceRelations = await ServiceCounter.find({
+    counterId: { $in: counterIds },
+    isActive: true
+  }).populate('serviceId', serviceFields);
+
+  const servicesByCounterId = new Map();
+
+  serviceRelations.forEach((relation) => {
+    const key = String(relation.counterId);
+    if (!servicesByCounterId.has(key)) {
+      servicesByCounterId.set(key, []);
+    }
+
+    servicesByCounterId.get(key).push(relation.serviceId);
+  });
+
+  return counters.map((counter) => {
+    const counterObj = counter.toObject();
+    counterObj.services = servicesByCounterId.get(String(counter._id)) || [];
+    return counterObj;
+  });
+};
+
 exports.getAll = async () => {
   const counters = await Counter.find().sort({ code: 1 });
-  
-  const countersWithServices = await Promise.all(
-    counters.map(async (counter) => {
-      const serviceRelations = await ServiceCounter.find({ 
-        counterId: counter._id, 
-        isActive: true 
-      }).populate('serviceId', 'code name icon displayOrder');
-      
-      const counterObj = counter.toObject();
-      counterObj.services = serviceRelations.map(rel => rel.serviceId);
-      
-      return counterObj;
-    })
-  );
-  
-  return countersWithServices;
+
+  return attachServicesToCounters(counters, 'code name icon displayOrder');
 };
 
 exports.getById = async (id) => {
@@ -46,22 +61,8 @@ exports.getById = async (id) => {
 
 exports.getActive = async () => {
   const counters = await Counter.find({ isActive: true }).sort({ code: 1 });
-  
-  const countersWithServices = await Promise.all(
-    counters.map(async (counter) => {
-      const serviceRelations = await ServiceCounter.find({ 
-        counterId: counter._id, 
-        isActive: true 
-      }).populate('serviceId', 'code name');
-      
-      const counterObj = counter.toObject();
-      counterObj.services = serviceRelations.map(rel => rel.serviceId);
-      
-      return counterObj;
-    })
-  );
-  
-  return countersWithServices;
+
+  return attachServicesToCounters(counters, 'code name');
 };
 
 exports.create = async (data) => {
@@ -313,35 +314,63 @@ exports.getServices = async (id) => {
 
 exports.getAllStats = async () => {
   const counters = await Counter.find({ isActive: true }).sort({ number: 1 });
+  if (counters.length === 0) {
+    return [];
+  }
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const counterIds = counters.map((counter) => counter._id);
 
-  const stats = await Promise.all(
-    counters.map(async (counter) => {
-      const [completedToday, processing] = await Promise.all([
-        Ticket.countDocuments({
-          counterId: counter._id,
+  const [completedTodayRows, processingRows] = await Promise.all([
+    Ticket.aggregate([
+      {
+        $match: {
+          counterId: { $in: counterIds },
           status: TicketStatus.COMPLETED,
           completedAt: { $gte: today }
-        }),
-        Ticket.countDocuments({
-          counterId: counter._id,
+        }
+      },
+      {
+        $group: {
+          _id: '$counterId',
+          count: { $sum: 1 }
+        }
+      }
+    ]),
+    Ticket.aggregate([
+      {
+        $match: {
+          counterId: { $in: counterIds },
           status: TicketStatus.PROCESSING
-        })
-      ]);
+        }
+      },
+      {
+        $group: {
+          _id: '$counterId',
+          count: { $sum: 1 }
+        }
+      }
+    ])
+  ]);
 
-      return {
-        counter: {
-          id: counter._id,
-          name: counter.name,
-          number: counter.number
-        },
-        totalProcessed: counter.processedCount || 0,
-        completedToday,
-        processing
-      };
-    })
+  const completedTodayMap = new Map(
+    completedTodayRows.map((row) => [String(row._id), row.count])
   );
+  const processingMap = new Map(
+    processingRows.map((row) => [String(row._id), row.count])
+  );
+
+  const stats = counters.map((counter) => ({
+    counter: {
+      id: counter._id,
+      name: counter.name,
+      number: counter.number
+    },
+    totalProcessed: counter.processedCount || 0,
+    completedToday: completedTodayMap.get(String(counter._id)) || 0,
+    processing: processingMap.get(String(counter._id)) || 0
+  }));
 
   return stats.sort((a, b) => b.totalProcessed - a.totalProcessed);
 };
