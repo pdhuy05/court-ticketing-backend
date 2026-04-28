@@ -114,34 +114,45 @@ exports.create = async (data) => {
   if (services.length !== normalizedServiceIds.length) {
     throw new ApiError(400, 'Một số dịch vụ không tồn tại');
   }
-  
-  const counter = await Counter.create({
-    name,
-    code: code.toUpperCase(),
-    number: number || 1,
-    note: note || '',
-    isActive: isActive !== undefined ? isActive : true
-  });
-  
-  const serviceRelations = [];
-  for (const serviceId of normalizedServiceIds) {
-    const relation = await ServiceCounter.create({
-      serviceId,
-      counterId: counter._id,
-      isActive: true
-    });
-    serviceRelations.push(relation);
-  }
-  
-  const populatedServices = await ServiceCounter.find({ counterId: counter._id })
-    .populate('serviceId', 'name code');
-  
-  const counterObj = counter.toObject();
-  counterObj.services = populatedServices.map(rel => rel.serviceId);
-  
-  await emitDashboardUpdateSafe('counter-created');
 
-  return counterObj;
+  let counter = null;
+
+  try {
+    counter = await Counter.create({
+      name,
+      code: code.toUpperCase(),
+      number: number || 1,
+      note: note || '',
+      isActive: isActive !== undefined ? isActive : true
+    });
+
+    if (normalizedServiceIds.length > 0) {
+      await ServiceCounter.insertMany(
+        normalizedServiceIds.map((serviceId) => ({
+          serviceId,
+          counterId: counter._id,
+          isActive: true
+        }))
+      );
+    }
+
+    const populatedServices = await ServiceCounter.find({ counterId: counter._id })
+      .populate('serviceId', 'name code');
+
+    const counterObj = counter.toObject();
+    counterObj.services = populatedServices.map(rel => rel.serviceId);
+
+    await emitDashboardUpdateSafe('counter-created');
+
+    return counterObj;
+  } catch (error) {
+    if (counter?._id) {
+      await ServiceCounter.deleteMany({ counterId: counter._id });
+      await Counter.deleteOne({ _id: counter._id });
+    }
+
+    throw error;
+  }
 };
 
 exports.update = async (id, data) => {
