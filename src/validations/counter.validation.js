@@ -51,11 +51,15 @@ const updateCounterSchema = Joi.object({
   number: Joi.number().integer().min(1).optional(),
   note: Joi.string().allow('', null).optional(),
   isActive: Joi.boolean().optional(),
-  serviceIds: Joi.array()
-    .items(objectId)
-    .min(0)
+  serviceIds: Joi.alternatives()
+    .try(
+      Joi.array()
+        .items(objectId)
+        .min(0)
+        .unique(),
+      Joi.valid(null)
+    )
     .optional()
-    .unique()
     .messages({
       'string.pattern.base': 'ID dịch vụ không hợp lệ'
     })
