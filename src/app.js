@@ -14,6 +14,37 @@ const AdminShiftRoute = require('./routers/admin/shift.route');
 const StatisticsRoute = require("./routers/statistics.route");
 const { notifySystemError } = require("./services/admin-notification.service");
 
+const duplicateFieldLabelMap = {
+  name: 'Tên',
+  code: 'Mã',
+  number: 'Số quầy',
+  username: 'Tên đăng nhập',
+  ipAddress: 'Địa chỉ IP máy in',
+  counterId: 'Quầy',
+  'serviceId+counterId': 'Quan hệ quầy và dịch vụ',
+  'counterId+serviceId': 'Quan hệ quầy và dịch vụ',
+  'staffId+serviceId': 'Quan hệ nhân viên và dịch vụ'
+};
+
+const getDuplicateFieldLabel = (err) => {
+  const duplicatedFields = Object.keys(err?.keyPattern || err?.keyValue || {});
+
+  if (duplicatedFields.length === 0) {
+    return null;
+  }
+
+  const compoundKey = duplicatedFields.join('+');
+  if (duplicateFieldLabelMap[compoundKey]) {
+    return duplicateFieldLabelMap[compoundKey];
+  }
+
+  if (duplicatedFields.length === 1) {
+    return duplicateFieldLabelMap[duplicatedFields[0]] || null;
+  }
+
+  return null;
+};
+
 const normalizeError = (err) => {
   if (err instanceof ApiError || err?.statusCode) {
     return err;
@@ -33,10 +64,13 @@ const normalizeError = (err) => {
   }
 
   if (err?.code === 11000) {
-    const duplicatedFields = Object.keys(err.keyPattern || err.keyValue || {});
-    const fieldLabel = duplicatedFields.length > 0 ? duplicatedFields.join(', ') : 'dữ liệu';
+    const fieldLabel = getDuplicateFieldLabel(err);
 
-    return new ApiError(409, `Lỗi database: ${fieldLabel} đã tồn tại`);
+    if (fieldLabel) {
+      return new ApiError(409, `${fieldLabel} đã tồn tại, vui lòng chọn giá trị khác`);
+    }
+
+    return new ApiError(409, 'Dữ liệu đã tồn tại, vui lòng kiểm tra lại');
   }
 
   if (err?.name === 'MongoServerError' || err?.name === 'MongoError' || err?.name === 'MongooseError') {
