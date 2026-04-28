@@ -95,6 +95,7 @@ exports.getActive = async () => {
 
 exports.create = async (data) => {
   const { name, code, number, serviceIds, note, isActive } = data;
+  const normalizedServiceIds = [...new Set((serviceIds || []).map(String))];
   
   const existingCode = await Counter.findOne({ code: code.toUpperCase() });
   if (existingCode) {
@@ -105,13 +106,12 @@ exports.create = async (data) => {
   if (existingNumber) {
     throw new ApiError(400, `Số quầy ${number} đã tồn tại`);
   }
-  
-  if (!serviceIds || serviceIds.length === 0) {
-    throw new ApiError(400, 'Phải chọn ít nhất một dịch vụ cho quầy');
-  }
-  
-  const services = await Service.find({ _id: { $in: serviceIds } });
-  if (services.length !== serviceIds.length) {
+
+  const services = normalizedServiceIds.length > 0
+    ? await Service.find({ _id: { $in: normalizedServiceIds } })
+    : [];
+
+  if (services.length !== normalizedServiceIds.length) {
     throw new ApiError(400, 'Một số dịch vụ không tồn tại');
   }
   
@@ -124,7 +124,7 @@ exports.create = async (data) => {
   });
   
   const serviceRelations = [];
-  for (const serviceId of serviceIds) {
+  for (const serviceId of normalizedServiceIds) {
     const relation = await ServiceCounter.create({
       serviceId,
       counterId: counter._id,

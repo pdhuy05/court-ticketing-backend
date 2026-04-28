@@ -29,14 +29,16 @@ const createCounterSchema = Joi.object({
       'any.required': 'Số quầy là bắt buộc',
       'number.min': 'Số quầy phải lớn hơn 0'
     }),
-  serviceIds: Joi.array()
-    .items(objectId)
-    .min(1)
-    .required()
-    .unique()
+  serviceIds: Joi.alternatives()
+    .try(
+      Joi.array()
+        .items(objectId)
+        .min(0)
+        .unique(),
+      Joi.valid(null)
+    )
+    .optional()
     .messages({
-      'array.min': 'Phải chọn ít nhất một dịch vụ',
-      'any.required': 'Danh sách dịch vụ là bắt buộc',
       'string.pattern.base': 'ID dịch vụ không hợp lệ'
     }),
   note: Joi.string()
