@@ -58,15 +58,12 @@ const ensureCounterActive = async (counterId) => {
 };
 
 const ensureNoProcessingTicket = async (counterId, staffId = null) => {
+    // Nếu có staffId: chỉ check riêng nhân viên đó — nhiều nhân viên cùng quầy
+    // được phép xử lý đồng thời, mỗi người 1 vé của dịch vụ được gán.
+    // Nếu không có staffId (admin/fallback): check toàn quầy như cũ.
     const query = staffId
-        ? {
-            staffId,
-            status: TicketStatus.PROCESSING
-        }
-        : {
-            counterId,
-            status: TicketStatus.PROCESSING
-        };
+        ? { staffId, status: TicketStatus.PROCESSING }
+        : { counterId, status: TicketStatus.PROCESSING };
 
     const existingProcessing = await Ticket.findOne(query)
         .populate('serviceId', 'name code prefixNumber');
@@ -74,7 +71,7 @@ const ensureNoProcessingTicket = async (counterId, staffId = null) => {
     if (existingProcessing) {
         const presentation = buildTicketPresentation(existingProcessing);
         if (staffId) {
-            throw new ApiError(400, `Nhân viên đang xử lý vé ${presentation.formattedNumber}. Vui lòng hoàn thành hoặc bỏ qua vé hiện tại trước`);
+            throw new ApiError(400, `Bạn đang xử lý vé ${presentation.formattedNumber}. Vui lòng hoàn thành hoặc bỏ qua vé hiện tại trước`);
         }
 
         throw new ApiError(400, `Quầy đang xử lý vé ${presentation.formattedNumber}. Vui lòng hoàn thành hoặc bỏ qua vé hiện tại trước`);
