@@ -6,8 +6,10 @@ const { TicketStatus } = require('../constants/enums');
 const ApiError = require('../utils/ApiError');
 const { emitDashboardUpdateSafe } = require('./dashboard.service');
 
+const normalizeServiceIds = (serviceIds) => [...new Set((serviceIds || []).filter(Boolean).map(String))];
+
 const assertCanRemoveServicesFromCounter = async (counterId, serviceIds) => {
-  const normalizedServiceIds = (serviceIds || []).filter(Boolean);
+  const normalizedServiceIds = normalizeServiceIds(serviceIds);
 
   if (normalizedServiceIds.length === 0) {
     return;
@@ -96,7 +98,7 @@ exports.getActive = async () => {
 
 exports.create = async (data) => {
   const { name, code, number, serviceIds, note, isActive } = data;
-  const normalizedServiceIds = [...new Set((serviceIds || []).map(String))];
+  const normalizedServiceIds = normalizeServiceIds(serviceIds);
   
   const existingCode = await Counter.findOne({ code: code.toUpperCase() });
   if (existingCode) {
@@ -181,7 +183,7 @@ exports.update = async (id, data) => {
 
   // Nếu có truyền serviceIds (kể cả mảng rỗng) thì cập nhật lại danh sách service
   if (serviceIds !== undefined) {
-    const normalizedServiceIds = [...new Set((serviceIds || []).map(String))];
+    const normalizedServiceIds = normalizeServiceIds(serviceIds);
     if (normalizedServiceIds.length > 0) {
       const services = await Service.find({ _id: { $in: normalizedServiceIds } });
       if (services.length !== normalizedServiceIds.length) {

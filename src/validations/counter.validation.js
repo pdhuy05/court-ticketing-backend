@@ -1,6 +1,33 @@
 const Joi = require('joi');
 const { idParamSchema, objectId } = require('./common.validation');
 
+const optionalServiceIdsSchema = Joi.alternatives()
+  .try(
+    Joi.array()
+      .items(Joi.alternatives().try(objectId, Joi.valid(''), Joi.valid(null)))
+      .custom((value, helpers) => {
+        const normalized = value.filter(Boolean);
+        if (new Set(normalized).size !== normalized.length) {
+          return helpers.error('array.unique');
+        }
+        return normalized;
+      }),
+    Joi.valid(null),
+    Joi.string().trim().valid('')
+  )
+  .optional()
+  .custom((value) => {
+    if (value === null || value === '') {
+      return [];
+    }
+
+    return value;
+  })
+  .messages({
+    'string.pattern.base': 'ID dịch vụ không hợp lệ',
+    'array.unique': 'Danh sách dịch vụ bị trùng'
+  });
+
 const createCounterSchema = Joi.object({
   code: Joi.string()
     .required()
@@ -29,18 +56,7 @@ const createCounterSchema = Joi.object({
       'any.required': 'Số quầy là bắt buộc',
       'number.min': 'Số quầy phải lớn hơn 0'
     }),
-  serviceIds: Joi.alternatives()
-    .try(
-      Joi.array()
-        .items(objectId)
-        .min(0)
-        .unique(),
-      Joi.valid(null)
-    )
-    .optional()
-    .messages({
-      'string.pattern.base': 'ID dịch vụ không hợp lệ'
-    }),
+  serviceIds: optionalServiceIdsSchema,
   note: Joi.string()
     .allow('', null)
     .default(''),
@@ -53,18 +69,7 @@ const updateCounterSchema = Joi.object({
   number: Joi.number().integer().min(1).optional(),
   note: Joi.string().allow('', null).optional(),
   isActive: Joi.boolean().optional(),
-  serviceIds: Joi.alternatives()
-    .try(
-      Joi.array()
-        .items(objectId)
-        .min(0)
-        .unique(),
-      Joi.valid(null)
-    )
-    .optional()
-    .messages({
-      'string.pattern.base': 'ID dịch vụ không hợp lệ'
-    })
+  serviceIds: optionalServiceIdsSchema
 }).min(1);
 
 const addServicesSchema = Joi.object({
