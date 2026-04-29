@@ -6,6 +6,7 @@ const Service = require('../models/service.model');
 const ServiceSchedule = require('../models/serviceSchedule.model');
 const { TicketStatus, ShiftAction } = require('../constants/enums');
 const ApiError = require('../utils/ApiError');
+const logger = require('../utils/Logger');
 
 const findStaffById = async (staffId) => {
   const staff = await User.findById(staffId);
@@ -371,8 +372,30 @@ const adminEndShift = async (staffId, { reason = 'Admin kết thúc ca thủ cô
   };
 };
 
+
+const applyCurrentScheduleState = async () => {
+  const schedules = await ServiceSchedule.find({ isEnabled: true }).lean();
+
+  if (schedules.length === 0) {
+    return;
+  }
+
+  const now = new Date();
+  const currentHHMM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+  for (const schedule of schedules) {
+    const normalizedServiceId = normalizeScheduleServiceId(schedule.serviceId);
+    const isOpen = currentHHMM >= schedule.openTime && currentHHMM < schedule.closeTime;
+
+    await updateServicesOpenState(normalizedServiceId, isOpen);
+  }
+
+  logger.info(`Đã khôi phục trạng thái isOpen cho ${schedules.length} lịch dịch vụ`);
+};
+
 module.exports = {
   appendShiftLog,
+  applyCurrentScheduleState,
   autoStartAllShifts,
   countActiveTicketsForStaff,
   deleteSchedule,

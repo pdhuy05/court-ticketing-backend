@@ -287,9 +287,10 @@ const getStaffDisplay = async (counterId, staffId = null) => {
 
     const formatTicket = (ticket) => buildTicketPresentation(ticket, counter);
 
-    // currentTicket: ticket processing đầu tiên (hoặc của chính staff nếu cần giao diện nhân viên)
+    // currentTicket: chỉ lấy ticket mà chính nhân viên đó đang xử lý
+    // Nếu chưa gọi ai thì null, không fallback sang ticket của nhân viên khác
     const currentTicket = staffId
-        ? (processingTickets.find(t => String(t.staffId) === String(staffId)) || processingTickets[0] || null)
+        ? (processingTickets.find(t => String(t.staffId) === String(staffId)) || null)
         : (processingTickets[0] || null);
 
     return {

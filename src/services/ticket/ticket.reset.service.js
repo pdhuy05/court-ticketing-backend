@@ -61,6 +61,10 @@ const resetTicketsByDate = async (dateString, actor) => {
 };
 
 const resetAllTickets = async (actor) => {
+    // Lưu thống kê ngày hôm nay trước khi reset
+    const { start, end } = getDateRange();
+    await calculateDailyStatistics(start, end, actor);
+
     const affectedCounterIds = await getAffectedCounterIds();
     await Counter.updateMany({}, { currentTicketId: null });
     const sequenceResult = await resetCounterSequences(affectedCounterIds);
