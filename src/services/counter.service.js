@@ -1,10 +1,13 @@
 const Counter = require('../models/counter.model');
 const ServiceCounter = require('../models/serviceCounter.model');
+const StaffService = require('../models/staffService.model');
 const Service = require('../models/service.model');
 const Ticket = require('../models/ticket.model');
 const { TicketStatus } = require('../constants/enums');
 const ApiError = require('../utils/ApiError');
 const { emitDashboardUpdateSafe } = require('./dashboard.service');
+const { emitToRoom } = require('../utils/socketEmitter');
+const { emitStaffDisplayUpdateForCounters } = require('./ticket/ticket.socket');
 
 const normalizeServiceIds = (serviceIds) => [...new Set((serviceIds || []).filter(Boolean).map(String))];
 
@@ -181,7 +184,6 @@ exports.update = async (id, data) => {
     throw new ApiError(404, 'Không tìm thấy quầy');
   }
 
-  // Nếu có truyền serviceIds (kể cả mảng rỗng) thì cập nhật lại danh sách service
   if (serviceIds !== undefined) {
     const normalizedServiceIds = normalizeServiceIds(serviceIds);
     if (normalizedServiceIds.length > 0) {
@@ -193,18 +195,37 @@ exports.update = async (id, data) => {
 
     const currentRelations = await ServiceCounter.find({
       counterId: counter._id
-    }).select('serviceId');
+    }).select('serviceId isActive');
 
-    const removedServiceIds = currentRelations
+    const deactivateServiceIds = currentRelations
       .map((relation) => String(relation.serviceId))
       .filter((existingServiceId) => !normalizedServiceIds.includes(existingServiceId));
 
-    await assertCanRemoveServicesFromCounter(counter._id, removedServiceIds);
+    await assertCanRemoveServicesFromCounter(counter._id, deactivateServiceIds);
 
-    await ServiceCounter.deleteMany({ counterId: counter._id });
+    if (deactivateServiceIds.length > 0) {
+      await ServiceCounter.updateMany(
+        { counterId: counter._id, serviceId: { $in: deactivateServiceIds } },
+        { $set: { isActive: false } }
+      );
+
+      // Đồng bộ StaffService trực tiếp theo counterId
+      await StaffService.updateMany(
+        {
+          counterId: counter._id,
+          serviceId: { $in: deactivateServiceIds },
+          isActive: true
+        },
+        { $set: { isActive: false } }
+      );
+    }
 
     for (const serviceId of normalizedServiceIds) {
-      await ServiceCounter.create({ serviceId, counterId: counter._id, isActive: true });
+      await ServiceCounter.findOneAndUpdate(
+        { serviceId, counterId: counter._id },
+        { $set: { isActive: true } },
+        { upsert: true, returnDocument: 'after' }
+      );
     }
   }
   
@@ -251,6 +272,10 @@ exports.addServices = async (id, serviceIds) => {
         isActive: true
       });
       addedServices.push(relation);
+    } else if (!existing.isActive) {
+      existing.isActive = true;
+      await existing.save();
+      addedServices.push(existing);
     }
   }
   
@@ -277,14 +302,25 @@ exports.removeService = async (id, serviceId) => {
 
   await assertCanRemoveServicesFromCounter(counter._id, [serviceId]);
   
-  const deleted = await ServiceCounter.findOneAndDelete({
-    serviceId,
-    counterId: counter._id
-  });
+  const deactivated = await ServiceCounter.findOneAndUpdate(
+    { serviceId, counterId: counter._id, isActive: true },
+    { $set: { isActive: false } },
+    { returnDocument: 'after' }
+  );
   
-  if (!deleted) {
+  if (!deactivated) {
     throw new ApiError(404, 'Không tìm thấy mối quan hệ giữa quầy và dịch vụ');
   }
+
+  // Đồng bộ StaffService
+  await StaffService.updateMany(
+    {
+      counterId: counter._id,
+      serviceId,
+      isActive: true
+    },
+    { $set: { isActive: false } }
+  );
   
   const serviceRelations = await ServiceCounter.find({ 
     counterId: counter._id, 
@@ -356,13 +392,23 @@ exports.toggleActive = async (id) => {
         counterId: null,
         staffId: null,
         serviceCounterId: null,
-        processingAt: null,
         calledAt: null,
+        processingAt: null,
         isRecall: false,
-        recallCounterId: null
+        recallCounterId: null,
+        skipCount: 0
       }
     );
     await Counter.findByIdAndUpdate(counter._id, { currentTicketId: null });
+
+    // Đồng bộ StaffService trực tiếp theo counterId
+    await StaffService.updateMany(
+      { counterId: counter._id, isActive: true },
+      { $set: { isActive: false } }
+    );
+
+    emitToRoom('waiting-room', 'counter-deactivated', { counterId: counter._id });
+    await emitStaffDisplayUpdateForCounters([counter._id], 'counter-deactivated', {});
   }
 
   await emitDashboardUpdateSafe('counter-toggled');

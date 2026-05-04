@@ -47,7 +47,7 @@ const UserSchema = new mongoose.Schema(
 
     onDuty: {
       type: Boolean,
-      default: true
+      default: false
     },
 
     lastShiftStart: {

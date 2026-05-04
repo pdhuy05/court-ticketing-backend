@@ -33,6 +33,9 @@ const speakTicketIfTtsEnabled = async (displayNumber, counterName) => {
 
 const queueAutoPrintTicket = ({ ticket, service, ticketNumberDisplay }) => {
     setImmediate(async () => {
+        const maxAttempts = Number(process.env.PRINT_MAX_RETRIES) || 3;
+        let lastError = null;
+
         try {
             const defaultPrinter = await Printer.findOne({
                 isDefault: true,
@@ -60,15 +63,45 @@ const queueAutoPrintTicket = ({ ticket, service, ticketNumberDisplay }) => {
                 );
             }
 
-            await printerService.printTicket(
-                defaultPrinter.code,
-                ticket,
-                service
-            );
+            for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+                try {
+                    await printerService.printTicket(
+                        defaultPrinter.code,
+                        ticket,
+                        service
+                    );
 
-            logger.success(`Đã in ticket ${ticketNumberDisplay} trên máy ${defaultPrinter.name}`);
+                    logger.success({
+                        action: 'print-ticket',
+                        ticketId: ticket?._id,
+                        displayNumber: ticketNumberDisplay,
+                        printerCode: defaultPrinter.code,
+                        attempt,
+                        maxAttempts
+                    });
+                    return;
+                } catch (attemptError) {
+                    lastError = attemptError;
+                    logger.warning({
+                        action: 'print-ticket-retry',
+                        ticketId: ticket?._id,
+                        attempt,
+                        maxAttempts,
+                        message: attemptError.message
+                    });
+                    if (attempt < maxAttempts) {
+                        await new Promise((r) => setTimeout(r, 400 * attempt));
+                    }
+                }
+            }
+
+            throw lastError || new Error('In thất bại sau nhiều lần thử');
         } catch (printError) {
-            logger.error(`Lỗi in ticket: ${printError.message}`);
+            logger.error({
+                action: 'print-ticket-failed',
+                ticketId: ticket?._id,
+                message: printError.message
+            });
             emitAdminNotificationSafe({
                 type: 'printer-error',
                 severity: 'warning',
@@ -145,7 +178,7 @@ exports.printTicket = asyncHandler(async (req, res) => {
 
     res.json({
         success: true,
-        message: `Đã gửi lệnh in vé ${ticket.ticketNumber}`,
+        message: `Đã tiếp nhận yêu cầu in vé ${ticket.ticketNumber}`,
         printStatus: 'queued'
     });
 });

@@ -6,6 +6,7 @@ const database = require("./src/config/database");
 const ticketService = require("./src/services/ticket.service");
 const autoResetScheduler = require("./src/services/autoReset.service");
 const autoSchedulerService = require('./src/services/autoScheduler.service');
+const stuckProcessingRecovery = require('./src/services/stuckProcessingRecovery.service');
 const User = require("./src/models/user.model");
 const { setIO } = require("./src/utils/socketEmitter");
 
@@ -168,6 +169,9 @@ server.listen(config.port, () => {
   });
   autoSchedulerService.start().catch((error) => {
     console.error(`Khởi động auto scheduler thất bại: ${error.message}`);
+  });
+  stuckProcessingRecovery.start().catch((error) => {
+    console.error(`Khởi động stuck ticket recovery thất bại: ${error.message}`);
   });
   console.log(`
 \x1b[42m\x1b[30m ✓ \x1b[0m \x1b[36mServer\x1b[0m: Khởi động thành công!

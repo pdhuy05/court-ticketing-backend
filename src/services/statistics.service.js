@@ -45,8 +45,11 @@ const calculateDailyStatistics = async (startDate, endDate, actor = null) => {
   const completionRate = totalTickets > 0 ? round2((completedTickets / totalTickets) * 100) : 0;
   const skipRate = totalTickets > 0 ? round2((skippedTickets / totalTickets) * 100) : 0;
 
-  const avgWaitingTime = round2(average(tickets.map((t) => t.waitingDuration)));
-  const avgProcessingTime = round2(average(tickets.map((t) => t.processingDuration)));
+  const ticketsWithWaiting = tickets.filter((t) => t.waitingDuration > 0);
+  const ticketsWithProcessing = tickets.filter((t) => t.processingDuration > 0);
+
+  const avgWaitingTime = round2(average(ticketsWithWaiting.map((t) => t.waitingDuration)));
+  const avgProcessingTime = round2(average(ticketsWithProcessing.map((t) => t.processingDuration)));
 
   const byServiceMap = new Map();
   for (const t of tickets) {
@@ -64,6 +67,8 @@ const calculateDailyStatistics = async (startDate, endDate, actor = null) => {
   for (const [, list] of byServiceMap) {
     const svc = list[0].serviceId;
     const serviceId = svc?._id || list[0].serviceId;
+    const listWithWaiting = list.filter((x) => x.waitingDuration > 0);
+    const listWithProcessing = list.filter((x) => x.processingDuration > 0);
     byService.push({
       serviceId,
       serviceCode: svc?.code || '',
@@ -71,8 +76,8 @@ const calculateDailyStatistics = async (startDate, endDate, actor = null) => {
       total: list.length,
       completed: list.filter((x) => x.status === TicketStatus.COMPLETED).length,
       skipped: list.filter((x) => x.status === TicketStatus.SKIPPED).length,
-      avgWaitingTime: round2(average(list.map((x) => x.waitingDuration))),
-      avgProcessingTime: round2(average(list.map((x) => x.processingDuration)))
+      avgWaitingTime: round2(average(listWithWaiting.map((x) => x.waitingDuration))),
+      avgProcessingTime: round2(average(listWithProcessing.map((x) => x.processingDuration)))
     });
   }
   byService.sort((a, b) => String(a.serviceCode).localeCompare(String(b.serviceCode)));
@@ -93,12 +98,13 @@ const calculateDailyStatistics = async (startDate, endDate, actor = null) => {
   const byCounter = [];
   for (const [, list] of byCounterMap) {
     const c = list[0].counterId;
+    const listWithProcessing = list.filter((x) => x.processingDuration > 0);
     byCounter.push({
       counterId: c?._id || list[0].counterId,
       counterName: c?.name || '',
       counterNumber: typeof c?.number === 'number' ? c.number : 0,
       processedCount: list.length,
-      avgProcessingTime: round2(average(list.map((x) => x.processingDuration)))
+      avgProcessingTime: round2(average(listWithProcessing.map((x) => x.processingDuration)))
     });
   }
   byCounter.sort((a, b) => (a.counterNumber || 0) - (b.counterNumber || 0));

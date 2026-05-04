@@ -30,9 +30,11 @@ const buildServiceSnapshot = (service) => ({
 const getStaffServiceAccess = async (staffId, counterId) => {
   const [counterRelations, assignments] = await Promise.all([
     getCounterServiceRelations(counterId),
-    staffId
-      ? StaffService.find({ staffId }).populate('serviceId', 'name code icon displayOrder isActive')
-      : []
+    staffId && counterId
+      ? StaffService.find({ staffId, counterId, isActive: true }).populate('serviceId', 'name code icon displayOrder isActive')
+      : staffId
+        ? StaffService.find({ staffId, isActive: true }).populate('serviceId', 'name code icon displayOrder isActive')
+        : []
   ]);
 
   const availableServices = counterRelations
@@ -109,6 +111,7 @@ const assignServicesToStaff = async (staffId, serviceIds = []) => {
       counterAccess.availableServiceIds.map((serviceId) => StaffService.create({
         staffId,
         serviceId,
+        counterId: staff.counterId,
         isActive: false
       }))
     );
@@ -121,16 +124,17 @@ const assignServicesToStaff = async (staffId, serviceIds = []) => {
       const existing = existingMap.get(serviceId);
 
       if (existing) {
-        if (!existing.isActive) {
-          existing.isActive = true;
-          await existing.save();
-        }
+        // Luôn cập nhật counterId và isActive để đảm bảo đồng bộ với quầy hiện tại
+        existing.counterId = staff.counterId;
+        existing.isActive = true;
+        await existing.save();
         return;
       }
 
       await StaffService.create({
         staffId,
         serviceId,
+        counterId: staff.counterId,
         isActive: true
       });
     })

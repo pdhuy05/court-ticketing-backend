@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Service = require('../models/service.model');
 const ServiceCounter = require('../models/serviceCounter.model');
 const Counter = require('../models/counter.model');
+const StaffService = require('../models/staffService.model');
 const Ticket = require('../models/ticket.model');
 const ApiError = require('../utils/ApiError');
 const { emitDashboardUpdateSafe } = require('./dashboard.service');
@@ -267,7 +268,17 @@ exports.removeCounter = async (id, counterId) => {
   if (!deleted) {
     throw new ApiError(404, 'Không tìm thấy mối quan hệ giữa dịch vụ và quầy');
   }
-  
+
+  // Đồng bộ StaffService: deactivate các assignment của nhân viên tại quầy này cho service này
+  await StaffService.updateMany(
+    {
+      counterId,
+      serviceId: service._id,
+      isActive: true
+    },
+    { $set: { isActive: false } }
+  );
+
   const result = {
     service,
     removed: true

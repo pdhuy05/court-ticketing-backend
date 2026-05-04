@@ -11,6 +11,12 @@ const StaffServiceSchema = new mongoose.Schema({
     ref: 'Service',
     required: true
   },
+  counterId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Counter',
+    default: null,
+    index: true
+  },
   isActive: {
     type: Boolean,
     default: true
@@ -24,5 +30,7 @@ const StaffServiceSchema = new mongoose.Schema({
 StaffServiceSchema.index({ staffId: 1, serviceId: 1 }, { unique: true });
 StaffServiceSchema.index({ staffId: 1, isActive: 1 });
 StaffServiceSchema.index({ serviceId: 1, isActive: 1 });
+StaffServiceSchema.index({ staffId: 1, counterId: 1, isActive: 1 });
+StaffServiceSchema.index({ counterId: 1, serviceId: 1, isActive: 1 });
 
 module.exports = mongoose.model('StaffService', StaffServiceSchema);

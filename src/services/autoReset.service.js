@@ -5,15 +5,15 @@ const {
   seedAutoResetDefaults
 } = require('./setting.service');
 const { resetTicketsByDate } = require('./ticket');
-const { pad, getDateString, getCurrentHHMM } = require('../utils/dateTime.util');
+const { pad, getDateString, getCurrentHHMM, getAppNow } = require('../utils/dateTime.util');
 
 let _intervalId = null;
 let _lastResetDate = null;
 
-const getTodayString = () => getDateString(new Date());
+const getTodayString = () => getDateString(getAppNow());
 
 const getYesterdayString = () => {
-  const date = new Date();
+  const date = getAppNow();
   date.setDate(date.getDate() - 1);
   return getDateString(date);
 };
@@ -46,7 +46,7 @@ const runAutoReset = async () => {
     logger.info(`Auto reset ticket bắt đầu cho ngày ${yesterday}`);
     const result = await resetTicketsByDate(yesterday, null);
     logger.success(
-      `Auto reset ticket hoàn tất cho ngày ${yesterday} (${result.resetCount} quầy)`
+      `Auto reset ticket hoàn tất cho ngày ${yesterday} (${result.counterCount} quầy)`
     );
   } catch (error) {
     logger.error(`Auto reset ticket thất bại: ${error.message}`);

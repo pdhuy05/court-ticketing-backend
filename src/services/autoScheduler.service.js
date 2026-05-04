@@ -1,7 +1,7 @@
 const logger = require('../utils/Logger');
 const { getShiftAutoStartTime, seedShiftDefaults } = require('./setting.service');
 const { autoStartAllShifts, runServiceScheduler, applyCurrentScheduleState } = require('./shift.service');
-const { pad, getDateString, getCurrentHHMM } = require('../utils/dateTime.util');
+const { pad, getDateString, getCurrentHHMM, getAppNow } = require('../utils/dateTime.util');
 
 let _shiftIntervalId = null;
 let _serviceIntervalId = null;
@@ -16,7 +16,7 @@ const runAutoShiftStart = async () => {
       return;
     }
 
-    const today = getDateString(new Date());
+    const today = getDateString(getAppNow());
 
     if (_lastAutoStartDate === today) {
       return;
@@ -34,8 +34,8 @@ const runAutoShiftStart = async () => {
 
 const runAutoServiceSchedule = async () => {
   try {
-    const now = new Date();
-    const currentMinute = `${getDateString(now)} ${getCurrentHHMM()}`;
+    const now = getAppNow();
+    const currentMinute = `${getDateString(now)} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
     if (_lastRunMinute === currentMinute) {
       return;
@@ -54,11 +54,7 @@ const start = async () => {
   }
 
   await seedShiftDefaults();
-
-  // Khôi phục trạng thái isOpen cho các dịch vụ theo lịch hiện tại
   await applyCurrentScheduleState();
-
-  // Gọi ngay lập tức để không bỏ lỡ phút đầu tiên sau restart
   await runAutoShiftStart();
   await runAutoServiceSchedule();
 

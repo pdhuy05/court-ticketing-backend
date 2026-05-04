@@ -1,5 +1,9 @@
 const User = require('../models/user.model');
+const Counter = require('../models/counter.model');
+const StaffService = require('../models/staffService.model');
+const Ticket = require('../models/ticket.model');
 const ApiError = require('../utils/ApiError');
+const { TicketStatus } = require('../constants/enums');
 const { emitDashboardUpdateSafe } = require('./dashboard.service');
 const {
   getStaffServiceSummary,
@@ -79,14 +83,43 @@ const createStaff = async (data) => {
 };
 
 const updateStaff = async (id, data) => {
-  const staff = await User.findOneAndUpdate(
-    { _id: id, role: 'staff' },
-    data,
-    { returnDocument: 'after', runValidators: true }
-  );
+  const allowedFields = ['fullName', 'isActive', 'counterId', 'note'];
+  const updateData = {};
+  allowedFields.forEach(field => {
+    if (data[field] !== undefined) updateData[field] = data[field];
+  });
+
+  const staff = await User.findOne({ _id: id, role: 'staff' });
   if (!staff) {
     throw new ApiError(404, 'Không tìm thấy nhân viên');
   }
+
+  if (updateData.counterId !== undefined && updateData.counterId !== null) {
+    const counter = await Counter.findOne({
+      _id: updateData.counterId,
+      isActive: true,
+    });
+    if (!counter) {
+      throw new ApiError(404, 'Quầy không tồn tại hoặc đã bị vô hiệu hóa');
+    }
+  }
+
+  if (updateData.counterId !== undefined && String(updateData.counterId) !== String(staff.counterId)) {
+    // Nhân viên đổi quầy: deactivate toàn bộ StaffService cũ
+    await StaffService.updateMany(
+      { staffId: staff._id, isActive: true },
+      { $set: { isActive: false } }
+    );
+  }
+
+  // Nếu có password: validate rồi gán vào model để pre('save') hash bằng bcrypt
+  if (data.password) {
+    ensureStrongPassword(staff.username, data.password);
+    staff.password = data.password;
+  }
+
+  Object.assign(staff, updateData);
+  await staff.save({ validateModifiedOnly: true });
 
   await emitDashboardUpdateSafe('staff-updated');
 
@@ -99,24 +132,45 @@ const deleteStaff = async (id) => {
     throw new ApiError(404, 'Không tìm thấy nhân viên');
   }
 
+  // Xóa toàn bộ StaffService của nhân viên này
+  await StaffService.deleteMany({ staffId: staff._id });
+
   await emitDashboardUpdateSafe('staff-deleted');
 
   return staff;
 };
 
 const assignCounter = async (id, counterId) => {
-  const staff = await User.findOneAndUpdate(
-    { _id: id, role: 'staff' },
-    { counterId },
-    { returnDocument: 'after' }
-  );
+  const staff = await User.findOne({ _id: id, role: 'staff' });
   if (!staff) {
     throw new ApiError(404, 'Không tìm thấy nhân viên');
   }
 
+  // Validate counter tồn tại và đang active
+  if (counterId !== null && counterId !== undefined) {
+    const counter = await Counter.findOne({ _id: counterId, isActive: true });
+    if (!counter) {
+      throw new ApiError(404, 'Quầy không tồn tại hoặc đã bị vô hiệu hóa');
+    }
+  }
+
+  // Nếu đổi sang quầy khác: deactivate StaffService cũ
+  if (staff.counterId && String(staff.counterId) !== String(counterId)) {
+    await StaffService.updateMany(
+      { staffId: staff._id, isActive: true },
+      { $set: { isActive: false } }
+    );
+  }
+
+  const updatedStaff = await User.findOneAndUpdate(
+    { _id: id, role: 'staff' },
+    { counterId },
+    { returnDocument: 'after' }
+  );
+
   await emitDashboardUpdateSafe('staff-counter-assigned');
 
-  return enrichStaff(staff);
+  return enrichStaff(updatedStaff);
 };
 
 const getStaffServices = async (id) => {
@@ -145,25 +199,53 @@ const toggleActive = async (id) => {
   staff.isActive = !staff.isActive;
   await staff.save();
 
+  if (!staff.isActive) {
+    // Trả ticket đang xử lý của nhân viên này về hàng chờ
+    await Ticket.updateMany(
+      { staffId: staff._id, status: TicketStatus.PROCESSING },
+      {
+        $set: {
+          status: TicketStatus.WAITING,
+          staffId: null,
+          counterId: null,
+          serviceCounterId: null,
+          calledAt: null,
+          processingAt: null,
+          isRecall: false,
+          recalledAt: null,
+          recallCounterId: null,
+          skipCount: 0
+        }
+      }
+    );
+  }
+
   await emitDashboardUpdateSafe('staff-toggled');
 
   return enrichStaff(staff);
 };
 
 const removeCounter = async (id) => {
-  const staff = await User.findOneAndUpdate(
-    { _id: id, role: 'staff' },
-    { counterId: null },
-    { returnDocument: 'after', runValidators: true }
-  );
-  
+  const staff = await User.findOne({ _id: id, role: 'staff' });
   if (!staff) {
     throw new ApiError(404, 'Không tìm thấy nhân viên');
   }
 
+  // Deactivate toàn bộ StaffService khi nhân viên rời quầy
+  await StaffService.updateMany(
+    { staffId: staff._id, isActive: true },
+    { $set: { isActive: false } }
+  );
+
+  const updatedStaff = await User.findOneAndUpdate(
+    { _id: id, role: 'staff' },
+    { counterId: null },
+    { returnDocument: 'after', runValidators: true }
+  );
+
   await emitDashboardUpdateSafe('staff-counter-removed');
 
-  return enrichStaff(staff);
+  return enrichStaff(updatedStaff);
 };
 
 module.exports = {

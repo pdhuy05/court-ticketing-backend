@@ -100,7 +100,7 @@ const getSummary = async (range) => {
       {
         $match: {
           status: TicketStatus.COMPLETED,
-          processingAt: { $ne: null },
+          $or: [{ calledAt: { $ne: null } }, { processingAt: { $ne: null } }],
           completedAt: { $gte: start, $lt: end }
         }
       },
@@ -108,7 +108,12 @@ const getSummary = async (range) => {
         $project: {
           durationInMinutes: {
             $divide: [
-              { $subtract: ['$completedAt', '$processingAt'] },
+              {
+                $subtract: [
+                  '$completedAt',
+                  { $ifNull: ['$calledAt', '$processingAt'] }
+                ]
+              },
               1000 * 60
             ]
           }
@@ -144,7 +149,7 @@ const getSummary = async (range) => {
 };
 
 const getServiceStats = async () => {
-  const services = await Service.find()
+  const services = await Service.find({ isActive: true })
     .sort({ displayOrder: 1, createdAt: 1 })
     .select('code name isActive displayOrder');
 
@@ -188,7 +193,7 @@ const getServiceStats = async () => {
 };
 
 const getCounterStats = async (overloadThreshold = DEFAULT_OVERLOAD_THRESHOLD) => {
-  const counters = await Counter.find()
+  const counters = await Counter.find({ isActive: true })
     .sort({ number: 1, code: 1 })
     .select('code name number isActive processedCount currentTicketId');
 
@@ -211,6 +216,7 @@ const getCounterStats = async (overloadThreshold = DEFAULT_OVERLOAD_THRESHOLD) =
 
       const waiting = serviceIds.length
         ? await Ticket.countDocuments({
+            queueCounterId: counter._id,
             serviceId: { $in: serviceIds },
             status: TicketStatus.WAITING
           })
@@ -377,14 +383,22 @@ const getReportSummary = async (range) => {
       {
         $match: {
           status: TicketStatus.COMPLETED,
-          processingAt: { $ne: null },
+          $or: [{ calledAt: { $ne: null } }, { processingAt: { $ne: null } }],
           completedAt: { $gte: start, $lt: end }
         }
       },
       {
         $project: {
           durationInMinutes: {
-            $divide: [{ $subtract: ['$completedAt', '$processingAt'] }, 1000 * 60]
+            $divide: [
+              {
+                $subtract: [
+                  '$completedAt',
+                  { $ifNull: ['$calledAt', '$processingAt'] }
+                ]
+              },
+              1000 * 60
+            ]
           }
         }
       },
@@ -411,7 +425,7 @@ const getReportSummary = async (range) => {
 
 const getServiceReport = async (range) => {
   const { start, end } = range;
-  const services = await Service.find()
+  const services = await Service.find({ isActive: true })
     .sort({ displayOrder: 1, createdAt: 1 })
     .select('code name isActive displayOrder');
 
@@ -455,7 +469,7 @@ const getServiceReport = async (range) => {
 
 const getCounterReport = async (range, overloadThreshold = DEFAULT_OVERLOAD_THRESHOLD) => {
   const { start, end } = range;
-  const counters = await Counter.find()
+  const counters = await Counter.find({ isActive: true })
     .sort({ number: 1, code: 1 })
     .select('code name number isActive processedCount');
 
@@ -483,8 +497,10 @@ const getCounterReport = async (range, overloadThreshold = DEFAULT_OVERLOAD_THRE
         }),
         serviceIds.length
           ? Ticket.countDocuments({
+              queueCounterId: counter._id,
               serviceId: { $in: serviceIds },
-              status: TicketStatus.WAITING
+              status: TicketStatus.WAITING,
+              isRecall: false
             })
           : 0
       ]);
