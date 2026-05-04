@@ -17,6 +17,18 @@ const getCounterServiceRelations = async (counterId) => {
   }).populate('serviceId', 'name code icon displayOrder isActive');
 };
 
+// Lấy tất cả dịch vụ của quầy (kể cả dịch vụ bị vô hiệu hóa) để phục vụ việc gán cho nhân viên
+const getCounterServiceRelationsForAssignment = async (counterId) => {
+  if (!counterId) {
+    return [];
+  }
+
+  return ServiceCounter.find({
+    counterId,
+    isActive: true
+  }).populate('serviceId', 'name code icon displayOrder isActive');
+};
+
 const buildServiceSnapshot = (service) => ({
   id: service._id,
   _id: service._id,
@@ -91,9 +103,16 @@ const assignServicesToStaff = async (staffId, serviceIds = []) => {
     throw new ApiError(400, 'Nhân viên chưa được gán quầy nên chưa thể gán dịch vụ');
   }
 
+  // Dùng tất cả dịch vụ của quầy (kể cả inactive) để validate khi gán
+  const counterRelationsForAssignment = await getCounterServiceRelationsForAssignment(staff.counterId);
+  const allCounterServiceIds = counterRelationsForAssignment
+    .map((r) => r.serviceId)
+    .filter(Boolean)
+    .map((s) => String(s._id));
+  const allCounterServiceIdSet = new Set(allCounterServiceIds);
+  const invalidServiceIds = normalizedServiceIds.filter((serviceId) => !allCounterServiceIdSet.has(serviceId));
+
   const counterAccess = await getStaffServiceAccess(null, staff.counterId);
-  const availableServiceIdSet = new Set(counterAccess.availableServiceIds);
-  const invalidServiceIds = normalizedServiceIds.filter((serviceId) => !availableServiceIdSet.has(serviceId));
 
   if (invalidServiceIds.length > 0) {
     throw new ApiError(400, 'Chỉ được gán các dịch vụ mà quầy của nhân viên đang phục vụ');
@@ -193,6 +212,7 @@ const assertStaffCanHandleService = async (staffId, counterId, serviceId) => {
 
 module.exports = {
   getCounterServiceRelations,
+  getCounterServiceRelationsForAssignment,
   getStaffServiceAccess,
   ensureStaffHasAccessibleServices,
   assignServicesToStaff,

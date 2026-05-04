@@ -1,7 +1,7 @@
 const User = require('../models/user.model');
-const StaffService = require('../models/staffService.model');
 const jwt = require('jsonwebtoken');
 const ApiError = require('../utils/ApiError');
+const { getStaffServiceAccess } = require('./staff-permission.service');
 
 const login = async (username, password) => {
   const user = await User.findOne({ username });
@@ -13,11 +13,14 @@ const login = async (username, password) => {
   if (!user.isActive) throw new ApiError(403, 'Tài khoản đã bị khóa');
 
   if (user.role === 'staff') {
-    const hasCounter = !!user.counterId;
-    const hasService = await StaffService.exists({ staffId: user._id, isActive: true });
+    if (!user.counterId) {
+      throw new ApiError(403, 'Tài khoản chưa được gán quầy. Vui lòng liên hệ quản trị viên.');
+    }
 
-    if (!hasCounter || !hasService) {
-      throw new ApiError(403, 'Bạn chưa được gán quầy hoặc dịch vụ. Vui lòng liên hệ admin.');
+    const access = await getStaffServiceAccess(user._id, user.counterId);
+
+    if (!access.assignedServices || access.assignedServices.length === 0) {
+      throw new ApiError(403, 'Tài khoản không có dịch vụ nào đang hoạt động. Vui lòng liên hệ quản trị viên để được cấp quyền dịch vụ.');
     }
   }
 
