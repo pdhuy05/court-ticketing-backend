@@ -124,7 +124,6 @@ const assignServicesToStaff = async (staffId, serviceIds = []) => {
       const existing = existingMap.get(serviceId);
 
       if (existing) {
-        // Luôn cập nhật counterId và isActive để đảm bảo đồng bộ với quầy hiện tại
         existing.counterId = staff.counterId;
         existing.isActive = true;
         await existing.save();

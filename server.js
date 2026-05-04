@@ -10,8 +10,6 @@ const stuckProcessingRecovery = require('./src/services/stuckProcessingRecovery.
 const User = require("./src/models/user.model");
 const { setIO } = require("./src/utils/socketEmitter");
 
-database();
-
 const server = http.createServer(app);
 
 const io = socketIo(server, {
@@ -163,22 +161,40 @@ io.on('connection', (socket) => {
 
 setIO(io);
 
-server.listen(config.port, () => {
-  autoResetScheduler.start().catch((error) => {
-    console.error(`Khởi động auto reset thất bại: ${error.message}`);
-  });
-  autoSchedulerService.start().catch((error) => {
-    console.error(`Khởi động auto scheduler thất bại: ${error.message}`);
-  });
-  stuckProcessingRecovery.start().catch((error) => {
-    console.error(`Khởi động stuck ticket recovery thất bại: ${error.message}`);
-  });
+server.listen(config.port, async () => {
   console.log(`
 \x1b[42m\x1b[30m ✓ \x1b[0m \x1b[36mServer\x1b[0m: Khởi động thành công!
 \x1b[90m  ├─ URL: \x1b[0m\x1b[33mhttp://localhost:${config.port}\x1b[0m
 \x1b[90m  ├─ Port: \x1b[0m${config.port}
 \x1b[90m  ├─ Time: \x1b[0m${new Date().toLocaleString()}
-\x1b[90m  └─ Developer: \x1b[0m\x1b[35m[HuyPham]\x1b[0m \x1b[35m[KhanhPhuong]\x1b[0m
+\x1b[90m  ├─ Developer: \x1b[0m\x1b[35m[HuyPham]\x1b[0m \x1b[35m[KhanhPhuong]\x1b[0m
 \x1b[90m  └─ Copyright: \x1b[0m\x1b[32m© 2026 Phạm Đình Huy & Trần Phương Khánh\x1b[0m
 `);
+
+  await database();
+
+  const schedulerResults = await Promise.allSettled([
+    autoResetScheduler.start(),
+    autoSchedulerService.start(),
+    stuckProcessingRecovery.start(),
+  ]);
+
+  const [resetResult, schedulerResult, stuckResult] = schedulerResults;
+
+  const statusIcon = (r) => r.status === 'fulfilled' ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m';
+
+  console.log(`  \x1b[90m╔══════════════════════════════════════════╗\x1b[0m`);
+  console.log(`  \x1b[90m║\x1b[0m    \x1b[36mSchedulers\x1b[0m                            \x1b[90m║\x1b[0m`);
+  console.log(`  \x1b[90m╠══════════════════════════════════════════╣\x1b[0m`);
+  console.log(`  \x1b[90m│\x1b[0m  ${statusIcon(resetResult)} 🔄  Auto reset ticket                 \x1b[90m│\x1b[0m`);
+  console.log(`  \x1b[90m│\x1b[0m  ${statusIcon(schedulerResult)} 📅  Auto mở ca & lịch dịch vụ         \x1b[90m│\x1b[0m`);
+  console.log(`  \x1b[90m│\x1b[0m  ${statusIcon(stuckResult)} 🔓  Giải phóng vé bị kẹt              \x1b[90m│\x1b[0m`);
+  console.log(`  \x1b[90m╚══════════════════════════════════════════╝\x1b[0m`);
+
+  schedulerResults.forEach((r, i) => {
+    if (r.status === 'rejected') {
+      const names = ['auto reset', 'auto scheduler', 'stuck ticket recovery'];
+      console.error(`\x1b[31m  Khởi động ${names[i]} thất bại: ${r.reason?.message}\x1b[0m`);
+    }
+  });
 });

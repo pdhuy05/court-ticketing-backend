@@ -105,14 +105,12 @@ const updateStaff = async (id, data) => {
   }
 
   if (updateData.counterId !== undefined && String(updateData.counterId) !== String(staff.counterId)) {
-    // Nhân viên đổi quầy: deactivate toàn bộ StaffService cũ
     await StaffService.updateMany(
       { staffId: staff._id, isActive: true },
       { $set: { isActive: false } }
     );
   }
 
-  // Nếu có password: validate rồi gán vào model để pre('save') hash bằng bcrypt
   if (data.password) {
     ensureStrongPassword(staff.username, data.password);
     staff.password = data.password;
@@ -132,7 +130,6 @@ const deleteStaff = async (id) => {
     throw new ApiError(404, 'Không tìm thấy nhân viên');
   }
 
-  // Xóa toàn bộ StaffService của nhân viên này
   await StaffService.deleteMany({ staffId: staff._id });
 
   await emitDashboardUpdateSafe('staff-deleted');
@@ -146,7 +143,6 @@ const assignCounter = async (id, counterId) => {
     throw new ApiError(404, 'Không tìm thấy nhân viên');
   }
 
-  // Validate counter tồn tại và đang active
   if (counterId !== null && counterId !== undefined) {
     const counter = await Counter.findOne({ _id: counterId, isActive: true });
     if (!counter) {
@@ -154,7 +150,6 @@ const assignCounter = async (id, counterId) => {
     }
   }
 
-  // Nếu đổi sang quầy khác: deactivate StaffService cũ
   if (staff.counterId && String(staff.counterId) !== String(counterId)) {
     await StaffService.updateMany(
       { staffId: staff._id, isActive: true },
@@ -200,7 +195,6 @@ const toggleActive = async (id) => {
   await staff.save();
 
   if (!staff.isActive) {
-    // Trả ticket đang xử lý của nhân viên này về hàng chờ
     await Ticket.updateMany(
       { staffId: staff._id, status: TicketStatus.PROCESSING },
       {
@@ -231,7 +225,6 @@ const removeCounter = async (id) => {
     throw new ApiError(404, 'Không tìm thấy nhân viên');
   }
 
-  // Deactivate toàn bộ StaffService khi nhân viên rời quầy
   await StaffService.updateMany(
     { staffId: staff._id, isActive: true },
     { $set: { isActive: false } }

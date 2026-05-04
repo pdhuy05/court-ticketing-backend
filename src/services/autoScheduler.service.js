@@ -60,9 +60,6 @@ const start = async () => {
 
   _shiftIntervalId = setInterval(runAutoShiftStart, 60 * 1000);
   _serviceIntervalId = setInterval(runAutoServiceSchedule, 60 * 1000);
-
-  logger.info('Đã khởi động scheduler auto mở ca staff');
-  logger.info('Đã khởi động scheduler tự động mở/đóng dịch vụ');
 };
 
 const stop = () => {

@@ -121,8 +121,6 @@ const start = async () => {
             logger.error(`stuckProcessingRecovery: ${error.message}`);
         });
     }, intervalMs);
-
-    logger.info('Đã khởi động scheduler giải phóng ticket processing bị kẹt');
 };
 
 const stop = () => {

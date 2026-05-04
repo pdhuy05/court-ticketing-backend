@@ -269,7 +269,6 @@ exports.removeCounter = async (id, counterId) => {
     throw new ApiError(404, 'Không tìm thấy mối quan hệ giữa dịch vụ và quầy');
   }
 
-  // Đồng bộ StaffService: deactivate các assignment của nhân viên tại quầy này cho service này
   await StaffService.updateMany(
     {
       counterId,

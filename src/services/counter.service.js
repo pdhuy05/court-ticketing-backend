@@ -209,7 +209,6 @@ exports.update = async (id, data) => {
         { $set: { isActive: false } }
       );
 
-      // Đồng bộ StaffService trực tiếp theo counterId
       await StaffService.updateMany(
         {
           counterId: counter._id,
@@ -312,7 +311,6 @@ exports.removeService = async (id, serviceId) => {
     throw new ApiError(404, 'Không tìm thấy mối quan hệ giữa quầy và dịch vụ');
   }
 
-  // Đồng bộ StaffService
   await StaffService.updateMany(
     {
       counterId: counter._id,
@@ -401,7 +399,6 @@ exports.toggleActive = async (id) => {
     );
     await Counter.findByIdAndUpdate(counter._id, { currentTicketId: null });
 
-    // Đồng bộ StaffService trực tiếp theo counterId
     await StaffService.updateMany(
       { counterId: counter._id, isActive: true },
       { $set: { isActive: false } }
