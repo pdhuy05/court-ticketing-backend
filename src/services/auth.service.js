@@ -1,4 +1,5 @@
 const User = require('../models/user.model');
+const StaffService = require('../models/staffService.model');
 const jwt = require('jsonwebtoken');
 const ApiError = require('../utils/ApiError');
 
@@ -10,6 +11,15 @@ const login = async (username, password) => {
   if (!isMatch) throw new ApiError(401, 'Mật khẩu không đúng');
 
   if (!user.isActive) throw new ApiError(403, 'Tài khoản đã bị khóa');
+
+  if (user.role === 'staff') {
+    const hasCounter = !!user.counterId;
+    const hasService = await StaffService.exists({ staffId: user._id, isActive: true });
+
+    if (!hasCounter || !hasService) {
+      throw new ApiError(403, 'Bạn chưa được gán quầy hoặc dịch vụ. Vui lòng liên hệ admin.');
+    }
+  }
 
   user.lastLoginAt = new Date();
   await user.save();
