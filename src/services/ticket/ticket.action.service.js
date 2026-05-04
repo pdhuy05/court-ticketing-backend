@@ -126,38 +126,24 @@ const resolveIssueCounter = async (serviceId, requestedCounterId = null) => {
     throw new ApiError(400, 'Dịch vụ này hiện chưa có quầy phục vụ.');
   }
 
-  const filteredRelations = await getAvailableCounterRelationsForOnDutyStaff(serviceId, activeRelations);
-
-  if (filteredRelations.length === 0) {
-    throw new ApiError(400, 'Dịch vụ này hiện không có nhân viên đang làm ca. Vui lòng quay lại sau.');
-  }
-
   if (requestedCounterId) {
-    const matchedRelation = filteredRelations.find((relation) => (
+    const matchedRelation = activeRelations.find((relation) => (
       String(relation.counterId?._id || relation.counterId) === String(requestedCounterId)
     ));
 
     if (!matchedRelation?.counterId?.isActive) {
-      const requestedCounterExists = activeRelations.some((relation) => (
-        String(relation.counterId?._id || relation.counterId) === String(requestedCounterId)
-      ));
-
-      if (requestedCounterExists) {
-        throw new ApiError(400, 'Quầy được chọn hiện không có nhân viên đang làm ca cho dịch vụ này');
-      }
-
       throw new ApiError(400, 'Quầy được chọn không phục vụ dịch vụ này hoặc đã bị khóa');
     }
 
     return {
       issueCounter: matchedRelation.counterId,
-      availableCounters: filteredRelations
+      availableCounters: activeRelations
     };
   }
 
   return {
-    issueCounter: getPrimaryCounter(filteredRelations),
-    availableCounters: filteredRelations
+    issueCounter: getPrimaryCounter(activeRelations),
+    availableCounters: activeRelations
   };
 };
 
