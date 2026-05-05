@@ -5,7 +5,7 @@ const app = require("./src/app");
 const database = require("./src/config/database");
 const ticketService = require("./src/services/ticket.service");
 const autoResetScheduler = require("./src/services/autoReset.service");
-const autoSchedulerService = require('./src/services/autoScheduler.service');
+const autoSchedulerService = require("./src/services/autoScheduler.service");
 const User = require("./src/models/user.model");
 const { setIO } = require("./src/utils/socketEmitter");
 
@@ -16,42 +16,47 @@ const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
     origin: "*",
-    methods: ["GET", "POST"]
-  }
+    methods: ["GET", "POST"],
+  },
 });
 
-io.on('connection', (socket) => {
-  console.log(`\x1b[44m\x1b[37m \x1b[0m \x1b[36mSocket\x1b[0m: Client connected - ID: \x1b[33m${socket.id}\x1b[0m`);
+io.on("connection", (socket) => {
+  console.log(
+    `\x1b[44m\x1b[37m \x1b[0m \x1b[36mSocket\x1b[0m: Client connected - ID: \x1b[33m${socket.id}\x1b[0m`,
+  );
 
   const joinCounterRoom = (counterId) => {
     if (!counterId) {
-      socket.emit('socket-error', {
-        message: 'Thiếu counterId để join room staff'
+      socket.emit("socket-error", {
+        message: "Thiếu counterId để join room staff",
       });
       return;
     }
 
     const room = `counter-${counterId}`;
     socket.join(room);
-    socket.emit('joined-counter-room', {
+    socket.emit("joined-counter-room", {
       counterId: String(counterId),
-      room
+      room,
     });
-    console.log(`\x1b[42m\x1b[30m \x1b[0m \x1b[36mSocket\x1b[0m: Client \x1b[33m${socket.id}\x1b[0m joined \x1b[35mcounter ${counterId}\x1b[0m`);
+    console.log(
+      `\x1b[42m\x1b[30m \x1b[0m \x1b[36mSocket\x1b[0m: Client \x1b[33m${socket.id}\x1b[0m joined \x1b[35mcounter ${counterId}\x1b[0m`,
+    );
 
-    ticketService.getStaffDisplay(counterId)
+    ticketService
+      .getStaffDisplay(counterId)
       .then((data) => {
-        socket.emit('staff-display-updated', {
-          reason: 'joined-counter-room',
+        socket.emit("staff-display-updated", {
+          reason: "joined-counter-room",
           counterId: String(counterId),
           updatedAt: new Date().toISOString(),
-          data
+          data,
         });
       })
       .catch((error) => {
-        socket.emit('socket-error', {
-          message: error.message || 'Không thể tải dữ liệu staff display',
-          counterId: String(counterId)
+        socket.emit("socket-error", {
+          message: error.message || "Không thể tải dữ liệu staff display",
+          counterId: String(counterId),
         });
       });
   };
@@ -67,14 +72,14 @@ io.on('connection', (socket) => {
 
     const staff = await User.findOne({
       _id: staffId,
-      role: 'staff',
-      isActive: true
-    }).select('counterId');
+      role: "staff",
+      isActive: true,
+    }).select("counterId");
 
     if (!staff?.counterId) {
-      socket.emit('socket-error', {
-        message: 'Nhân viên chưa được gán quầy hoặc không tồn tại',
-        staffId: String(staffId)
+      socket.emit("socket-error", {
+        message: "Nhân viên chưa được gán phòng hoặc không tồn tại",
+        staffId: String(staffId),
       });
       return;
     }
@@ -82,81 +87,91 @@ io.on('connection', (socket) => {
     const counterId = String(staff.counterId);
 
     if (requestedCounterId && String(requestedCounterId) !== counterId) {
-      socket.emit('socket-error', {
-        message: 'counterId không khớp với quầy của nhân viên',
+      socket.emit("socket-error", {
+        message: "counterId không khớp với phòng của nhân viên",
         staffId: String(staffId),
-        counterId
+        counterId,
       });
       return;
     }
 
     const room = `staff-display-${staffId}`;
     socket.join(room);
-    socket.emit('joined-counter-room', {
+    socket.emit("joined-counter-room", {
       counterId,
       staffId: String(staffId),
-      room
+      room,
     });
-    console.log(`\x1b[42m\x1b[30m \x1b[0m \x1b[36mSocket\x1b[0m: Client \x1b[33m${socket.id}\x1b[0m joined \x1b[35mstaff ${staffId}\x1b[0m`);
+    console.log(
+      `\x1b[42m\x1b[30m \x1b[0m \x1b[36mSocket\x1b[0m: Client \x1b[33m${socket.id}\x1b[0m joined \x1b[35mstaff ${staffId}\x1b[0m`,
+    );
 
-    ticketService.getStaffDisplay(counterId, staffId)
+    ticketService
+      .getStaffDisplay(counterId, staffId)
       .then((data) => {
-        socket.emit('staff-display-updated', {
-          reason: 'joined-counter-room',
+        socket.emit("staff-display-updated", {
+          reason: "joined-counter-room",
           counterId,
           staffId: String(staffId),
           updatedAt: new Date().toISOString(),
-          data
+          data,
         });
       })
       .catch((error) => {
-        socket.emit('socket-error', {
-          message: error.message || 'Không thể tải dữ liệu staff display',
+        socket.emit("socket-error", {
+          message: error.message || "Không thể tải dữ liệu staff display",
           counterId,
-          staffId: String(staffId)
+          staffId: String(staffId),
         });
       });
   };
 
-  socket.on('join-waiting-room', () => {
-    socket.join('waiting-room');
-    console.log(`\x1b[43m\x1b[30m \x1b[0m \x1b[36mSocket\x1b[0m: Client \x1b[33m${socket.id}\x1b[0m joined \x1b[35mwaiting-room\x1b[0m`);
+  socket.on("join-waiting-room", () => {
+    socket.join("waiting-room");
+    console.log(
+      `\x1b[43m\x1b[30m \x1b[0m \x1b[36mSocket\x1b[0m: Client \x1b[33m${socket.id}\x1b[0m joined \x1b[35mwaiting-room\x1b[0m`,
+    );
 
-    ticketService.getWaitingRoomData()
+    ticketService
+      .getWaitingRoomData()
       .then((data) => {
-        socket.emit('waiting-room-snapshot', {
+        socket.emit("waiting-room-snapshot", {
           updatedAt: new Date().toISOString(),
           totalWaiting: data.tickets.length,
           tickets: data.tickets,
-          lastIssuedByCounter: data.lastIssuedByCounter
+          lastIssuedByCounter: data.lastIssuedByCounter,
         });
       })
       .catch((error) => {
-        socket.emit('socket-error', {
-          message: error.message || 'Không thể tải dữ liệu màn hình chờ'
+        socket.emit("socket-error", {
+          message: error.message || "Không thể tải dữ liệu màn hình chờ",
         });
       });
   });
 
-  socket.on('join-counter', (counterId) => {
+  socket.on("join-counter", (counterId) => {
     joinCounterRoom(counterId);
   });
 
-  socket.on('join-staff-display', (payload) => {
+  socket.on("join-staff-display", (payload) => {
     joinStaffDisplayRoom(payload).catch((error) => {
-      socket.emit('socket-error', {
-        message: error.message || 'Không thể join room staff display'
+      socket.emit("socket-error", {
+        message: error.message || "Không thể join room staff display",
       });
     });
   });
 
-  socket.on('join-admin-dashboard', () => {
-    socket.join('admin-dashboard');
-    console.log(`\x1b[45m\x1b[37m \x1b[0m \x1b[36mSocket\x1b[0m: Client \x1b[33m${socket.id}\x1b[0m joined \x1b[35madmin-dashboard\x1b[0m`);
+  socket.on("join-admin-dashboard", () => {
+    socket.join("admin-dashboard");
+    console.log(
+      `\x1b[45m\x1b[37m \x1b[0m \x1b[36mSocket\x1b[0m: Client \x1b[33m${socket.id}\x1b[0m joined \x1b[35madmin-dashboard\x1b[0m`,
+    );
   });
 
-  socket.on('disconnect', () => {
-    console.log(`\x1b[41m\x1b[37m \x1b[0m \x1b[36mSocket\x1b[0m: Client disconnected - ID: \x1b[33m${socket.id}\x1b[0m`);
+  socket.on("disconnect", () => {
+    console.log(
+      `\x1b[41m\x1b[37m \x1b[0m \x1b[36mSocket\x1b[0m: Client disconnected - ID: \x1b[33m${socket.id}\x1b[0m`,
+    );
   });
 });
 
@@ -174,23 +189,25 @@ server.listen(config.port, async () => {
 
   const schedulerResults = await Promise.allSettled([
     autoResetScheduler.start(),
-    autoSchedulerService.start()
+    autoSchedulerService.start(),
   ]);
 
   const labels = [
-    'Auto reset ticket',
-    'Auto mở ca staff & tự động mở/đóng dịch vụ'
+    "Auto reset ticket",
+    "Auto mở ca staff & tự động mở/đóng quầy",
   ];
 
   const lines = schedulerResults.map((result, i) => {
     const isLast = i === schedulerResults.length - 1;
-    const prefix = isLast ? '  └─' : '  ├─';
-    if (result.status === 'fulfilled') {
+    const prefix = isLast ? "  └─" : "  ├─";
+    if (result.status === "fulfilled") {
       return `\x1b[90m${prefix}\x1b[0m \x1b[32m✓\x1b[0m ${labels[i]}`;
     } else {
       return `\x1b[90m${prefix}\x1b[0m \x1b[31m✗\x1b[0m ${labels[i]}: ${result.reason?.message}`;
     }
   });
 
-  console.log(`\x1b[42m\x1b[30m ✓ \x1b[0m \x1b[36mSchedulers\x1b[0m:\n${lines.join('\n')}\n`);
+  console.log(
+    `\x1b[42m\x1b[30m ✓ \x1b[0m \x1b[36mSchedulers\x1b[0m:\n${lines.join("\n")}\n`,
+  );
 });

@@ -1,11 +1,11 @@
-const Service = require('../services/service.service');
-const asyncHandler = require('../utils/asyncHandler');
+const Service = require("../services/service.service");
+const asyncHandler = require("../utils/asyncHandler");
 
 exports.getAllService = async (req, res, next) => {
   const services = await Service.getAll();
   res.json({
     success: true,
-    data: services
+    data: services,
   });
 };
 
@@ -14,7 +14,7 @@ exports.getActiveService = async (req, res, next) => {
   res.json({
     success: true,
     count: services.length,
-    data: services
+    data: services,
   });
 };
 
@@ -22,7 +22,7 @@ exports.getServiceById = async (req, res, next) => {
   const service = await Service.getById(req.params.id);
   res.json({
     success: true,
-    data: service
+    data: service,
   });
 };
 
@@ -31,7 +31,7 @@ exports.createService = async (req, res, next) => {
   res.status(201).json({
     success: true,
     data: service,
-    message: 'Tạo dịch vụ thành công'
+    message: "Tạo quầy thành công",
   });
 };
 
@@ -40,7 +40,7 @@ exports.updateService = async (req, res, next) => {
   res.json({
     success: true,
     data: service,
-    message: 'Cập nhật dịch vụ thành công'
+    message: "Cập nhật quầy thành công",
   });
 };
 
@@ -48,8 +48,8 @@ exports.deleteService = async (req, res, next) => {
   const service = await Service.remove(req.params.id);
   res.json({
     success: true,
-    message: 'Xóa thành công',
-    data: service
+    message: "Xóa thành công",
+    data: service,
   });
 };
 
@@ -60,7 +60,7 @@ exports.addCounters = async (req, res, next) => {
   res.json({
     success: true,
     data: result,
-    message: `Thêm ${result.addedCounters} quầy vào dịch vụ thành công`
+    message: `Thêm ${result.addedCounters} phòng vào quầy thành công`,
   });
 };
 
@@ -71,7 +71,7 @@ exports.removeCounter = async (req, res, next) => {
   res.json({
     success: true,
     data: result,
-    message: 'Xóa quầy khỏi dịch vụ thành công'
+    message: "Xóa phòng khỏi quầy thành công",
   });
 };
 
@@ -80,7 +80,7 @@ exports.getCountersByService = async (req, res, next) => {
 
   res.json({
     success: true,
-    data: result
+    data: result,
   });
 };
 
@@ -88,7 +88,7 @@ exports.getStats = async (req, res, next) => {
   const stats = await Service.getStats(req.params.id);
   res.json({
     success: true,
-    data: stats
+    data: stats,
   });
 };
 

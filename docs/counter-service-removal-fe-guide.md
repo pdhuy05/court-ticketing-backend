@@ -1,10 +1,10 @@
-# Hướng Dẫn FE: Gỡ Dịch Vụ Khỏi Quầy và Xóa Quầy An Toàn
+# Hướng Dẫn FE: Gỡ quầy Khỏi phòng và Xóa phòng An Toàn
 
 Tài liệu này hướng dẫn frontend xử lý đúng tính năng:
 
-- gỡ một dịch vụ khỏi quầy
-- cập nhật danh sách dịch vụ của quầy
-- xóa cả quầy
+- gỡ một quầy khỏi phòng
+- cập nhật danh sách quầy của phòng
+- xóa cả phòng
 
 Sau thay đổi mới của backend, các thao tác này sẽ bị chặn nếu còn vé tồn đọng.
 
@@ -19,13 +19,13 @@ Mục tiêu:
 
 Mỗi ticket khi tạo sẽ được gán:
 
-- `queueCounterId`: quầy xếp hàng ban đầu
-- `serviceId`: dịch vụ của vé
+- `queueCounterId`: phòng xếp hàng ban đầu
+- `serviceId`: quầy của vé
 
 Nếu admin:
 
-- gỡ dịch vụ khỏi quầy
-- hoặc xóa quầy
+- gỡ quầy khỏi phòng
+- hoặc xóa phòng
 
 trong khi vẫn còn vé `WAITING` hoặc `PROCESSING`, thì các vé đó có thể bị “mồ côi” và không còn đường xử lý.
 
@@ -35,7 +35,7 @@ Vì vậy backend bây giờ sẽ chặn các thao tác nguy hiểm này.
 
 Có 3 case chính:
 
-### 2.1 Gỡ một dịch vụ khỏi quầy
+### 2.1 Gỡ một quầy khỏi phòng
 
 API liên quan:
 
@@ -43,23 +43,23 @@ API liên quan:
 
 Backend sẽ chặn nếu còn:
 
-- vé `WAITING` của dịch vụ đó trong queue của quầy
-- vé `PROCESSING` của dịch vụ đó đang được xử lý tại quầy
+- vé `WAITING` của quầy đó trong queue của phòng
+- vé `PROCESSING` của quầy đó đang được xử lý tại phòng
 
-### 2.2 Cập nhật lại danh sách dịch vụ của quầy
+### 2.2 Cập nhật lại danh sách quầy của phòng
 
 API liên quan:
 
 - `PUT /api/counters/:id`
 - hoặc `PATCH /api/counters/:id`
 
-Tùy theo FE đang gọi route cập nhật quầy nào trong project.
+Tùy theo FE đang gọi route cập nhật phòng nào trong project.
 
 Backend sẽ chặn nếu:
 
 - trong danh sách service bị loại bỏ có service vẫn còn vé tồn đọng
 
-### 2.3 Xóa cả quầy
+### 2.3 Xóa cả phòng
 
 API liên quan:
 
@@ -67,12 +67,12 @@ API liên quan:
 
 Backend sẽ chặn nếu còn:
 
-- vé `WAITING` trong queue của quầy
-- vé `PROCESSING` đang được xử lý tại quầy
+- vé `WAITING` trong queue của phòng
+- vé `PROCESSING` đang được xử lý tại phòng
 
 ## 3. Quy tắc mới FE cần nhớ
 
-### 3.1 Với thao tác gỡ một service khỏi quầy
+### 3.1 Với thao tác gỡ một service khỏi phòng
 
 Không được phép gỡ nếu còn:
 
@@ -86,7 +86,7 @@ hoặc:
 - `serviceId = serviceId`
 - `status = PROCESSING`
 
-### 3.2 Với thao tác xóa quầy
+### 3.2 Với thao tác xóa phòng
 
 Không được phép xóa nếu còn:
 
@@ -96,7 +96,7 @@ hoặc:
 
 - `counterId = counterId` và `status = PROCESSING`
 
-### 3.3 Với thao tác cập nhật service list của quầy
+### 3.3 Với thao tác cập nhật service list của phòng
 
 FE có thể gửi:
 
@@ -107,30 +107,30 @@ Nhưng nếu các service bị remove vẫn còn vé tồn đọng thì backend 
 
 ## 4. API response FE sẽ gặp
 
-### 4.1 Khi gỡ service khỏi quầy nhưng còn vé tồn
+### 4.1 Khi gỡ service khỏi phòng nhưng còn vé tồn
 
 Ví dụ response:
 
 ```json
 {
   "success": false,
-  "message": "Không thể gỡ dịch vụ khỏi quầy vì còn 3 vé đang chờ và 1 vé đang xử lý cho dịch vụ này."
+  "message": "Không thể gỡ quầy khỏi phòng vì còn 3 vé đang chờ và 1 vé đang xử lý cho quầy này."
 }
 ```
 
 Ý nghĩa:
 
-- `3 vé đang chờ`: đang nằm trong queue của quầy
-- `1 vé đang xử lý`: đang được staff xử lý tại quầy
+- `3 vé đang chờ`: đang nằm trong queue của phòng
+- `1 vé đang xử lý`: đang được staff xử lý tại phòng
 
-### 4.2 Khi cập nhật serviceIds của quầy nhưng remove nhầm service còn vé
+### 4.2 Khi cập nhật serviceIds của phòng nhưng remove nhầm service còn vé
 
 Ví dụ response:
 
 ```json
 {
   "success": false,
-  "message": "Không thể gỡ dịch vụ khỏi quầy vì vẫn còn vé tồn đọng của các dịch vụ bị loại bỏ. Hiện còn 5 vé đang chờ và 2 vé đang xử lý."
+  "message": "Không thể gỡ quầy khỏi phòng vì vẫn còn vé tồn đọng của các quầy bị loại bỏ. Hiện còn 5 vé đang chờ và 2 vé đang xử lý."
 }
 ```
 
@@ -139,25 +139,25 @@ Ví dụ response:
 - FE đang submit danh sách service mới
 - một hoặc nhiều service bị remove vẫn còn vé tồn
 
-### 4.3 Khi xóa quầy nhưng còn vé tồn
+### 4.3 Khi xóa phòng nhưng còn vé tồn
 
 Ví dụ response:
 
 ```json
 {
   "success": false,
-  "message": "Không thể xóa quầy vì còn 4 vé đang chờ và 1 vé đang xử lý."
+  "message": "Không thể xóa phòng vì còn 4 vé đang chờ và 1 vé đang xử lý."
 }
 ```
 
-### 4.4 Khi xóa quầy nhưng vẫn còn service được gán
+### 4.4 Khi xóa phòng nhưng vẫn còn service được gán
 
 Ví dụ response:
 
 ```json
 {
   "success": false,
-  "message": "Không thể xóa quầy đang có 3 dịch vụ được gán. Vui lòng gỡ hết dịch vụ trước khi xóa."
+  "message": "Không thể xóa phòng đang có 3 quầy được gán. Vui lòng gỡ hết quầy trước khi xóa."
 }
 ```
 
@@ -182,34 +182,34 @@ Không nên hiển thị chung chung kiểu:
 
 ## 6. Gợi ý UX cho từng màn hình
 
-## 6.1 Màn hình chi tiết quầy
+## 6.1 Màn hình chi tiết phòng
 
-Nếu FE có màn hình chi tiết 1 quầy với danh sách dịch vụ:
+Nếu FE có màn hình chi tiết 1 phòng với danh sách quầy:
 
 Mỗi dòng service nên có:
 
-- tên dịch vụ
-- mã dịch vụ
+- tên quầy
+- mã quầy
 - nút `Gỡ`
 
 Khi admin bấm `Gỡ`:
 
 1. mở confirm modal
 2. nội dung nên ghi rõ:
-   - thao tác này sẽ làm quầy ngừng phục vụ dịch vụ
+   - thao tác này sẽ làm phòng ngừng phục vụ quầy
    - nếu còn vé tồn đọng thì backend sẽ chặn
 3. nếu API fail -> hiển thị chính xác message backend trả về
 
 ### Gợi ý text confirm
 
 ```text
-Bạn có chắc muốn gỡ dịch vụ này khỏi quầy không?
-Nếu vẫn còn vé đang chờ hoặc đang xử lý cho dịch vụ này tại quầy, hệ thống sẽ không cho phép gỡ.
+Bạn có chắc muốn gỡ quầy này khỏi phòng không?
+Nếu vẫn còn vé đang chờ hoặc đang xử lý cho quầy này tại phòng, hệ thống sẽ không cho phép gỡ.
 ```
 
-## 6.2 Màn hình sửa quầy
+## 6.2 Màn hình sửa phòng
 
-Nếu FE có form sửa quầy cho phép chọn nhiều service:
+Nếu FE có form sửa phòng cho phép chọn nhiều service:
 
 Admin có thể:
 
@@ -235,25 +235,25 @@ Nếu bị chặn:
 
 Nghĩa là:
 
-- quầy được phép không còn dịch vụ nào
+- phòng được phép không còn quầy nào
 - nhưng chỉ khi không có vé tồn đọng của các service bị remove
 
-## 6.3 Màn hình danh sách quầy
+## 6.3 Màn hình danh sách phòng
 
-Nếu FE có nút `Xóa quầy`:
+Nếu FE có nút `Xóa phòng`:
 
 Khi bấm xóa:
 
 1. mở confirm modal
 2. warning rõ:
-   - nếu quầy còn service đang gán -> bị chặn
-   - nếu quầy còn vé đang chờ / đang xử lý -> bị chặn
+   - nếu phòng còn service đang gán -> bị chặn
+   - nếu phòng còn vé đang chờ / đang xử lý -> bị chặn
 
 ### Gợi ý text confirm
 
 ```text
-Bạn có chắc muốn xóa quầy này không?
-Chỉ có thể xóa khi quầy không còn dịch vụ được gán và không còn vé đang chờ hoặc đang xử lý.
+Bạn có chắc muốn xóa phòng này không?
+Chỉ có thể xóa khi phòng không còn quầy được gán và không còn vé đang chờ hoặc đang xử lý.
 ```
 
 ## 7. FE không cần làm gì thêm ở client
@@ -285,11 +285,11 @@ Response thường trả về object counter đã cập nhật:
   "success": true,
   "data": {
     "_id": "counter-id",
-    "name": "Quầy 1",
+    "name": "phòng 1",
     "services": [
       {
         "_id": "service-a",
-        "name": "Dịch vụ A",
+        "name": "quầy A",
         "code": "A01"
       }
     ]
@@ -300,22 +300,22 @@ Response thường trả về object counter đã cập nhật:
 FE có thể:
 
 - update local state trực tiếp từ `data.services`
-- hoặc refetch lại chi tiết quầy
+- hoặc refetch lại chi tiết phòng
 
-### 8.2 Sau khi update quầy thành công
+### 8.2 Sau khi update phòng thành công
 
 FE nên:
 
 - đóng modal / form edit nếu UX phù hợp
-- refresh danh sách service mới của quầy
+- refresh danh sách service mới của phòng
 
-### 8.3 Sau khi xóa quầy thành công
+### 8.3 Sau khi xóa phòng thành công
 
 FE nên:
 
-- remove quầy khỏi list
-- hoặc refetch lại list quầy
-- redirect khỏi trang chi tiết quầy nếu đang đứng trong đó
+- remove phòng khỏi list
+- hoặc refetch lại list phòng
+- redirect khỏi trang chi tiết phòng nếu đang đứng trong đó
 
 ## 9. Gợi ý state cho frontend
 
@@ -378,7 +378,7 @@ async function deleteCounter(counterId: string) {
 
 ## 11. Flow FE nên triển khai
 
-### 11.1 Flow gỡ 1 service khỏi quầy
+### 11.1 Flow gỡ 1 service khỏi phòng
 
 1. admin bấm `Gỡ`
 2. mở confirm modal
@@ -390,7 +390,7 @@ async function deleteCounter(counterId: string) {
    - giữ nguyên UI
    - hiện đúng message backend
 
-### 11.2 Flow sửa danh sách service của quầy
+### 11.2 Flow sửa danh sách service của phòng
 
 1. admin mở form edit
 2. thay đổi danh sách service
@@ -401,9 +401,9 @@ async function deleteCounter(counterId: string) {
    - giữ nguyên form
    - hiện đúng message backend
 
-### 11.3 Flow xóa quầy
+### 11.3 Flow xóa phòng
 
-1. admin bấm `Xóa quầy`
+1. admin bấm `Xóa phòng`
 2. confirm
 3. gọi API delete
 4. nếu success:
@@ -413,15 +413,15 @@ async function deleteCounter(counterId: string) {
 
 ## 12. Các message FE cần ưu tiên hiển thị nguyên văn
 
-- `Không thể gỡ dịch vụ khỏi quầy vì còn X vé đang chờ và Y vé đang xử lý cho dịch vụ này.`
-- `Không thể gỡ dịch vụ khỏi quầy vì vẫn còn vé tồn đọng của các dịch vụ bị loại bỏ. Hiện còn X vé đang chờ và Y vé đang xử lý.`
-- `Không thể xóa quầy vì còn X vé đang chờ và Y vé đang xử lý.`
-- `Không thể xóa quầy đang có N dịch vụ được gán. Vui lòng gỡ hết dịch vụ trước khi xóa.`
+- `Không thể gỡ quầy khỏi phòng vì còn X vé đang chờ và Y vé đang xử lý cho quầy này.`
+- `Không thể gỡ quầy khỏi phòng vì vẫn còn vé tồn đọng của các quầy bị loại bỏ. Hiện còn X vé đang chờ và Y vé đang xử lý.`
+- `Không thể xóa phòng vì còn X vé đang chờ và Y vé đang xử lý.`
+- `Không thể xóa phòng đang có N quầy được gán. Vui lòng gỡ hết quầy trước khi xóa.`
 
 ## 13. Checklist tích hợp cho FE
 
 - Có confirm modal khi gỡ service
-- Có confirm modal khi xóa quầy
+- Có confirm modal khi xóa phòng
 - Không reset form khi update counter bị backend chặn
 - Hiển thị message backend nguyên văn cho các lỗi business
 - Refetch hoặc update local state sau khi thao tác thành công
@@ -429,8 +429,8 @@ async function deleteCounter(counterId: string) {
 
 ## 14. Tóm tắt ngắn gọn
 
-- Gỡ service khỏi quầy sẽ bị chặn nếu còn vé `WAITING` hoặc `PROCESSING` của service đó
-- Xóa quầy sẽ bị chặn nếu còn vé `WAITING` hoặc `PROCESSING` trong quầy
-- Update danh sách service của quầy sẽ bị chặn nếu các service bị remove còn vé tồn
+- Gỡ service khỏi phòng sẽ bị chặn nếu còn vé `WAITING` hoặc `PROCESSING` của service đó
+- Xóa phòng sẽ bị chặn nếu còn vé `WAITING` hoặc `PROCESSING` trong phòng
+- Update danh sách service của phòng sẽ bị chặn nếu các service bị remove còn vé tồn
 - FE chỉ cần gọi API và hiển thị message backend rõ ràng
 

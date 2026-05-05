@@ -10,20 +10,20 @@ const AdminUserRoute = require("./routers/admin/user.route");
 const AdminDashboardRoute = require("./routers/admin/dashboard.route");
 const AdminTicketRoute = require("./routers/admin/ticket.route");
 const AdminSettingsRoute = require("./routers/admin/settings.route");
-const AdminShiftRoute = require('./routers/admin/shift.route');
+const AdminShiftRoute = require("./routers/admin/shift.route");
 const StatisticsRoute = require("./routers/statistics.route");
 const { notifySystemError } = require("./services/admin-notification.service");
 
 const duplicateFieldLabelMap = {
-  name: 'Tên',
-  code: 'Mã',
-  number: 'Số quầy',
-  username: 'Tên đăng nhập',
-  ipAddress: 'Địa chỉ IP máy in',
-  counterId: 'Quầy',
-  'serviceId+counterId': 'Quan hệ quầy và dịch vụ',
-  'counterId+serviceId': 'Quan hệ quầy và dịch vụ',
-  'staffId+serviceId': 'Quan hệ nhân viên và dịch vụ'
+  name: "Tên",
+  code: "Mã",
+  number: "Số phòng",
+  username: "Tên đăng nhập",
+  ipAddress: "Địa chỉ IP máy in",
+  counterId: "phòng",
+  "serviceId+counterId": "Quan hệ phòng và quầy",
+  "counterId+serviceId": "Quan hệ phòng và quầy",
+  "staffId+serviceId": "Quan hệ nhân viên và quầy",
 };
 
 const getDuplicateFieldLabel = (err) => {
@@ -33,7 +33,7 @@ const getDuplicateFieldLabel = (err) => {
     return null;
   }
 
-  const compoundKey = duplicatedFields.join('+');
+  const compoundKey = duplicatedFields.join("+");
   if (duplicateFieldLabelMap[compoundKey]) {
     return duplicateFieldLabelMap[compoundKey];
   }
@@ -50,36 +50,45 @@ const normalizeError = (err) => {
     return err;
   }
 
-  if (err?.name === 'ValidationError') {
+  if (err?.name === "ValidationError") {
     const message = Object.values(err.errors || {})
       .map((item) => item.message)
       .filter(Boolean)
-      .join('; ');
+      .join("; ");
 
-    return new ApiError(400, message || 'Dữ liệu không hợp lệ');
+    return new ApiError(400, message || "Dữ liệu không hợp lệ");
   }
 
-  if (err?.name === 'CastError') {
-    return new ApiError(400, `${err.path || 'Dữ liệu'} không hợp lệ`);
+  if (err?.name === "CastError") {
+    return new ApiError(400, `${err.path || "Dữ liệu"} không hợp lệ`);
   }
 
   if (err?.code === 11000) {
     const fieldLabel = getDuplicateFieldLabel(err);
 
     if (fieldLabel) {
-      return new ApiError(409, `${fieldLabel} đã tồn tại, vui lòng chọn giá trị khác`);
+      return new ApiError(
+        409,
+        `${fieldLabel} đã tồn tại, vui lòng chọn giá trị khác`,
+      );
     }
 
-    return new ApiError(409, 'Dữ liệu đã tồn tại, vui lòng kiểm tra lại');
+    return new ApiError(409, "Dữ liệu đã tồn tại, vui lòng kiểm tra lại");
   }
 
-  if (err?.name === 'MongoServerError' || err?.name === 'MongoError' || err?.name === 'MongooseError') {
-    return new ApiError(500, `Lỗi database: ${err.message || 'Database error'}`);
+  if (
+    err?.name === "MongoServerError" ||
+    err?.name === "MongoError" ||
+    err?.name === "MongooseError"
+  ) {
+    return new ApiError(
+      500,
+      `Lỗi database: ${err.message || "Database error"}`,
+    );
   }
 
-  return new ApiError(500, err?.message || 'Internal Server Error');
+  return new ApiError(500, err?.message || "Internal Server Error");
 };
-
 
 const app = express();
 
@@ -90,30 +99,30 @@ app.use(express.json());
 app.use("/api/services", ServicesRoute);
 app.use("/api/counters", CountersRoute);
 app.use("/api/tickets", TicketsRoute);
-app.use("/api/printers", PrintersRoute)
-app.use("/api/auth", AuthRoute)
-app.use("/api/admin/users", AdminUserRoute);  
+app.use("/api/printers", PrintersRoute);
+app.use("/api/auth", AuthRoute);
+app.use("/api/admin/users", AdminUserRoute);
 app.use("/api/admin/dashboard", AdminDashboardRoute);
 app.use("/api/admin/tickets", AdminTicketRoute);
 app.use("/api/admin/settings", AdminSettingsRoute);
-app.use('/api/admin/shift', AdminShiftRoute);
+app.use("/api/admin/shift", AdminShiftRoute);
 app.use("/api/statistics", StatisticsRoute);
 
 app.use((err, req, res, next) => {
   const normalizedError = normalizeError(err);
 
   notifySystemError({
-    title: 'API lỗi',
-    message: normalizedError.message || 'Internal Server Error',
+    title: "API lỗi",
+    message: normalizedError.message || "Internal Server Error",
     source: `${req.method} ${req.originalUrl}`,
     meta: {
-      statusCode: normalizedError.statusCode || 500
-    }
+      statusCode: normalizedError.statusCode || 500,
+    },
   });
 
   res.status(normalizedError.statusCode || 500).json({
     success: false,
-    message: normalizedError.message || 'Internal Server Error',
+    message: normalizedError.message || "Internal Server Error",
   });
 });
 

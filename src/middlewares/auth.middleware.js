@@ -1,56 +1,82 @@
-const jwt = require('jsonwebtoken');
-const User = require('../models/user.model');
+const jwt = require("jsonwebtoken");
+const User = require("../models/user.model");
 
 const authMiddleware = async (req, res, next) => {
   try {
-    const token = req.headers.authorization?.split(' ')[1];
+    const token = req.headers.authorization?.split(" ")[1];
     if (!token) {
-      return res.status(401).json({ success: false, message: 'Chưa đăng nhập' });
+      return res
+        .status(401)
+        .json({ success: false, message: "Chưa đăng nhập" });
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id).select('-password');
+    const user = await User.findById(decoded.id).select("-password");
     if (!user || !user.isActive) {
-      return res.status(401).json({ success: false, message: 'Tài khoản không tồn tại hoặc đã bị vô hiệu hóa' });
+      return res
+        .status(401)
+        .json({
+          success: false,
+          message: "Tài khoản không tồn tại hoặc đã bị vô hiệu hóa",
+        });
     }
 
     req.user = user;
     next();
   } catch (error) {
-    return res.status(401).json({ success: false, message: 'Token không hợp lệ hoặc đã hết hạn' });
+    return res
+      .status(401)
+      .json({ success: false, message: "Token không hợp lệ hoặc đã hết hạn" });
   }
 };
 
 const adminOnly = (req, res, next) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ success: false, message: 'Chỉ admin mới có quyền truy cập' });
+  if (req.user.role !== "admin") {
+    return res
+      .status(403)
+      .json({ success: false, message: "Chỉ admin mới có quyền truy cập" });
   }
   next();
 };
 
 const staffOnly = (req, res, next) => {
-  if (req.user.role !== 'staff') {
-    return res.status(403).json({ success: false, message: 'Chỉ nhân viên mới có quyền truy cập' });
+  if (req.user.role !== "staff") {
+    return res
+      .status(403)
+      .json({ success: false, message: "Chỉ nhân viên mới có quyền truy cập" });
   }
   next();
 };
 
 const counterStaff = (req, res, next) => {
-  if (req.user.role === 'staff' && !req.user.counterId) {
-    return res.status(403).json({ success: false, message: 'Tài khoản chưa được gán quầy, vui lòng liên hệ quản trị viên' });
+  if (req.user.role === "staff" && !req.user.counterId) {
+    return res
+      .status(403)
+      .json({
+        success: false,
+        message:
+          "Tài khoản chưa được gán phòng, vui lòng liên hệ quản trị viên",
+      });
   }
   next();
 };
 
 const staffOnDuty = (req, res, next) => {
-  if (req.user.role === 'staff' && !req.user.onDuty) {
+  if (req.user.role === "staff" && !req.user.onDuty) {
     return res.status(403).json({
       success: false,
-      message: 'Bạn chưa bắt đầu ca làm việc. Vui lòng mở ca trước khi tiếp tục'
+      message:
+        "Bạn chưa bắt đầu ca làm việc. Vui lòng mở ca trước khi tiếp tục",
     });
   }
 
   next();
 };
 
-module.exports = { authMiddleware, adminOnly, staffOnly, counterStaff, staffOnDuty };
+module.exports = {
+  authMiddleware,
+  adminOnly,
+  staffOnly,
+  counterStaff,
+  staffOnDuty,
+};

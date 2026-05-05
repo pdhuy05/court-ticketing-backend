@@ -56,7 +56,7 @@ Neu staff chua duoc gan service rieng, backend co the tra:
 ```json
 {
   "success": false,
-  "message": "Nhân viên chưa được gán dịch vụ nào tại quầy hiện tại"
+  "message": "Nhân viên chưa được gán quầy nào tại phòng hiện tại"
 }
 ```
 
@@ -262,7 +262,7 @@ await api.post('/api/tickets/call-by-id', {
 Neu backend tra:
 
 ```text
-403 - Nhân viên chưa được gán dịch vụ nào tại quầy hiện tại
+403 - Nhân viên chưa được gán quầy nào tại phòng hiện tại
 ```
 
 Frontend nen hien thi thong diep ro rang:
@@ -274,7 +274,7 @@ Tai khoan chua duoc admin gan dich vu xu ly. Vui long lien he quan tri vien.
 Neu backend tra:
 
 ```text
-403 - Nhân viên không được phép gọi ticket thuộc dịch vụ này
+403 - Nhân viên không được phép gọi ticket thuộc quầy này
 ```
 
 Frontend nen hien thi:

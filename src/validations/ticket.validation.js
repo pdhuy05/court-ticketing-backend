@@ -1,88 +1,81 @@
-const Joi = require('joi');
-const { idParamSchema, objectId } = require('./common.validation');
+const Joi = require("joi");
+const { idParamSchema, objectId } = require("./common.validation");
 
 const createTicketSchema = Joi.object({
-    serviceId: Joi.string()
-        .trim()
-        .pattern(/^[0-9a-fA-F]{24}$/)
-        .required()
-        .messages({
-            'any.required': 'Vui lòng chọn dịch vụ',
-            'string.pattern.base': 'ID dịch vụ không hợp lệ'
-        }),
-    name: Joi.string()
-        .required()
-        .trim()
-        .min(2)
-        .max(100)
-        .messages({
-            'any.required': 'Tên khách hàng là bắt buộc',
-            'string.empty': 'Tên khách hàng không được để trống',
-            'string.min': 'Tên khách hàng phải có ít nhất 2 ký tự',
-            'string.max': 'Tên khách hàng không được vượt quá 100 ký tự'
-        }),
-    phone: Joi.string()
-        .required()
-        .trim()
-        .pattern(/^[0-9]{8,15}$/)
-        .messages({
-            'any.required': 'Số điện thoại là bắt buộc',
-            'string.empty': 'Số điện thoại không được để trống',
-            'string.pattern.base': 'Số điện thoại phải gồm ít nhất 8 chữ số'
-        }),
-    counterId: objectId.optional()
+  serviceId: Joi.string()
+    .trim()
+    .pattern(/^[0-9a-fA-F]{24}$/)
+    .required()
+    .messages({
+      "any.required": "Vui lòng chọn quầy",
+      "string.pattern.base": "ID quầy không hợp lệ",
+    }),
+  name: Joi.string().required().trim().min(2).max(100).messages({
+    "any.required": "Tên khách hàng là bắt buộc",
+    "string.empty": "Tên khách hàng không được để trống",
+    "string.min": "Tên khách hàng phải có ít nhất 2 ký tự",
+    "string.max": "Tên khách hàng không được vượt quá 100 ký tự",
+  }),
+  phone: Joi.string()
+    .required()
+    .trim()
+    .pattern(/^[0-9]{8,15}$/)
+    .messages({
+      "any.required": "Số điện thoại là bắt buộc",
+      "string.empty": "Số điện thoại không được để trống",
+      "string.pattern.base": "Số điện thoại phải gồm ít nhất 8 chữ số",
+    }),
+  counterId: objectId.optional(),
 });
 
 const callNextSchema = Joi.object({
-    counterId: Joi.string()
-        .pattern(/^[0-9a-fA-F]{24}$/)
-        .required()
-        .messages({
-            'any.required': 'Vui lòng chọn quầy',
-            'string.pattern.base': 'ID quầy không hợp lệ'
-        })
+  counterId: Joi.string()
+    .pattern(/^[0-9a-fA-F]{24}$/)
+    .required()
+    .messages({
+      "any.required": "Vui lòng chọn phòng",
+      "string.pattern.base": "ID phòng không hợp lệ",
+    }),
 });
 
 const callByIdSchema = Joi.object({
-    ticketId: objectId
-        .required()
-        .messages({
-            'any.required': 'ticketId là bắt buộc',
-            'string.empty': 'ticketId không được để trống',
-            'string.pattern.base': 'ticketId phải là ObjectId hợp lệ (24 ký tự hex)'
-        })
+  ticketId: objectId.required().messages({
+    "any.required": "ticketId là bắt buộc",
+    "string.empty": "ticketId không được để trống",
+    "string.pattern.base": "ticketId phải là ObjectId hợp lệ (24 ký tự hex)",
+  }),
 });
 
 const completeTicketSchema = Joi.object({}).optional();
 
 const cancelTicketSchema = Joi.object({
-    reason: Joi.string().optional().max(500)
+  reason: Joi.string().optional().max(500),
 });
 
 const skipTicketSchema = Joi.object({
-    reason: Joi.string().optional().max(500)
+  reason: Joi.string().optional().max(500),
 });
 
 const backToWaitingSchema = Joi.object({
-    position: Joi.string().valid('front', 'back').default('front')
+  position: Joi.string().valid("front", "back").default("front"),
 });
 
 module.exports = {
-    ticketIdParamSchema: idParamSchema,
-    counterDisplayParamsSchema: Joi.object({
-        counterId: objectId.required().messages({
-            'any.required': 'ID quầy là bắt buộc'
-        })
+  ticketIdParamSchema: idParamSchema,
+  counterDisplayParamsSchema: Joi.object({
+    counterId: objectId.required().messages({
+      "any.required": "ID phòng là bắt buộc",
     }),
-    createTicketSchema,
-    callNextSchema,
-    callByIdSchema,
-    completeTicketSchema,
-    cancelTicketSchema,
-    backToWaitingSchema,
-    skipTicketSchema,
-    recallTicketParamsSchema: idParamSchema,
-    cancelRecallTicketSchema: Joi.object({
-        reason: Joi.string().trim().max(500).optional()
-    })
+  }),
+  createTicketSchema,
+  callNextSchema,
+  callByIdSchema,
+  completeTicketSchema,
+  cancelTicketSchema,
+  backToWaitingSchema,
+  skipTicketSchema,
+  recallTicketParamsSchema: idParamSchema,
+  cancelRecallTicketSchema: Joi.object({
+    reason: Joi.string().trim().max(500).optional(),
+  }),
 };

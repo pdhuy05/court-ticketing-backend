@@ -2,7 +2,7 @@
 
 > **Ngày cập nhật:** 17/04/2026  
 > **Backend version:** court-ticket-backend (latest)  
-> **Tác động:** Nhiều nhân viên cùng quầy có thể xử lý ticket song song
+> **Tác động:** Nhiều nhân viên cùng phòng có thể xử lý ticket song song
 
 ---
 
@@ -11,20 +11,20 @@
 ### Trước đây (Single Processing)
 
 ```
-Quầy 1 ──► chỉ 1 ticket PROCESSING tại 1 thời điểm
-         ──► Staff B muốn gọi số ──► bị chặn "Quầy đang xử lý ticket khác"
+phòng 1 ──► chỉ 1 ticket PROCESSING tại 1 thời điểm
+         ──► Staff B muốn gọi số ──► bị chặn "phòng đang xử lý ticket khác"
 ```
 
 ### Bây giờ (Multi Processing)
 
 ```
-Quầy 1 ──► Staff A đang xử lý ND-2031
+phòng 1 ──► Staff A đang xử lý ND-2031
          ──► Staff B gọi thêm RT-2032 ──► ✅ OK, cả 2 cùng processing
          ──► Mỗi staff chỉ thấy ticket của mình
 ```
 
 > [!IMPORTANT]
-> **Quy tắc cốt lõi:** Mỗi staff chỉ thấy và quản lý ticket mà chính mình đang xử lý. Không còn khái niệm "ticket duy nhất của quầy".
+> **Quy tắc cốt lõi:** Mỗi staff chỉ thấy và quản lý ticket mà chính mình đang xử lý. Không còn khái niệm "ticket duy nhất của phòng".
 
 ---
 
@@ -55,7 +55,7 @@ Quầy 1 ──► Staff A đang xử lý ND-2031
   "data": {
     "counter": {
       "id": "...",
-      "name": "Quầy 1",
+      "name": "phòng 1",
       "number": 1,
       "isActive": true,
       "processedCount": 15
@@ -80,7 +80,7 @@ Quầy 1 ──► Staff A đang xử lý ND-2031
 > [!WARNING]
 > ### ⚠️ `currentTicket` giờ là ticket của CHÍNH staff đang đăng nhập
 > 
-> **Trước:** `currentTicket` = ticket duy nhất đang processing của cả quầy  
+> **Trước:** `currentTicket` = ticket duy nhất đang processing của cả phòng  
 > **Sau:** `currentTicket` = ticket mà **staff hiện tại** (theo JWT) đang xử lý
 > 
 > - Staff A gọi `GET /staff/display` → thấy ticket của Staff A
@@ -99,7 +99,7 @@ Quầy 1 ──► Staff A đang xử lý ND-2031
 {
   "success": true,
   "data": {
-    "counter": { "id": "...", "name": "Quầy 1", ... },
+    "counter": { "id": "...", "name": "phòng 1", ... },
     "services": [...],
     "currentTicket": { ... } | null,
     "staffName": "...",
@@ -169,7 +169,7 @@ Quầy 1 ──► Staff A đang xử lý ND-2031
 > | Field | Ý nghĩa | Khi nào dùng |
 > |-------|---------|-------------|
 > | `currentTicket` | Phần tử đầu tiên của `processingTickets` (hoặc `null`) | **Backward compatible** — FE cũ vẫn chạy đúng |
-> | `processingTickets` | **Mảng đầy đủ** tất cả ticket đang processing tại quầy | **FE mới** nên dùng field này để hiển thị trên TV |
+> | `processingTickets` | **Mảng đầy đủ** tất cả ticket đang processing tại phòng | **FE mới** nên dùng field này để hiển thị trên TV |
 > 
 > **Khuyến nghị:** Dùng `processingTickets` thay vì `currentTicket` cho counter display.
 
@@ -188,7 +188,7 @@ Quầy 1 ──► Staff A đang xử lý ND-2031
 
 | Trước | Sau |
 |-------|-----|
-| Nếu quầy đang có ticket processing → **trả lỗi 400** | Chỉ kiểm tra quầy `isActive` → **cho phép gọi thêm** |
+| Nếu phòng đang có ticket processing → **trả lỗi 400** | Chỉ kiểm tra phòng `isActive` → **cho phép gọi thêm** |
 | Staff bị chặn cho đến khi complete/skip ticket hiện tại | Staff gọi thoải mái, ticket mới gán `staffId` của staff gọi |
 
 > [!NOTE]
@@ -205,7 +205,7 @@ Quầy 1 ──► Staff A đang xử lý ND-2031
 }
 ```
 
-Hành vi tương tự `call-next` — không còn chặn khi quầy đang xử lý ticket khác.
+Hành vi tương tự `call-next` — không còn chặn khi phòng đang xử lý ticket khác.
 
 ---
 
@@ -237,7 +237,7 @@ Hành vi tương tự `complete` — backend refresh `currentTicketId` thay vì 
 | Room/Channel | Mô tả |
 |-------------|--------|
 | `waiting-room` | Màn hình chờ công khai |
-| `counter-{counterId}` | Tất cả staff trong quầy |
+| `counter-{counterId}` | Tất cả staff trong phòng |
 | `staff-display-{staffId}` | **Riêng từng staff** — data đã filter theo staffId |
 
 ### 4.2. Event: `staff-display-updated`
@@ -265,13 +265,13 @@ socket.on('staff-display-updated', (payload) => {
 // Trên room counter-{counterId} — tất cả staff đều nhận
 socket.on('ticket-called', (data) => {
   // data.ticket = ticket vừa được gọi
-  // data.counterName = tên quầy
+  // data.counterName = tên phòng
   // → Dùng để phát âm thanh, hiển thị thông báo
 });
 
 socket.on('new-current-ticket', (data) => {
   // data.currentTicket = ticket mới
-  // ⚠️ Event này broadcast cho cả quầy
+  // ⚠️ Event này broadcast cho cả phòng
   // → Nên dùng staff-display-updated thay vì event này để render
 });
 ```
@@ -366,13 +366,13 @@ interface TicketPresentation {
 
 ## 7. Test Scenarios cho FE
 
-### Scenario 1: Hai staff cùng quầy gọi số song song
+### Scenario 1: Hai staff cùng phòng gọi số song song
 
 ```
 1. Staff A đăng nhập → GET /staff/display → currentTicket = null
 2. Staff A gọi POST /call-next → nhận ticket ND-031
 3. Staff A gọi GET /staff/display → currentTicket = ND-031 ✅
-4. Staff B đăng nhập (cùng quầy) → GET /staff/display → currentTicket = null ✅
+4. Staff B đăng nhập (cùng phòng) → GET /staff/display → currentTicket = null ✅
 5. Staff B gọi POST /call-next → nhận ticket RT-032 (KHÔNG bị chặn)
 6. Staff B gọi GET /staff/display → currentTicket = RT-032 ✅
 7. Staff A gọi GET /staff/display → currentTicket = ND-031 ✅ (không bị ảnh hưởng)
@@ -415,7 +415,7 @@ interface TicketPresentation {
 **A:** `null` — giống như trước.
 
 ### Q: `processingTickets` có thể rỗng không?
-**A:** Có. Khi không có ticket nào đang processing tại quầy → `processingTickets = []` và `currentTicket = null`.
+**A:** Có. Khi không có ticket nào đang processing tại phòng → `processingTickets = []` và `currentTicket = null`.
 
 ### Q: Nút "Gọi số" có cần gửi `staffId` không?
 **A:** Không. Backend tự lấy `staffId` từ JWT token (`req.user._id`). FE chỉ cần gửi `counterId`.

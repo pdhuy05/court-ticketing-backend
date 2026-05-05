@@ -1,11 +1,15 @@
-const logger = require('../utils/Logger');
+const logger = require("../utils/Logger");
 const {
   getAutoResetTime,
   isAutoResetEnabled,
-  seedAutoResetDefaults
-} = require('./setting.service');
-const { resetTicketsByDate } = require('./ticket');
-const { pad, getDateString, getCurrentHHMM } = require('../utils/dateTime.util');
+  seedAutoResetDefaults,
+} = require("./setting.service");
+const { resetTicketsByDate } = require("./ticket");
+const {
+  pad,
+  getDateString,
+  getCurrentHHMM,
+} = require("../utils/dateTime.util");
 
 let _intervalId = null;
 let _lastResetDate = null;
@@ -22,7 +26,7 @@ const runAutoReset = async () => {
   try {
     const [enabled, resetTime] = await Promise.all([
       isAutoResetEnabled(),
-      getAutoResetTime()
+      getAutoResetTime(),
     ]);
 
     if (!enabled) {
@@ -46,7 +50,7 @@ const runAutoReset = async () => {
     logger.info(`Auto reset ticket bắt đầu cho ngày ${yesterday}`);
     const result = await resetTicketsByDate(yesterday, null);
     logger.success(
-      `Auto reset ticket hoàn tất cho ngày ${yesterday} (${result.resetCount} quầy)`
+      `Auto reset ticket hoàn tất cho ngày ${yesterday} (${result.resetCount} phòng)`,
     );
   } catch (error) {
     logger.error(`Auto reset ticket thất bại: ${error.message}`);
@@ -69,7 +73,7 @@ const stop = () => {
   if (_intervalId) {
     clearInterval(_intervalId);
     _intervalId = null;
-    logger.info('Đã dừng scheduler auto reset ticket');
+    logger.info("Đã dừng scheduler auto reset ticket");
   }
 };
 
@@ -77,5 +81,5 @@ module.exports = {
   getTodayString,
   getYesterdayString,
   start,
-  stop
+  stop,
 };

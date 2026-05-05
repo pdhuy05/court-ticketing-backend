@@ -1,361 +1,388 @@
-const ticketService = require('../services/ticket.service');
-const printerService = require('../services/printer.service');
-const settingService = require('../services/setting.service');
-const { speakCallTicket } = require('../services/tts.service');
-const Printer = require('../models/printer.model');
-const Counter = require('../models/counter.model');
-const Ticket = require('../models/ticket.model');
-const ApiError = require('../utils/ApiError');
-const asyncHandler = require('../utils/asyncHandler');
-const logger = require('../utils/Logger');
-const { emitAdminNotificationSafe } = require('../services/admin-notification.service');
-const { buildTicketPresentation } = require('../services/ticket/ticket.helpers');
+const ticketService = require("../services/ticket.service");
+const printerService = require("../services/printer.service");
+const settingService = require("../services/setting.service");
+const { speakCallTicket } = require("../services/tts.service");
+const Printer = require("../models/printer.model");
+const Counter = require("../models/counter.model");
+const Ticket = require("../models/ticket.model");
+const ApiError = require("../utils/ApiError");
+const asyncHandler = require("../utils/asyncHandler");
+const logger = require("../utils/Logger");
+const {
+  emitAdminNotificationSafe,
+} = require("../services/admin-notification.service");
+const {
+  buildTicketPresentation,
+} = require("../services/ticket/ticket.helpers");
 
 const ensureAssignedCounterId = (req) => {
-    const counterId = req.user?.counterId;
+  const counterId = req.user?.counterId;
 
-    if (!counterId) {
-        throw new ApiError(400, 'Tài khoản chưa được gán quầy');
-    }
+  if (!counterId) {
+    throw new ApiError(400, "Tài khoản chưa được gán phòng");
+  }
 
-    return counterId;
+  return counterId;
 };
 
 const speakTicketIfTtsEnabled = async (displayNumber, counterName) => {
-    if (!(await settingService.isTtsEnabled())) {
-        return;
-    }
+  if (!(await settingService.isTtsEnabled())) {
+    return;
+  }
 
-    speakCallTicket(displayNumber, counterName).catch((error) => {
-        logger.error(`Lỗi phát âm thanh: ${error.message}`);
-    });
+  speakCallTicket(displayNumber, counterName).catch((error) => {
+    logger.error(`Lỗi phát âm thanh: ${error.message}`);
+  });
 };
 
 const queueAutoPrintTicket = ({ ticket, service, ticketNumberDisplay }) => {
-    setImmediate(async () => {
-        try {
-            const defaultPrinter = await Printer.findOne({
-                isDefault: true,
-                isActive: true
-            });
+  setImmediate(async () => {
+    try {
+      const defaultPrinter = await Printer.findOne({
+        isDefault: true,
+        isActive: true,
+      });
 
-            if (!defaultPrinter) {
-                logger.warning('Không tìm thấy máy in mặc định');
-                return;
-            }
+      if (!defaultPrinter) {
+        logger.warning("Không tìm thấy máy in mặc định");
+        return;
+      }
 
-            if (
-                defaultPrinter.type !== 'network' ||
-                !defaultPrinter.connection?.host
-            ) {
-                logger.warning(`Máy in ${defaultPrinter.name} chưa hỗ trợ loại kết nối ${defaultPrinter.type}`);
-                return;
-            }
+      if (
+        defaultPrinter.type !== "network" ||
+        !defaultPrinter.connection?.host
+      ) {
+        logger.warning(
+          `Máy in ${defaultPrinter.name} chưa hỗ trợ loại kết nối ${defaultPrinter.type}`,
+        );
+        return;
+      }
 
-            if (!printerService.hasPrinter(defaultPrinter.code)) {
-                printerService.addNetworkPrinter(
-                    defaultPrinter.code,
-                    defaultPrinter.connection.host,
-                    defaultPrinter.connection.port || 9100
-                );
-            }
+      if (!printerService.hasPrinter(defaultPrinter.code)) {
+        printerService.addNetworkPrinter(
+          defaultPrinter.code,
+          defaultPrinter.connection.host,
+          defaultPrinter.connection.port || 9100,
+        );
+      }
 
-            await printerService.printTicket(
-                defaultPrinter.code,
-                ticket,
-                service
-            );
+      await printerService.printTicket(defaultPrinter.code, ticket, service);
 
-            logger.success(`Đã in ticket ${ticketNumberDisplay} trên máy ${defaultPrinter.name}`);
-        } catch (printError) {
-            logger.error(`Lỗi in ticket: ${printError.message}`);
-            emitAdminNotificationSafe({
-                type: 'printer-error',
-                severity: 'warning',
-                title: 'Lỗi in ticket',
-                message: printError.message,
-                source: 'ticket.controller.queueAutoPrintTicket',
-                meta: {
-                    printer: 'default',
-                    serviceId: service?._id,
-                    ticketId: ticket?._id
-                }
-            });
-        }
-    });
+      logger.success(
+        `Đã in ticket ${ticketNumberDisplay} trên máy ${defaultPrinter.name}`,
+      );
+    } catch (printError) {
+      logger.error(`Lỗi in ticket: ${printError.message}`);
+      emitAdminNotificationSafe({
+        type: "printer-error",
+        severity: "warning",
+        title: "Lỗi in ticket",
+        message: printError.message,
+        source: "ticket.controller.queueAutoPrintTicket",
+        meta: {
+          printer: "default",
+          serviceId: service?._id,
+          ticketId: ticket?._id,
+        },
+      });
+    }
+  });
 };
 
 exports.create = asyncHandler(async (req, res) => {
-    const result = await ticketService.createTicket(req.body);
-    result.ticket.displayNumber = result.ticketNumberDisplay;
+  const result = await ticketService.createTicket(req.body);
+  result.ticket.displayNumber = result.ticketNumberDisplay;
 
-    const ticketData = {
-        _id: result.ticket._id,
-        number: result.ticket.number,
-        ticketNumber: result.ticket.ticketNumber,
-        formattedNumber: result.ticketNumberFormatted,
-        displayNumber: result.ticketNumberDisplay,
-        name: result.ticket.name,
-        phone: result.ticket.phone,
-        status: result.ticket.status,
-        date: result.ticket.date,
-        createdAt: result.ticket.createdAt,
-        qrData: result.qrData
-    };
+  const ticketData = {
+    _id: result.ticket._id,
+    number: result.ticket.number,
+    ticketNumber: result.ticket.ticketNumber,
+    formattedNumber: result.ticketNumberFormatted,
+    displayNumber: result.ticketNumberDisplay,
+    name: result.ticket.name,
+    phone: result.ticket.phone,
+    status: result.ticket.status,
+    date: result.ticket.date,
+    createdAt: result.ticket.createdAt,
+    qrData: result.qrData,
+  };
 
-    const serviceData = {
-        _id: result.service._id,
-        code: result.service.code,
-        name: result.service.name
-    };
+  const serviceData = {
+    _id: result.service._id,
+    code: result.service.code,
+    name: result.service.name,
+  };
 
-    const availableCountersData = result.availableCounters.map((counter) => ({
-        _id: counter._id,
-        code: counter.code,
-        name: counter.name,
-        number: counter.number
-    }));
+  const availableCountersData = result.availableCounters.map((counter) => ({
+    _id: counter._id,
+    code: counter.code,
+    name: counter.name,
+    number: counter.number,
+  }));
 
-    res.status(201).json({
-        success: true,
-        data: ticketData,
-        service: serviceData,
-        availableCounters: availableCountersData,
-        message: `Đã cấp số ${result.ticketNumberDisplay} cho dịch vụ ${result.service.name}`
-    });
+  res.status(201).json({
+    success: true,
+    data: ticketData,
+    service: serviceData,
+    availableCounters: availableCountersData,
+    message: `Đã cấp số ${result.ticketNumberDisplay} cho quầy ${result.service.name}`,
+  });
 });
 
 exports.printTicket = asyncHandler(async (req, res) => {
-    const ticket = await Ticket.findById(req.params.id)
-        .populate('serviceId', 'code name prefixNumber')
-        .populate('queueCounterId', 'code name number')
-        .populate('counterId', 'code name number');
+  const ticket = await Ticket.findById(req.params.id)
+    .populate("serviceId", "code name prefixNumber")
+    .populate("queueCounterId", "code name number")
+    .populate("counterId", "code name number");
 
-    if (!ticket) {
-        throw new ApiError(404, 'Không tìm thấy vé');
-    }
+  if (!ticket) {
+    throw new ApiError(404, "Không tìm thấy vé");
+  }
 
-    const presentation = buildTicketPresentation(ticket);
-    ticket.displayNumber = presentation.displayNumber || ticket.ticketNumber;
+  const presentation = buildTicketPresentation(ticket);
+  ticket.displayNumber = presentation.displayNumber || ticket.ticketNumber;
 
-    queueAutoPrintTicket({
-        ticket,
-        service: ticket.serviceId,
-        ticketNumberDisplay: ticket.displayNumber || ticket.ticketNumber
-    });
+  queueAutoPrintTicket({
+    ticket,
+    service: ticket.serviceId,
+    ticketNumberDisplay: ticket.displayNumber || ticket.ticketNumber,
+  });
 
-    res.json({
-        success: true,
-        message: `Đã gửi lệnh in vé ${ticket.ticketNumber}`,
-        printStatus: 'queued'
-    });
+  res.json({
+    success: true,
+    message: `Đã gửi lệnh in vé ${ticket.ticketNumber}`,
+    printStatus: "queued",
+  });
 });
 
 exports.getAllWaiting = asyncHandler(async (req, res) => {
-    const { tickets, lastIssuedByCounter } = await ticketService.getWaitingRoomData();
+  const { tickets, lastIssuedByCounter } =
+    await ticketService.getWaitingRoomData();
 
-    res.json({
-        success: true,
-        count: tickets.length,
-        data: tickets,
-        lastIssuedByCounter
-    });
+  res.json({
+    success: true,
+    count: tickets.length,
+    data: tickets,
+    lastIssuedByCounter,
+  });
 });
 
 exports.getTicketByQR = asyncHandler(async (req, res) => {
-    const data = await ticketService.getTicketByQR(req.params.qrData);
+  const data = await ticketService.getTicketByQR(req.params.qrData);
 
-    res.json({
-        success: true,
-        data
-    });
+  res.json({
+    success: true,
+    data,
+  });
 });
 
 exports.callNext = asyncHandler(async (req, res) => {
-    const counterId = ensureAssignedCounterId(req);
+  const counterId = ensureAssignedCounterId(req);
 
-    if (req.body.counterId && String(counterId) !== String(req.body.counterId)) {
-        throw new ApiError(403, 'Bạn chỉ được phép gọi số cho quầy được gán');
-    }
+  if (req.body.counterId && String(counterId) !== String(req.body.counterId)) {
+    throw new ApiError(403, "Bạn chỉ được phép gọi số cho phòng được gán");
+  }
 
-    const { nextTicket, counter } = await ticketService.callNext(
-        counterId,
-        req.user?._id
-    );
+  const { nextTicket, counter } = await ticketService.callNext(
+    counterId,
+    req.user?._id,
+  );
 
-    logger.success(`Đã gọi số ${nextTicket.formattedNumber} đến ${counter.name}`);
-    await speakTicketIfTtsEnabled(nextTicket.displayNumber, counter.name);
+  logger.success(`Đã gọi số ${nextTicket.formattedNumber} đến ${counter.name}`);
+  await speakTicketIfTtsEnabled(nextTicket.displayNumber, counter.name);
 
-    res.json({
-        success: true,
-        data: nextTicket,
-        message: `Xin mời ông bà có số vé ${nextTicket.formattedNumber} đến ${counter.name}`
-    });
+  res.json({
+    success: true,
+    data: nextTicket,
+    message: `Xin mời ông bà có số vé ${nextTicket.formattedNumber} đến ${counter.name}`,
+  });
 });
 
 exports.callById = asyncHandler(async (req, res) => {
-    const counterId = ensureAssignedCounterId(req);
+  const counterId = ensureAssignedCounterId(req);
 
-    const { ticket, counter } = await ticketService.callById(
-        req.body.ticketId,
-        counterId,
-        req.user?._id
-    );
+  const { ticket, counter } = await ticketService.callById(
+    req.body.ticketId,
+    counterId,
+    req.user?._id,
+  );
 
-    logger.success(`Đã gọi số ${ticket.formattedNumber} đến ${counter.name} theo ticketId`);
-    await speakTicketIfTtsEnabled(ticket.displayNumber, counter.name);
+  logger.success(
+    `Đã gọi số ${ticket.formattedNumber} đến ${counter.name} theo ticketId`,
+  );
+  await speakTicketIfTtsEnabled(ticket.displayNumber, counter.name);
 
-    res.json({
-        success: true,
-        data: ticket,
-        message: `Xin mời ông bà có số vé ${ticket.formattedNumber} đến ${counter.name}`
-    });
+  res.json({
+    success: true,
+    data: ticket,
+    message: `Xin mời ông bà có số vé ${ticket.formattedNumber} đến ${counter.name}`,
+  });
 });
 
 exports.complete = asyncHandler(async (req, res) => {
-    const ticket = await ticketService.completeTicket(
-        req.params.id,
-        req.user?.counterId,
-        req.user?._id
-    );
+  const ticket = await ticketService.completeTicket(
+    req.params.id,
+    req.user?.counterId,
+    req.user?._id,
+  );
 
-    res.json({
-        success: true,
-        data: ticket,
-        message: `Hoàn thành số ${ticket.formattedNumber}`
-    });
+  res.json({
+    success: true,
+    data: ticket,
+    message: `Hoàn thành số ${ticket.formattedNumber}`,
+  });
 });
 
 exports.skip = asyncHandler(async (req, res) => {
-    const { reason } = req.body || {};
-    const ticketId = req.params.id;
-    const counterId = req.user?.counterId;
+  const { reason } = req.body || {};
+  const ticketId = req.params.id;
+  const counterId = req.user?.counterId;
 
-    const ticket = await ticketService.skipTicket(ticketId, reason, counterId, req.user?._id);
+  const ticket = await ticketService.skipTicket(
+    ticketId,
+    reason,
+    counterId,
+    req.user?._id,
+  );
 
-    logger.warning(`Đã bỏ qua số ${ticket.formattedNumber} - Lý do: ${reason || 'Khách vắng mặt '}`);
+  logger.warning(
+    `Đã bỏ qua số ${ticket.formattedNumber} - Lý do: ${reason || "Khách vắng mặt "}`,
+  );
 
-    const message = ticket.isRecall
-        ? `Đã chuyển số ${ticket.formattedNumber} vào danh sách cần gọi lại`
-        : `Đã đóng ticket ${ticket.formattedNumber} sau ${ticket.skipCount} lần bỏ qua`;
+  const message = ticket.isRecall
+    ? `Đã chuyển số ${ticket.formattedNumber} vào danh sách cần gọi lại`
+    : `Đã đóng ticket ${ticket.formattedNumber} sau ${ticket.skipCount} lần bỏ qua`;
 
-    res.json({
-        success: true,
-        data: ticket,
-        message
-    });
+  res.json({
+    success: true,
+    data: ticket,
+    message,
+  });
 });
 
 exports.backToWaiting = asyncHandler(async (req, res) => {
-    const counterId = ensureAssignedCounterId(req);
-    const ticket = await ticketService.backToWaiting(
-        req.params.id,
-        counterId,
-        req.user?._id,
-        req.body?.position || 'front'
-    );
+  const counterId = ensureAssignedCounterId(req);
+  const ticket = await ticketService.backToWaiting(
+    req.params.id,
+    counterId,
+    req.user?._id,
+    req.body?.position || "front",
+  );
 
-    res.json({
-        success: true,
-        data: ticket,
-        message: `Đã trả số ${ticket.formattedNumber} về hàng chờ`
-    });
+  res.json({
+    success: true,
+    data: ticket,
+    message: `Đã trả số ${ticket.formattedNumber} về hàng chờ`,
+  });
 });
 
 exports.getRecallList = asyncHandler(async (req, res) => {
-    const counterId = ensureAssignedCounterId(req);
-    const recallList = await ticketService.getRecallList(counterId, req.user?._id);
+  const counterId = ensureAssignedCounterId(req);
+  const recallList = await ticketService.getRecallList(
+    counterId,
+    req.user?._id,
+  );
 
-    res.json({
-        success: true,
-        count: recallList.length,
-        data: recallList
-    });
+  res.json({
+    success: true,
+    count: recallList.length,
+    data: recallList,
+  });
 });
 
 exports.recallTicket = asyncHandler(async (req, res) => {
-    const counterId = ensureAssignedCounterId(req);
-    const ticket = await ticketService.recallTicket(req.params.id, counterId, req.user?._id);
-    const counter = await Counter.findById(counterId).select('name');
+  const counterId = ensureAssignedCounterId(req);
+  const ticket = await ticketService.recallTicket(
+    req.params.id,
+    counterId,
+    req.user?._id,
+  );
+  const counter = await Counter.findById(counterId).select("name");
 
-    await speakTicketIfTtsEnabled(ticket.displayNumber, counter?.name || 'quầy hiện tại');
+  await speakTicketIfTtsEnabled(
+    ticket.displayNumber,
+    counter?.name || "phòng hiện tại",
+  );
 
-    res.json({
-        success: true,
-        data: ticket,
-        message: `Đã gọi lại số ${ticket.formattedNumber}`
-    });
+  res.json({
+    success: true,
+    data: ticket,
+    message: `Đã gọi lại số ${ticket.formattedNumber}`,
+  });
 });
 
 exports.recallProcessingTicket = asyncHandler(async (req, res) => {
-    const counterId = ensureAssignedCounterId(req);
-    const ticket = await ticketService.recallProcessingTicket(
-        req.params.id,
-        counterId,
-        req.user?._id
-    );
-    const counter = await Counter.findById(counterId).select('name');
+  const counterId = ensureAssignedCounterId(req);
+  const ticket = await ticketService.recallProcessingTicket(
+    req.params.id,
+    counterId,
+    req.user?._id,
+  );
+  const counter = await Counter.findById(counterId).select("name");
 
-    logger.success(`Đã gọi lại vé đang xử lý ${ticket.formattedNumber}`);
-    await speakTicketIfTtsEnabled(ticket.displayNumber, counter?.name || 'quầy hiện tại');
+  logger.success(`Đã gọi lại vé đang xử lý ${ticket.formattedNumber}`);
+  await speakTicketIfTtsEnabled(
+    ticket.displayNumber,
+    counter?.name || "phòng hiện tại",
+  );
 
-    res.json({
-        success: true,
-        data: ticket,
-        message: `Đã gọi lại vé đang xử lý ${ticket.formattedNumber}`
-    });
+  res.json({
+    success: true,
+    data: ticket,
+    message: `Đã gọi lại vé đang xử lý ${ticket.formattedNumber}`,
+  });
 });
 
 exports.cancelRecallTicket = asyncHandler(async (req, res) => {
-    const counterId = ensureAssignedCounterId(req);
-    const ticket = await ticketService.cancelRecallTicket(
-        req.params.id,
-        counterId,
-        req.user?._id,
-        req.body?.reason
-    );
+  const counterId = ensureAssignedCounterId(req);
+  const ticket = await ticketService.cancelRecallTicket(
+    req.params.id,
+    counterId,
+    req.user?._id,
+    req.body?.reason,
+  );
 
-    res.json({
-        success: true,
-        data: ticket,
-        message: `Đã hủy ticket recall số ${ticket.formattedNumber}`
-    });
+  res.json({
+    success: true,
+    data: ticket,
+    message: `Đã hủy ticket recall số ${ticket.formattedNumber}`,
+  });
 });
 
 exports.getCounterDisplay = asyncHandler(async (req, res) => {
-    const { counterId } = req.params;
-    const data = await ticketService.getCounterDisplay(counterId);
+  const { counterId } = req.params;
+  const data = await ticketService.getCounterDisplay(counterId);
 
-    res.json({
-        success: true,
-        data
-    });
+  res.json({
+    success: true,
+    data,
+  });
 });
 
 exports.getMyCounter = asyncHandler(async (req, res) => {
-    const counterId = ensureAssignedCounterId(req);
-    const data = await ticketService.getMyCounter(counterId, req.user?._id);
+  const counterId = ensureAssignedCounterId(req);
+  const data = await ticketService.getMyCounter(counterId, req.user?._id);
 
-    res.json({
-        success: true,
-        data: {
-            ...data,
-            staffName: req.user.fullName,
-            staffId: req.user._id
-        }
-    });
+  res.json({
+    success: true,
+    data: {
+      ...data,
+      staffName: req.user.fullName,
+      staffId: req.user._id,
+    },
+  });
 });
 
 exports.getStaffDisplay = asyncHandler(async (req, res) => {
-    const counterId = ensureAssignedCounterId(req);
-    const data = await ticketService.getStaffDisplay(counterId, req.user?._id);
+  const counterId = ensureAssignedCounterId(req);
+  const data = await ticketService.getStaffDisplay(counterId, req.user?._id);
 
-    res.json({
-        success: true,
-        data: {
-            ...data,
-            staffName: req.user.fullName,
-            staffId: req.user._id
-        }
-    });
+  res.json({
+    success: true,
+    data: {
+      ...data,
+      staffName: req.user.fullName,
+      staffId: req.user._id,
+    },
+  });
 });

@@ -1,6 +1,6 @@
-const shiftService = require('../../services/shift.service');
-const settingService = require('../../services/setting.service');
-const asyncHandler = require('../../utils/asyncHandler');
+const shiftService = require("../../services/shift.service");
+const settingService = require("../../services/setting.service");
+const asyncHandler = require("../../utils/asyncHandler");
 
 exports.getShiftSettings = async (req, res) => {
   const data = await settingService.getShiftSettings();
@@ -12,7 +12,7 @@ exports.patchAutoStartTime = async (req, res) => {
   res.json({
     success: true,
     data: { autoStartTime: value },
-    message: `Đã cập nhật thời gian tự động mở ca thành ${value}`
+    message: `Đã cập nhật thời gian tự động mở ca thành ${value}`,
   });
 };
 
@@ -21,7 +21,7 @@ exports.patchReminderMinutes = async (req, res) => {
   res.json({
     success: true,
     data: { reminderMinutes: value },
-    message: `Đã cập nhật thời gian nhắc nhở thành ${value} phút`
+    message: `Đã cập nhật thời gian nhắc nhở thành ${value} phút`,
   });
 };
 
@@ -50,14 +50,14 @@ exports.getStaffShiftHistory = async (req, res) => {
 exports.adminStartShift = async (req, res) => {
   const { staffId } = req.params;
   const data = await shiftService.adminStartShift(staffId);
-  res.json({ success: true, data, message: 'Đã mở ca cho nhân viên' });
+  res.json({ success: true, data, message: "Đã mở ca cho nhân viên" });
 };
 
 exports.adminEndShift = async (req, res) => {
   const { staffId } = req.params;
   const { reason } = req.body;
   const data = await shiftService.adminEndShift(staffId, { reason });
-  res.json({ success: true, data, message: 'Đã kết thúc ca cho nhân viên' });
+  res.json({ success: true, data, message: "Đã kết thúc ca cho nhân viên" });
 };
 
 exports.getServiceSchedules = async (req, res) => {
@@ -67,20 +67,23 @@ exports.getServiceSchedules = async (req, res) => {
 
 exports.upsertServiceSchedule = async (req, res) => {
   const data = await shiftService.upsertSchedule(req.body);
-  res.json({ success: true, data, message: 'Đã lưu lịch dịch vụ thành công' });
+  res.json({ success: true, data, message: "Đã lưu lịch quầy thành công" });
 };
 
 exports.deleteServiceSchedule = async (req, res) => {
   const data = await shiftService.deleteSchedule(req.params.serviceId);
-  res.json({ success: true, data, message: 'Đã xóa lịch dịch vụ thành công' });
+  res.json({ success: true, data, message: "Đã xóa lịch quầy thành công" });
 };
 
 exports.toggleServiceSchedule = async (req, res) => {
-  const data = await shiftService.setScheduleEnabled(req.params.serviceId, req.body.isEnabled);
+  const data = await shiftService.setScheduleEnabled(
+    req.params.serviceId,
+    req.body.isEnabled,
+  );
   res.json({
     success: true,
     data,
-    message: req.body.isEnabled ? 'Đã bật lịch dịch vụ' : 'Đã tắt lịch dịch vụ'
+    message: req.body.isEnabled ? "Đã bật lịch quầy" : "Đã tắt lịch quầy",
   });
 };
 

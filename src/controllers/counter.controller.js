@@ -1,11 +1,11 @@
-const CounterService = require('../services/counter.service');
-const asyncHandler = require('../utils/asyncHandler');
+const CounterService = require("../services/counter.service");
+const asyncHandler = require("../utils/asyncHandler");
 
 exports.getAll = async (req, res) => {
   const counters = await CounterService.getAll();
   res.json({
     success: true,
-    data: counters
+    data: counters,
   });
 };
 
@@ -13,7 +13,7 @@ exports.getById = async (req, res) => {
   const counter = await CounterService.getById(req.params.id);
   res.json({
     success: true,
-    data: counter
+    data: counter,
   });
 };
 
@@ -22,7 +22,7 @@ exports.getActive = async (req, res) => {
   res.json({
     success: true,
     count: counters.length,
-    data: counters
+    data: counters,
   });
 };
 
@@ -31,7 +31,7 @@ exports.create = async (req, res) => {
   res.status(201).json({
     success: true,
     data: counter,
-    message: `Tạo ${counter.name} (${counter.code}) thành công với ${counter.services?.length || 0} dịch vụ`
+    message: `Tạo ${counter.name} (${counter.code}) thành công với ${counter.services?.length || 0} quầy`,
   });
 };
 
@@ -40,7 +40,7 @@ exports.update = async (req, res) => {
   res.json({
     success: true,
     data: counter,
-    message: 'Cập nhật quầy thành công'
+    message: "Cập nhật phòng thành công",
   });
 };
 
@@ -50,7 +50,7 @@ exports.addServices = async (req, res) => {
   res.json({
     success: true,
     data: counter,
-    message: `Thêm ${counter.addedCount || 0} dịch vụ vào quầy thành công`
+    message: `Thêm ${counter.addedCount || 0} quầy vào phòng thành công`,
   });
 };
 
@@ -60,7 +60,7 @@ exports.removeService = async (req, res) => {
   res.json({
     success: true,
     data: counter,
-    message: 'Xóa dịch vụ khỏi quầy thành công'
+    message: "Xóa quầy khỏi phòng thành công",
   });
 };
 
@@ -68,7 +68,7 @@ exports.delete = async (req, res) => {
   const counter = await CounterService.delete(req.params.id);
   res.json({
     success: true,
-    message: `Xóa quầy ${counter.name} và các quan hệ liên quan thành công`
+    message: `Xóa phòng ${counter.name} và các quan hệ liên quan thành công`,
   });
 };
 
@@ -77,7 +77,7 @@ exports.toggleActive = async (req, res) => {
   res.json({
     success: true,
     data: counter,
-    message: `${counter.isActive ? 'Kích hoạt' : 'Vô hiệu hóa'} quầy ${counter.name} thành công`
+    message: `${counter.isActive ? "Kích hoạt" : "Vô hiệu hóa"} phòng ${counter.name} thành công`,
   });
 };
 
@@ -85,7 +85,7 @@ exports.getServices = async (req, res) => {
   const result = await CounterService.getServices(req.params.id);
   res.json({
     success: true,
-    data: result
+    data: result,
   });
 };
 
@@ -94,7 +94,7 @@ exports.getAllStats = async (req, res) => {
   res.json({
     success: true,
     data: stats,
-    count: stats.length
+    count: stats.length,
   });
 };
 

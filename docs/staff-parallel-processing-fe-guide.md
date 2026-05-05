@@ -1,21 +1,21 @@
-# Hướng Dẫn FE: Nhiều Nhân Viên Cùng Quầy Xử Lý Vé Độc Lập
+# Hướng Dẫn FE: Nhiều Nhân Viên Cùng phòng Xử Lý Vé Độc Lập
 
-Tài liệu này mô tả thay đổi mới của backend liên quan đến việc nhiều nhân viên cùng một quầy có thể xử lý vé song song.
+Tài liệu này mô tả thay đổi mới của backend liên quan đến việc nhiều nhân viên cùng một phòng có thể xử lý vé song song.
 
 Mục tiêu:
 
 - FE hiểu rõ backend đã đổi hành vi gì
 - FE biết trường hợp nào không cần sửa
 - FE biết trường hợp nào cần sửa UI / state / logic hiển thị
-- FE tránh giả định sai rằng một quầy chỉ có thể có một vé đang xử lý
+- FE tránh giả định sai rằng một phòng chỉ có thể có một vé đang xử lý
 
 ## 1. Backend đã thay đổi gì
 
 Trước đây:
 
 - backend check vé `PROCESSING` theo `counterId`
-- nghĩa là chỉ cần trong quầy đã có 1 vé đang xử lý
-- thì tất cả staff khác trong cùng quầy đều bị chặn gọi vé mới
+- nghĩa là chỉ cần trong phòng đã có 1 vé đang xử lý
+- thì tất cả staff khác trong cùng phòng đều bị chặn gọi vé mới
 
 Hiện tại:
 
@@ -26,7 +26,7 @@ Hiện tại:
 Nói đơn giản:
 
 - staff A đang xử lý vé -> staff A chưa được gọi vé tiếp theo
-- staff B cùng quầy vẫn có thể gọi vé nếu staff B đang rảnh
+- staff B cùng phòng vẫn có thể gọi vé nếu staff B đang rảnh
 
 ## 2. API có đổi không
 
@@ -58,18 +58,18 @@ thì thường có thể chạy ngay mà không cần đổi API layer.
 
 FE cần rà lại nếu đang có một trong các giả định sau:
 
-- một quầy chỉ có đúng 1 vé `PROCESSING`
-- nếu quầy có vé đang xử lý thì disable luôn nút `Call next` cho tất cả staff
-- current ticket đang hiển thị chung theo quầy chứ không theo nhân viên
+- một phòng chỉ có đúng 1 vé `PROCESSING`
+- nếu phòng có vé đang xử lý thì disable luôn nút `Call next` cho tất cả staff
+- current ticket đang hiển thị chung theo phòng chứ không theo nhân viên
 - socket đang join theo `counterId` nhưng FE lại kỳ vọng dữ liệu riêng cho staff
 
 ## 4. Điều FE cần hiểu đúng
 
 ### 4.1 `counterId`
 
-Là quầy.
+Là phòng.
 
-Một quầy có thể có:
+Một phòng có thể có:
 
 - nhiều staff
 - nhiều staff cùng xử lý vé song song
@@ -81,7 +81,7 @@ Là nhân viên cụ thể.
 Backend bây giờ check giới hạn gọi vé theo staff:
 
 - nếu staff đó đang có vé `PROCESSING` -> chặn staff đó
-- staff khác trong cùng quầy không bị ảnh hưởng
+- staff khác trong cùng phòng không bị ảnh hưởng
 
 ## 5. Error message FE có thể gặp
 
@@ -108,13 +108,13 @@ Backend có thể trả:
 ```json
 {
   "success": false,
-  "message": "Quầy đang xử lý vé 101. Vui lòng hoàn thành hoặc bỏ qua vé hiện tại trước"
+  "message": "phòng đang xử lý vé 101. Vui lòng hoàn thành hoặc bỏ qua vé hiện tại trước"
 }
 ```
 
 Ý nghĩa:
 
-- đây là mode xử lý theo quầy
+- đây là mode xử lý theo phòng
 - thường dùng cho case không có staff cụ thể
 
 ## 6. FE nên kiểm tra chỗ nào
@@ -127,7 +127,7 @@ Rà lại các logic:
 - disable nút `Call by id`
 - disable nút `Recall`
 
-Nếu hiện tại FE đang disable theo trạng thái của cả quầy thì cần sửa.
+Nếu hiện tại FE đang disable theo trạng thái của cả phòng thì cần sửa.
 
 FE chỉ nên disable khi:
 
@@ -138,7 +138,7 @@ FE chỉ nên disable khi:
 
 Nếu FE đang hiển thị:
 
-- 1 current ticket chung cho cả quầy
+- 1 current ticket chung cho cả phòng
 
 thì cần xác nhận lại mong muốn nghiệp vụ.
 
@@ -147,7 +147,7 @@ Với logic mới, mỗi staff có thể có current ticket riêng.
 Khi đó FE nên ưu tiên:
 
 - hiển thị current ticket của staff hiện tại
-- không nên lấy snapshot chung của cả quầy rồi coi đó là ticket của mình
+- không nên lấy snapshot chung của cả phòng rồi coi đó là ticket của mình
 
 ### 6.3 Socket join
 
@@ -162,7 +162,7 @@ socket.emit('join-staff-display', {
 });
 ```
 
-Không nên chỉ join room theo quầy nếu màn hình cần dữ liệu riêng cho nhân viên hiện tại.
+Không nên chỉ join room theo phòng nếu màn hình cần dữ liệu riêng cho nhân viên hiện tại.
 
 ## 7. Flow FE đúng nên là gì
 
@@ -190,7 +190,7 @@ Flow:
    - hiện warning
    - không coi là lỗi hệ thống
 
-### 7.3 Khi nhiều staff cùng dùng một quầy
+### 7.3 Khi nhiều staff cùng dùng một phòng
 
 Kỳ vọng đúng:
 
@@ -200,7 +200,7 @@ Kỳ vọng đúng:
 
 ## 8. FE nên sửa gì nếu đang có bug cũ
 
-### 8.1 Nếu FE đang disable theo cả quầy
+### 8.1 Nếu FE đang disable theo cả phòng
 
 Ví dụ logic cũ kiểu:
 
@@ -220,7 +220,7 @@ Trong đó:
 
 - `myCurrentTicket` là vé processing của chính staff đang login
 
-### 8.2 Nếu FE đang dùng snapshot chung của quầy
+### 8.2 Nếu FE đang dùng snapshot chung của phòng
 
 Nếu backend/socket đang hỗ trợ snapshot staff riêng, FE nên dùng dữ liệu staff-specific thay vì counter-wide.
 
@@ -240,17 +240,17 @@ Nhưng FE có thể cần sửa:
 
 ## 10. Gợi ý checklist cho FE
 
-- Màn hình staff có đang disable nút gọi số theo cả quầy không
-- Current ticket đang là của staff hiện tại hay của cả quầy
+- Màn hình staff có đang disable nút gọi số theo cả phòng không
+- Current ticket đang là của staff hiện tại hay của cả phòng
 - Socket đã join theo `staffId` chưa
 - Có hiển thị đúng message `Nhân viên đang xử lý vé...` chưa
-- Có test case 2 staff cùng quầy chưa
+- Có test case 2 staff cùng phòng chưa
 
 ## 11. Test case FE nên tự test
 
 ### Case 1
 
-- staff A và staff B cùng thuộc quầy 1
+- staff A và staff B cùng thuộc phòng 1
 - staff A gọi 1 vé
 - staff B gọi tiếp 1 vé khác
 
@@ -282,5 +282,5 @@ Kết quả mong đợi:
 - Backend mới block theo `staffId`, không block cả `counterId` nữa khi có nhân viên cụ thể
 - API gần như không đổi
 - FE có thể chạy ngay nếu đã làm đúng theo staff-specific flow
-- FE cần sửa nếu đang giả định “một quầy chỉ có một vé processing”
+- FE cần sửa nếu đang giả định “một phòng chỉ có một vé processing”
 

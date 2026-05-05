@@ -1,12 +1,12 @@
 # Hướng Dẫn FE: Shift Management và Service Schedule
 
-Tài liệu này mô tả cách frontend tích hợp phiên bản mới của tính năng quản lý ca và lịch mở/đóng dịch vụ.
+Tài liệu này mô tả cách frontend tích hợp phiên bản mới của tính năng quản lý ca và lịch mở/đóng quầy.
 
 Điểm quan trọng nhất:
 
 - Staff không còn tự mở ca / đóng ca.
 - Chỉ Admin mới quản lý trạng thái ca của staff.
-- Admin có thể cấu hình lịch mở/đóng cho từng dịch vụ hoặc cho toàn bộ dịch vụ.
+- Admin có thể cấu hình lịch mở/đóng cho từng quầy hoặc cho toàn bộ quầy.
 - Khi service bị đóng theo lịch, backend sẽ chặn tạo ticket mới.
 
 ## 1. Tổng quan nghiệp vụ
@@ -32,8 +32,8 @@ Admin có thể:
 
 Dùng field `isOpen` trên `Service`.
 
-- `isOpen = true`: dịch vụ đang mở
-- `isOpen = false`: dịch vụ đang tạm đóng
+- `isOpen = true`: quầy đang mở
+- `isOpen = false`: quầy đang tạm đóng
 
 Admin có thể:
 
@@ -229,7 +229,7 @@ Response item:
   "username": "staff01",
   "counterId": {
     "_id": "6611ab...",
-    "name": "Quầy tiếp nhận 1",
+    "name": "phòng tiếp nhận 1",
     "number": 1
   },
   "onDuty": true,
@@ -245,7 +245,7 @@ FE nên làm:
   - Tất cả
   - Đang trong ca
   - Ngoài ca
-- search theo tên, username, quầy
+- search theo tên, username, phòng
 
 Gợi ý label:
 
@@ -352,7 +352,7 @@ Response:
 
 Ý nghĩa `waitingTicketsCount`:
 
-- là số ticket còn lại tại quầy của staff lúc đóng ca
+- là số ticket còn lại tại phòng của staff lúc đóng ca
 
 FE nên:
 
@@ -410,7 +410,7 @@ FE phải xử lý 2 trường hợp:
 
 Gợi ý hiển thị:
 
-- nếu `ALL` -> label `Tất cả dịch vụ`
+- nếu `ALL` -> label `Tất cả quầy`
 - nếu object -> hiển thị `serviceId.name`
 
 ### 7.2 Tạo hoặc cập nhật schedule
@@ -457,7 +457,7 @@ Response:
     "closeTime": "16:30",
     "isEnabled": true
   },
-  "message": "Đã lưu lịch dịch vụ thành công"
+  "message": "Đã lưu lịch quầy thành công"
 }
 ```
 
@@ -503,7 +503,7 @@ Response:
     "closeTime": "16:30",
     "isEnabled": false
   },
-  "message": "Đã tắt lịch dịch vụ"
+  "message": "Đã tắt lịch quầy"
 }
 ```
 
@@ -532,7 +532,7 @@ Response:
     "serviceId": "ALL",
     "deletedCount": 1
   },
-  "message": "Đã xóa lịch dịch vụ thành công"
+  "message": "Đã xóa lịch quầy thành công"
 }
 ```
 
@@ -581,7 +581,7 @@ Nếu service đang đóng:
 ```json
 {
   "success": false,
-  "message": "Dịch vụ TU VAN hiện đang tạm đóng. Vui lòng quay lại sau."
+  "message": "quầy TU VAN hiện đang tạm đóng. Vui lòng quay lại sau."
 }
 ```
 
@@ -590,7 +590,7 @@ Nếu service không có staff đang trong ca:
 ```json
 {
   "success": false,
-  "message": "Dịch vụ này hiện không có nhân viên đang làm ca. Vui lòng quay lại sau."
+  "message": "quầy này hiện không có nhân viên đang làm ca. Vui lòng quay lại sau."
 }
 ```
 
@@ -628,7 +628,7 @@ Nên có:
 
 - table schedule
 - cột:
-  - Dịch vụ
+  - quầy
   - Giờ mở
   - Giờ đóng
   - Trạng thái rule
@@ -641,7 +641,7 @@ Nên có:
 Form create/update nên có:
 
 - select service:
-  - `Tất cả dịch vụ`
+  - `Tất cả quầy`
   - từng service cụ thể
 - `openTime`
 - `closeTime`
@@ -696,10 +696,10 @@ Gọi song song:
 - `Không tìm thấy nhân viên`
 - `Nhân viên đang trong ca làm việc`
 - `Nhân viên không đang trong ca làm việc`
-- `Không tìm thấy dịch vụ`
-- `Không tìm thấy lịch dịch vụ`
-- `Dịch vụ ... hiện đang tạm đóng. Vui lòng quay lại sau.`
-- `Dịch vụ này hiện không có nhân viên đang làm ca. Vui lòng quay lại sau.`
+- `Không tìm thấy quầy`
+- `Không tìm thấy lịch quầy`
+- `quầy ... hiện đang tạm đóng. Vui lòng quay lại sau.`
+- `quầy này hiện không có nhân viên đang làm ca. Vui lòng quay lại sau.`
 
 Nên hiển thị dưới dạng:
 

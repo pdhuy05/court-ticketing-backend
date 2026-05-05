@@ -1,14 +1,15 @@
-const net = require('net');
-const fs = require('fs');
-const path = require('path');
-const sharp = require('sharp');
-const QRCode = require('qrcode');
-const logger = require('../utils/Logger');
+const net = require("net");
+const fs = require("fs");
+const path = require("path");
+const sharp = require("sharp");
+const QRCode = require("qrcode");
+const logger = require("../utils/Logger");
 
-const { ConnectPrint } = require('../constants/enums');
+const { ConnectPrint } = require("../constants/enums");
 
-const getDisplayTicketNumber = (ticket) => ticket.displayNumber || ticket.ticketNumber || '001';
-const LOGO_PATH = path.join(__dirname, '..', 'public', 'logo', 'logo.png');
+const getDisplayTicketNumber = (ticket) =>
+  ticket.displayNumber || ticket.ticketNumber || "001";
+const LOGO_PATH = path.join(__dirname, "..", "public", "logo", "logo.png");
 
 class PrinterService {
   constructor() {
@@ -41,14 +42,14 @@ class PrinterService {
   async generateQRCode(ticket, service) {
     const qrText = `
 SỐ THỨ TỰ: ${getDisplayTicketNumber(ticket)}
-YÊU CẦU: ${service?.name || ''}
-ĐƯƠNG SỰ: ${ticket.name || ''}
-ĐIỆN THOẠI: ${ticket.phone || ''}
-THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString('vi-VN')}
+YÊU CẦU: ${service?.name || ""}
+ĐƯƠNG SỰ: ${ticket.name || ""}
+ĐIỆN THOẠI: ${ticket.phone || ""}
+THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString("vi-VN")}
     `.trim();
 
     return QRCode.toBuffer(qrText, {
-      errorCorrectionLevel: 'H',
+      errorCorrectionLevel: "H",
       margin: 2,
       width: 300,
     });
@@ -57,10 +58,10 @@ THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString('vi-VN')}
   async getLogoDataUri() {
     try {
       const logoBuffer = await fs.promises.readFile(LOGO_PATH);
-      return `data:image/png;base64,${logoBuffer.toString('base64')}`;
+      return `data:image/png;base64,${logoBuffer.toString("base64")}`;
     } catch (error) {
       logger.warning(`Không thể tải logo in: ${error.message}`);
-      return '';
+      return "";
     }
   }
 
@@ -70,17 +71,17 @@ THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString('vi-VN')}
     const logoWidth = 220;
     const logoHeight = 220;
 
-    const timeStr = new Date().toLocaleString('vi-VN', {
-      hour: '2-digit',
-      minute: '2-digit',
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
+    const timeStr = new Date().toLocaleString("vi-VN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
     });
 
-    const qrBase64 = qrBuffer 
-      ? `data:image/png;base64,${qrBuffer.toString('base64')}` 
-      : '';
+    const qrBase64 = qrBuffer
+      ? `data:image/png;base64,${qrBuffer.toString("base64")}`
+      : "";
     const logoBase64 = await this.getLogoDataUri();
 
     return `
@@ -88,7 +89,9 @@ THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString('vi-VN')}
         <rect width="100%" height="100%" fill="white"/>
 
         <!-- LOGO -->
-        ${logoBase64 ? `
+        ${
+          logoBase64
+            ? `
         <image
           x="${(width - logoWidth) / 2}"
           y="20"
@@ -97,7 +100,9 @@ THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString('vi-VN')}
           href="${logoBase64}"
           preserveAspectRatio="xMidYMid meet"
         />
-        ` : ''}
+        `
+            : ""
+        }
         
         <!-- HEADER -->
         <text x="50%" y="285" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="26" font-weight="bold" fill="black">TÒA ÁN NHÂN DÂN KHU VỰC 1</text>
@@ -110,7 +115,7 @@ THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString('vi-VN')}
         <text x="50%" y="560" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="200" font-weight="bold" fill="black">${getDisplayTicketNumber(ticket)}</text>
 
         <!-- SERVICE NAME -->
-        <text x="50%" y="650" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="28" font-weight="bold" fill="black">- ${service?.name || 'Dịch vụ'} -</text>
+        <text x="50%" y="650" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="28" font-weight="bold" fill="black">- ${service?.name || "quầy"} -</text>
 
         <!-- Dashed Line 1 -->
         <line x1="60" y1="690" x2="${width - 60}" y2="690" stroke="black" stroke-width="2" stroke-dasharray="6,4"/>
@@ -128,7 +133,7 @@ THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString('vi-VN')}
         />
 
         <!-- CUSTOMER NAME -->
-        <text x="50%" y="1075" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="24" font-weight="bold" fill="black">${ticket.name || 'Đương sự'}</text>
+        <text x="50%" y="1075" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="24" font-weight="bold" fill="black">${ticket.name || "Đương sự"}</text>
 
         <!-- SCAN INSTRUCTION -->
         <text x="50%" y="1110" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="20" fill="black">Quét mã để xem chi tiết</text>
@@ -144,9 +149,7 @@ THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString('vi-VN')}
   }
 
   async convertToEscPos(svgBuffer, printWidth) {
-    const pngBuffer = await sharp(svgBuffer)
-      .png()
-      .toBuffer();
+    const pngBuffer = await sharp(svgBuffer).png().toBuffer();
 
     const { data, info } = await sharp(pngBuffer)
       .resize({ width: printWidth, withoutEnlargement: true })
@@ -161,7 +164,10 @@ THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString('vi-VN')}
     const bytesPerLine = Math.ceil(width / 8);
 
     const header = Buffer.from([
-      0x1d, 0x76, 0x30, 0x00,
+      0x1d,
+      0x76,
+      0x30,
+      0x00,
       bytesPerLine & 0xff,
       (bytesPerLine >> 8) & 0xff,
       height & 0xff,
@@ -206,16 +212,16 @@ THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString('vi-VN')}
     return this.printTicket(
       printerId,
       {
-        ticketNumber: '001',
-        name: 'Nguyễn Văn A',
-        phone: '0912345678',
+        ticketNumber: "001",
+        name: "Nguyễn Văn A",
+        phone: "0912345678",
         createdAt: new Date(),
-        status: 'waiting',
+        status: "waiting",
       },
       {
-        name: 'NỘP ĐƠN',
-        code: 'ND',
-      }
+        name: "NỘP ĐƠN",
+        code: "ND",
+      },
     );
   }
 
@@ -238,20 +244,20 @@ THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString('vi-VN')}
               client.end();
               resolve({
                 success: true,
-                message: 'In ticket thành công',
+                message: "In ticket thành công",
               });
             }, 300);
           });
-        }
+        },
       );
 
-      client.on('error', (err) => {
+      client.on("error", (err) => {
         reject(new Error(`Kết nối thất bại: ${err.message}`));
       });
 
       client.setTimeout(10000, () => {
         client.destroy();
-        reject(new Error('Timeout khi kết nối máy in'));
+        reject(new Error("Timeout khi kết nối máy in"));
       });
     });
   }

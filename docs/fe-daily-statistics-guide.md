@@ -8,7 +8,7 @@ Tài liệu này mô tả tính năng **lưu thống kê theo ngày** sau khi ad
 
 - Mỗi lần admin gọi **reset ticket theo ngày** (`POST /api/admin/tickets/reset-day`), backend **trước khi xóa ticket** sẽ:
   - đọc tất cả ticket có `createdAt` thuộc ngày đó
-  - tính tổng hợp (tổng vé, hoàn thành, bỏ qua, tỷ lệ %, thời gian trung bình, nhóm theo dịch vụ / quầy / nhân viên)
+  - tính tổng hợp (tổng vé, hoàn thành, bỏ qua, tỷ lệ %, thời gian trung bình, nhóm theo quầy / phòng / nhân viên)
   - **ghi vào database** (collection `daily_statistics`, một bản ghi / một ngày `YYYY-MM-DD`)
 - Sau đó backend **xóa ticket** như cũ. Dữ liệu thống kê **vẫn còn** để xem lại lịch sử.
 
@@ -87,7 +87,7 @@ Authorization: Bearer <admin_token>
     "byCounter": [
       {
         "counterId": "6800f8ec6a3b0b7f6a1e9999",
-        "counterName": "QUẦY 1",
+        "counterName": "phòng 1",
         "counterNumber": 1,
         "processedCount": 55,
         "avgProcessingTime": 410
@@ -192,31 +192,31 @@ Backend so sánh chuỗi `startDate` và `endDate` theo thứ tự từ điển 
 - Tỷ lệ: có thể thêm `%` sau giá trị (`completionRate.toFixed(2) + '%'`).
 - Thời gian: có thể format `mm:ss` hoặc `X phút Y giây` từ số giây.
 
-### 6.2 Mảng `byService` (bảng / biểu đồ theo dịch vụ)
+### 6.2 Mảng `byService` (bảng / biểu đồ theo quầy)
 
 Mỗi phần tử:
 
 | Field | Mô tả |
 |-------|--------|
-| `serviceId` | ObjectId dịch vụ |
-| `serviceCode` | Mã dịch vụ (ví dụ `ND`) |
-| `serviceName` | Tên dịch vụ |
-| `total` | Tổng ticket thuộc dịch vụ trong ngày |
+| `serviceId` | ObjectId quầy |
+| `serviceCode` | Mã quầy (ví dụ `ND`) |
+| `serviceName` | Tên quầy |
+| `total` | Tổng ticket thuộc quầy trong ngày |
 | `completed` / `skipped` | Đếm theo `status` |
-| `avgWaitingTime` | Trung bình `waitingDuration` trong nhóm dịch vụ (giây) |
-| `avgProcessingTime` | Trung bình `processingDuration` trong nhóm dịch vụ (giây) |
+| `avgWaitingTime` | Trung bình `waitingDuration` trong nhóm quầy (giây) |
+| `avgProcessingTime` | Trung bình `processingDuration` trong nhóm quầy (giây) |
 
 Thứ tự phần tử: backend sắp xếp theo `serviceCode` tăng dần (ổn định cho bảng).
 
-### 6.3 Mảng `byCounter` (theo quầy)
+### 6.3 Mảng `byCounter` (theo phòng)
 
 **Chỉ tính ticket đã hoàn thành** (`status === "completed"`) và có `counterId`.
 
 | Field | Mô tả |
 |-------|--------|
-| `counterId` | Quầy xử lý |
+| `counterId` | phòng xử lý |
 | `counterName` / `counterNumber` | Hiển thị |
-| `processedCount` | Số vé **completed** tại quầy đó trong ngày |
+| `processedCount` | Số vé **completed** tại phòng đó trong ngày |
 | `avgProcessingTime` | Trung bình `processingDuration` của các vé completed đó (giây) |
 
 Sắp xếp: theo `counterNumber` tăng dần.

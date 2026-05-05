@@ -19,7 +19,7 @@ Staff bấm "Gọi số"
         ▼                                                  ▼
    BE xử lý ticket                              BE phát TTS trên SERVER
    trả response về FE                           "Vui lòng mời ông bà số
-        │                                        ND010 đến Quầy 1"
+        │                                        ND010 đến phòng 1"
         ▼                                                  │
    FE nhận response                                        ▼
         │                                         Loa kết nối với SERVER
@@ -64,7 +64,7 @@ TTS tự động phát khi gọi các API sau (FE không cần gửi gì thêm):
     "status": "processing",
     "serviceId": { "code": "ND", "name": "NỘP ĐƠN" }
   },
-  "message": "Vui lòng số 1010 đến Quầy 1"
+  "message": "Vui lòng số 1010 đến phòng 1"
 }
 ```
 
@@ -95,7 +95,7 @@ socket.on('ticket-called', (data) => {
   //     serviceName: "NỘP ĐƠN",
   //     isRecall: false
   //   },
-  //   counterName: "Quầy 1",
+  //   counterName: "phòng 1",
   //   counterId: "69e05daf...",
   //   calledAt: "2026-04-17T07:47:05.242Z",
   //   reason: "call-next"   // hoặc "call-by-id", "recall-ticket"

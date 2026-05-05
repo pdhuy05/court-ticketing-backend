@@ -1,7 +1,18 @@
-const logger = require('../utils/Logger');
-const { getShiftAutoStartTime, seedShiftDefaults } = require('./setting.service');
-const { autoStartAllShifts, runServiceScheduler, applyCurrentScheduleState } = require('./shift.service');
-const { pad, getDateString, getCurrentHHMM } = require('../utils/dateTime.util');
+const logger = require("../utils/Logger");
+const {
+  getShiftAutoStartTime,
+  seedShiftDefaults,
+} = require("./setting.service");
+const {
+  autoStartAllShifts,
+  runServiceScheduler,
+  applyCurrentScheduleState,
+} = require("./shift.service");
+const {
+  pad,
+  getDateString,
+  getCurrentHHMM,
+} = require("../utils/dateTime.util");
 
 let _shiftIntervalId = null;
 let _serviceIntervalId = null;
@@ -26,7 +37,9 @@ const runAutoShiftStart = async () => {
 
     logger.info(`Auto mở ca shift bắt đầu lúc ${autoStartTime}`);
     const result = await autoStartAllShifts();
-    logger.success(`Auto mở ca hoàn tất: ${result.startedCount} nhân viên được mở ca`);
+    logger.success(
+      `Auto mở ca hoàn tất: ${result.startedCount} nhân viên được mở ca`,
+    );
   } catch (error) {
     logger.error(`Auto mở ca thất bại: ${error.message}`);
   }
@@ -44,7 +57,7 @@ const runAutoServiceSchedule = async () => {
     _lastRunMinute = currentMinute;
     await runServiceScheduler();
   } catch (error) {
-    logger.error(`Auto lịch dịch vụ thất bại: ${error.message}`);
+    logger.error(`Auto lịch quầy thất bại: ${error.message}`);
   }
 };
 
@@ -66,17 +79,17 @@ const stop = () => {
   if (_shiftIntervalId) {
     clearInterval(_shiftIntervalId);
     _shiftIntervalId = null;
-    logger.info('Đã dừng scheduler auto mở ca staff');
+    logger.info("Đã dừng scheduler auto mở ca staff");
   }
 
   if (_serviceIntervalId) {
     clearInterval(_serviceIntervalId);
     _serviceIntervalId = null;
-    logger.info('Đã dừng scheduler tự động mở/đóng dịch vụ');
+    logger.info("Đã dừng scheduler tự động mở/đóng quầy");
   }
 };
 
 module.exports = {
   start,
-  stop
+  stop,
 };

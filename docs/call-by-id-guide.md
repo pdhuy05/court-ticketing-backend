@@ -148,7 +148,7 @@ Status:
 ```json
 {
   "success": false,
-  "message": "Nhân viên không được phép gọi ticket thuộc dịch vụ này"
+  "message": "Nhân viên không được phép gọi ticket thuộc quầy này"
 }
 ```
 
@@ -163,7 +163,7 @@ Status:
 ```json
 {
   "success": false,
-  "message": "Ticket không thuộc danh sách xử lý của quầy này"
+  "message": "Ticket không thuộc danh sách xử lý của phòng này"
 }
 ```
 
@@ -178,7 +178,7 @@ Status:
 ```json
 {
   "success": false,
-  "message": "Quầy đang xử lý ticket ..."
+  "message": "phòng đang xử lý ticket ..."
 }
 ```
 

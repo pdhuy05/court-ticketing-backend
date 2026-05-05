@@ -1,6 +1,6 @@
-# Hướng Dẫn FE: Quản Lý Thời Gian Mở/Đóng Dịch Vụ
+# Hướng Dẫn FE: Quản Lý Thời Gian Mở/Đóng quầy
 
-Tài liệu này chỉ tập trung vào tính năng quản lý thời gian mở/đóng dịch vụ.
+Tài liệu này chỉ tập trung vào tính năng quản lý thời gian mở/đóng quầy.
 
 Mục tiêu:
 
@@ -14,8 +14,8 @@ Mục tiêu:
 
 Admin có thể cấu hình giờ mở và giờ đóng cho:
 
-- một dịch vụ cụ thể
-- hoặc toàn bộ dịch vụ trong hệ thống
+- một quầy cụ thể
+- hoặc toàn bộ quầy trong hệ thống
 
 Backend sẽ có scheduler chạy mỗi 60 giây:
 
@@ -43,13 +43,13 @@ Nằm trong document `Service`.
 
 Ý nghĩa:
 
-- `true`: dịch vụ đang mở
-- `false`: dịch vụ đang tạm đóng
+- `true`: quầy đang mở
+- `false`: quầy đang tạm đóng
 
 Tóm tắt ngắn:
 
 - `isEnabled` = rule có hoạt động không
-- `isOpen` = dịch vụ đang mở thật hay đang đóng
+- `isOpen` = quầy đang mở thật hay đang đóng
 
 ## 3. Dữ liệu FE sẽ nhận
 
@@ -87,11 +87,11 @@ Nếu API trả:
 
 thì frontend cần hiểu là:
 
-- rule này áp dụng cho tất cả dịch vụ
+- rule này áp dụng cho tất cả quầy
 
 Gợi ý hiển thị:
 
-- label: `Tất cả dịch vụ`
+- label: `Tất cả quầy`
 
 Nếu `serviceId` là object thì hiển thị:
 
@@ -154,7 +154,7 @@ Response mẫu:
 
 FE nên render bảng có các cột:
 
-- Dịch vụ
+- quầy
 - Giờ mở
 - Giờ đóng
 - Rule đang bật hay tắt
@@ -173,7 +173,7 @@ API này dùng cho cả 2 trường hợp:
 
 Backend xác định theo `serviceId`.
 
-### 6.1 Body cho tất cả dịch vụ
+### 6.1 Body cho tất cả quầy
 
 ```json
 {
@@ -184,7 +184,7 @@ Backend xác định theo `serviceId`.
 }
 ```
 
-### 6.2 Body cho một dịch vụ cụ thể
+### 6.2 Body cho một quầy cụ thể
 
 ```json
 {
@@ -213,7 +213,7 @@ Response mẫu:
     "closeTime": "16:30",
     "isEnabled": true
   },
-  "message": "Đã lưu lịch dịch vụ thành công"
+  "message": "Đã lưu lịch quầy thành công"
 }
 ```
 
@@ -262,7 +262,7 @@ Response mẫu:
     "closeTime": "16:30",
     "isEnabled": false
   },
-  "message": "Đã tắt lịch dịch vụ"
+  "message": "Đã tắt lịch quầy"
 }
 ```
 
@@ -291,7 +291,7 @@ Response:
     "serviceId": "ALL",
     "deletedCount": 1
   },
-  "message": "Đã xóa lịch dịch vụ thành công"
+  "message": "Đã xóa lịch quầy thành công"
 }
 ```
 
@@ -312,14 +312,14 @@ Nên có:
   - tất cả
   - đang bật
   - đang tắt
-- có thể search theo tên dịch vụ
+- có thể search theo tên quầy
 
 ### 9.2 Form tạo / sửa
 
 Nên có:
 
-- select dịch vụ
-  - option đầu tiên: `Tất cả dịch vụ`
+- select quầy
+  - option đầu tiên: `Tất cả quầy`
   - sau đó là danh sách từng service
 - time picker `Giờ mở`
 - time picker `Giờ đóng`
@@ -342,7 +342,7 @@ Gọi:
 ### 10.2 Khi thêm mới
 
 1. Mở modal
-2. Chọn service hoặc `Tất cả dịch vụ`
+2. Chọn service hoặc `Tất cả quầy`
 3. Nhập `openTime`
 4. Nhập `closeTime`
 5. Submit `POST /api/admin/shift/service-schedules`
@@ -369,8 +369,8 @@ Gọi:
 
 ## 11. Lỗi FE cần hiển thị dễ hiểu
 
-- `Không tìm thấy dịch vụ`
-- `Không tìm thấy lịch dịch vụ`
+- `Không tìm thấy quầy`
+- `Không tìm thấy lịch quầy`
 - `serviceId không hợp lệ`
 - lỗi validation `HH:MM`
 
@@ -393,7 +393,7 @@ Message có thể nhận:
 ```json
 {
   "success": false,
-  "message": "Dịch vụ TU VAN hiện đang tạm đóng. Vui lòng quay lại sau."
+  "message": "quầy TU VAN hiện đang tạm đóng. Vui lòng quay lại sau."
 }
 ```
 
@@ -417,6 +417,6 @@ Nếu FE public có danh sách service thì nên:
 
 - schedule là rule giờ mở / giờ đóng
 - `isEnabled` là bật/tắt rule
-- `isOpen` là dịch vụ đang mở hay đóng thật
-- `serviceId = 'ALL'` nghĩa là áp dụng cho toàn bộ dịch vụ
+- `isOpen` là quầy đang mở hay đóng thật
+- `serviceId = 'ALL'` nghĩa là áp dụng cho toàn bộ quầy
 

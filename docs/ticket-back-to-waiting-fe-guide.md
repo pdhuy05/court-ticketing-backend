@@ -154,10 +154,10 @@ Mot so message loi thuong gap:
 
 - `Không tìm thấy ticket`
 - `Ticket đang ở trạng thái completed, không thể trả về hàng chờ. Chỉ áp dụng với ticket đang xử lý`
-- `Bạn chỉ được phép trả ticket của quầy được gán về hàng chờ`
-- `Nhân viên không có quyền xử lý dịch vụ ...`
-- `Dịch vụ ... đã bị vô hiệu hóa`
-- `Quầy không tồn tại hoặc không hoạt động`
+- `Bạn chỉ được phép trả ticket của phòng được gán về hàng chờ`
+- `Nhân viên không có quyền xử lý quầy ...`
+- `quầy ... đã bị vô hiệu hóa`
+- `phòng không tồn tại hoặc không hoạt động`
 
 Khuyen nghi FE:
 

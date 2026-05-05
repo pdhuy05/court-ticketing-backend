@@ -42,7 +42,7 @@ Response moi:
     "resetCount": 4,
     "counterCount": 4
   },
-  "message": "Đã reset dữ liệu ngày 2026-04-22 cho 4 quầy"
+  "message": "Đã reset dữ liệu ngày 2026-04-22 cho 4 phòng"
 }
 ```
 
@@ -61,7 +61,7 @@ Response moi:
   "data": {
     "resetCount": 4
   },
-  "message": "Đã reset bộ đếm của 4 quầy trong hệ thống"
+  "message": "Đã reset bộ đếm của 4 phòng trong hệ thống"
 }
 ```
 

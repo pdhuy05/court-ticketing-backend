@@ -81,7 +81,7 @@ POST /api/tickets
       "number": 1
     }
   ],
-  "message": "Đã cấp số 1001 cho dịch vụ NOP DON"
+  "message": "Đã cấp số 1001 cho quầy NOP DON"
 }
 ```
 
