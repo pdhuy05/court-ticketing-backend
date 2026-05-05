@@ -24,7 +24,6 @@ const cacheSet = (text, buffer) => {
   audioCache.set(text, buffer);
 };
 
-// Map lưu các promise đang download dở, tránh download trùng lặp
 const downloadInFlight = new Map();
 
 let speakerQueue = Promise.resolve();
@@ -88,18 +87,6 @@ const getAudioBuffer = (text) => {
 
   downloadInFlight.set(text, promise);
   return promise;
-};
-
-/**
- * Prefetch audio cho một text — bắt đầu download ngay lập tức mà không chờ play.
- * Gọi hàm này khi bạn biết sắp cần phát text đó (ví dụ: khi số tiếp theo vừa được gọi).
- */
-const prefetch = (text) => {
-  if (!TTS_ENABLED || !text || !text.trim()) return;
-  // Fire-and-forget: không cần await, chỉ cần kick-off download
-  getAudioBuffer(text).catch((err) => {
-    logger.warning(`TTS prefetch thất bại cho "${text}": ${err.message}`);
-  });
 };
 
 const playBuffer = (buffer) =>
@@ -173,8 +160,10 @@ const speak = (text) => {
   }
   if (!text || !text.trim()) return Promise.resolve();
 
-  // *** KEY FIX: Bắt đầu download NGAY LẬP TỨC, không chờ queue ***
-  // Download chạy song song với bất kỳ audio nào đang phát trước đó.
+  // ✅ KEY FIX: Download NGAY LẬP TỨC khi speak() được gọi
+  // Không nằm trong .then() của queue nữa
+  // → Clip 2 download song song trong lúc clip 1 đang phát
+  // → Khi clip 1 xong, clip 2 đã sẵn sàng → 0 delay
   const downloadPromise = getAudioBuffer(text).catch((err) => {
     logger.warning(`Google TTS thất bại khi download: ${err.message}`);
     return null;
@@ -183,9 +172,7 @@ const speak = (text) => {
   const task = speakerQueue
     .catch(() => {})
     .then(async () => {
-      // Lúc này download có thể đã xong (hoặc gần xong) → không bị delay thêm
-      const buffer = await downloadPromise;
-
+      const buffer = await downloadPromise; // hầu hết trường hợp đã xong từ lâu
       if (buffer) {
         try {
           await playBuffer(buffer);
@@ -214,9 +201,9 @@ const speak = (text) => {
 };
 
 /**
- * @param {string|number} displayNumber  - Số hiển thị trên màn hình
- * @param {string}        counterName    - Tên quầy (ví dụ: "Quầy 1")
- * @param {string}        [counterId]    - ID quầy (không dùng trong TTS)
+ * @param {string|number} displayNumber
+ * @param {string}        counterName
+ * @param {string}        [counterId]
  */
 const speakCallTicket = (displayNumber, counterName, counterId) => {
   const message = `Mời ông bà số ${displayNumber} đến ${counterName}`;
@@ -225,20 +212,4 @@ const speakCallTicket = (displayNumber, counterName, counterId) => {
   });
 };
 
-/**
- * Prefetch audio cho số tiếp theo để khi gọi speak() thì audio đã sẵn sàng.
- * Gọi hàm này ngay khi bạn biết số/quầy tiếp theo — ví dụ sau khi gọi xong số hiện tại.
- *
- * Ví dụ sử dụng:
- *   await speakCallTicket(currentNumber, currentCounter);
- *   prefetchCallTicket(nextNumber, nextCounter);  // download ngầm cho số kế
- *
- * @param {string|number} displayNumber
- * @param {string}        counterName
- */
-const prefetchCallTicket = (displayNumber, counterName) => {
-  const message = `Mời ông bà số ${displayNumber} đến ${counterName}`;
-  prefetch(message);
-};
-
-module.exports = { speak, speakCallTicket, prefetch, prefetchCallTicket };
+module.exports = { speak, speakCallTicket };
