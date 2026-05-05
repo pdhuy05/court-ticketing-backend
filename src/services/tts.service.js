@@ -109,7 +109,7 @@ const playBuffer = (buffer) =>
           command = `afplay "${tmpFile}"`;
           break;
         case 'win32':
-          command = `powershell -Command "Add-Type -AssemblyName PresentationCore; $mp = New-Object System.Windows.Media.MediaPlayer; $mp.Open([Uri]'${tmpFile}'); $mp.Play(); Start-Sleep -Seconds 10; $mp.Stop(); exit 0"`;
+          command = `powershell -Command "Add-Type -AssemblyName PresentationCore; $mp = New-Object System.Windows.Media.MediaPlayer; $mp.Open([Uri]'${tmpFile}'); $mp.Play(); do { Start-Sleep -Milliseconds 100 } while ($mp.Position -lt $mp.NaturalDuration.TimeSpan); $mp.Stop(); exit 0"`;
           break;
         case 'linux':
           command = `aplay "${tmpFile}" 2>/dev/null || mpg123 "${tmpFile}" 2>/dev/null || ffplay -nodisp -autoexit "${tmpFile}" 2>/dev/null`;
@@ -168,7 +168,7 @@ const speak = (text) => {
   const task = speakerQueue
     .catch(() => {})
     .then(async () => {
-      const buffer = await downloadPromise; 
+      const buffer = await downloadPromise;
 
       if (buffer) {
         try {
