@@ -12,6 +12,8 @@ const TTS_NATIVE_FALLBACK_ENABLED = process.env.TTS_NATIVE_FALLBACK_ENABLED
   ? process.env.TTS_NATIVE_FALLBACK_ENABLED === 'true'
   : os.platform() !== 'win32';
 
+// ─── Audio cache (LRU, tối đa 100 entry) ─────────────────────────────────────
+// Key: text gốc → Value: Buffer MP3
 const CACHE_MAX = 100;
 const audioCache = new Map();
 
@@ -24,9 +26,14 @@ const cacheSet = (text, buffer) => {
   audioCache.set(text, buffer);
 };
 
-const downloadInFlight = new Map(); 
+// ─── Download dedup ───────────────────────────────────────────────────────────
+// Nếu 2 phòng enqueue cùng 1 câu gần nhau → chỉ download 1 lần
+const downloadInFlight = new Map(); // text → Promise<Buffer>
 
+// ─── 1 queue duy nhất cho loa ────────────────────────────────────────────────
 let speakerQueue = Promise.resolve();
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const sanitizeText = (text = '') =>
   String(text).replace(/"/g, '\\"').replace(/'/g, "\\'").trim();
@@ -63,6 +70,10 @@ const fetchGoogleTTS = (text) =>
     });
   });
 
+/**
+ * Lấy Buffer MP3 cho `text` — từ cache hoặc download.
+ * Nhiều lời gọi cùng text cùng lúc chỉ tạo 1 request (dedup).
+ */
 const getAudioBuffer = (text) => {
   const cached = cacheGet(text);
   if (cached) {
@@ -109,7 +120,14 @@ const playBuffer = (buffer) =>
           command = `afplay "${tmpFile}"`;
           break;
         case 'win32':
-          command = `powershell -Command "Add-Type -AssemblyName PresentationCore; $mp = New-Object System.Windows.Media.MediaPlayer; $mp.Open([Uri]'${tmpFile}'); $mp.Play(); do { Start-Sleep -Milliseconds 100 } while ($mp.Position -lt $mp.NaturalDuration.TimeSpan); $mp.Stop(); exit 0"`;
+          command = `powershell -Command "
+$sig = '[DllImport(""winmm.dll"")] public static extern int mciSendString(string cmd, System.Text.StringBuilder ret, int retLen, IntPtr hwnd);';
+$mci = Add-Type -MemberDefinition $sig -Name MCI -Namespace Win -PassThru;
+$file = '${tmpFile}'.Replace('\\\\','\\');
+$mci::mciSendString(\"open \`\\"$file\`\\" type mpegvideo alias tts\", $null, 0, [IntPtr]::Zero) | Out-Null;
+$mci::mciSendString('play tts wait', $null, 0, [IntPtr]::Zero) | Out-Null;
+$mci::mciSendString('close tts', $null, 0, [IntPtr]::Zero) | Out-Null;
+exit 0"`;
           break;
         case 'linux':
           command = `aplay "${tmpFile}" 2>/dev/null || mpg123 "${tmpFile}" 2>/dev/null || ffplay -nodisp -autoexit "${tmpFile}" 2>/dev/null`;
@@ -153,6 +171,18 @@ const speakNativeFallback = (text) =>
     });
   });
 
+// ─── Core speak ───────────────────────────────────────────────────────────────
+
+/**
+ * Enqueue câu `text` vào queue loa.
+ *
+ * Điểm mấu chốt:
+ *   getAudioBuffer() được gọi NGAY LẬP TỨC khi speak() được gọi,
+ *   không chờ loa rảnh. Trong lúc loa đang phát câu trước, MP3 của
+ *   câu này đã được download về buffer sẵn sàng.
+ *
+ *   Khi đến lượt phát → await downloadPromise thường resolve ngay → 0 delay.
+ */
 const speak = (text) => {
   if (!TTS_ENABLED) {
     logger.info('TTS đang bị tắt');
@@ -160,15 +190,16 @@ const speak = (text) => {
   }
   if (!text || !text.trim()) return Promise.resolve();
 
+  // Bắt đầu download / lấy cache NGAY BÂY GIỜ, song song với loa
   const downloadPromise = getAudioBuffer(text).catch((err) => {
     logger.warning(`Google TTS thất bại khi download: ${err.message}`);
-    return null; 
+    return null; // null → thử native fallback
   });
 
   const task = speakerQueue
     .catch(() => {})
     .then(async () => {
-      const buffer = await downloadPromise;
+      const buffer = await downloadPromise; // thường đã xong lúc này
 
       if (buffer) {
         try {
@@ -200,7 +231,7 @@ const speak = (text) => {
 /**
  * @param {string|number} displayNumber
  * @param {string}        counterName
- * @param {string}        [counterId]  
+ * @param {string}        [counterId]  - giữ để tương thích với controller
  */
 const speakCallTicket = (displayNumber, counterName, counterId) => {
   const message = `Mời ông bà số ${displayNumber} đến ${counterName}`;
