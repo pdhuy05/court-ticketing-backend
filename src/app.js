@@ -12,7 +12,7 @@ const AdminTicketRoute = require("./routers/admin/ticket.route");
 const AdminSettingsRoute = require("./routers/admin/settings.route");
 const AdminShiftRoute = require("./routers/admin/shift.route");
 const StatisticsRoute = require("./routers/statistics.route");
-const DashboardRoute = require("./routers/dashboard.routes");
+const DashboardRoute = require("./routes/dashboard.routes");
 const { notifySystemError } = require("./services/admin-notification.service");
 
 const duplicateFieldLabelMap = {

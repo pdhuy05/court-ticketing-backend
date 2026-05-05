@@ -278,7 +278,7 @@ const getOverloadAlerts = (counters, overloadThreshold) => {
     }));
 };
 
-const getRecentTickets = async () => {
+const getLatestTicketsForOverview = async () => {
   const recentTickets = await Ticket.find()
     .sort({ updatedAt: -1, createdAt: -1 })
     .limit(10)
@@ -325,7 +325,7 @@ const getOverview = async (options = {}) => {
     getSummary(getDayRange()),
     getServiceStats(),
     getCounterStats(overloadThreshold),
-    getRecentTickets(),
+    getLatestTicketsForOverview(),
   ]);
   const alerts = getOverloadAlerts(counters, overloadThreshold);
 
