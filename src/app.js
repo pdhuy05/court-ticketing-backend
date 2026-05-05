@@ -20,7 +20,7 @@ const duplicateFieldLabelMap = {
   number: "Số phòng",
   username: "Tên đăng nhập",
   ipAddress: "Địa chỉ IP máy in",
-  counterId: "phòng",
+  counterId: "Phòng",
   "serviceId+counterId": "Quan hệ phòng và quầy",
   "counterId+serviceId": "Quan hệ phòng và quầy",
   "staffId+serviceId": "Quan hệ nhân viên và quầy",

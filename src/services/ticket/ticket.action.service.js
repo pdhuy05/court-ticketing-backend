@@ -149,7 +149,7 @@ const resolveIssueCounter = async (serviceId, requestedCounterId = null) => {
   );
 
   if (activeRelations.length === 0) {
-    throw new ApiError(400, "quầy này hiện chưa có phòng phục vụ.");
+    throw new ApiError(400, "Quầy này hiện chưa có phòng phục vụ.");
   }
 
   if (requestedCounterId) {

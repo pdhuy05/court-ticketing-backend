@@ -301,7 +301,7 @@ exports.recallTicket = asyncHandler(async (req, res) => {
 
   await speakTicketIfTtsEnabled(
     ticket.displayNumber,
-    counter?.name || "phòng hiện tại",
+    counter?.name || "Phòng hiện tại",
   );
 
   res.json({
@@ -323,7 +323,7 @@ exports.recallProcessingTicket = asyncHandler(async (req, res) => {
   logger.success(`Đã gọi lại vé đang xử lý ${ticket.formattedNumber}`);
   await speakTicketIfTtsEnabled(
     ticket.displayNumber,
-    counter?.name || "phòng hiện tại",
+    counter?.name || "Phòng hiện tại",
   );
 
   res.json({
