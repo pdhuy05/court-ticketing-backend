@@ -181,7 +181,6 @@ exports.update = async (id, data) => {
     throw new ApiError(404, 'Không tìm thấy quầy');
   }
 
-  // Nếu có truyền serviceIds (kể cả mảng rỗng) thì cập nhật lại danh sách service
   if (serviceIds !== undefined) {
     const normalizedServiceIds = normalizeServiceIds(serviceIds);
     if (normalizedServiceIds.length > 0) {

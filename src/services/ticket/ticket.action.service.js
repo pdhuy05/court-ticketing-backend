@@ -31,9 +31,16 @@ const {
     emitWaitingRoomNewTicket
 } = require('./ticket.socket');
 
-// A ticket is eligible for recall only after the first skip.
-// The second skip finalizes the ticket as SKIPPED.
 const MAX_RECALLABLE_SKIP_COUNT = 1;
+
+/** YYYY-MM-DD theo timezone local của server (production nên đặt TZ=Asia/Ho_Chi_Minh / UTC+7). */
+const formatLocalYYYYMMDD = (now = new Date()) => (
+    [
+        now.getFullYear(),
+        String(now.getMonth() + 1).padStart(2, '0'),
+        String(now.getDate()).padStart(2, '0')
+    ].join('-')
+);
 
 const canAccessService = (serviceIds, serviceId) => serviceIds.includes(String(serviceId));
 
@@ -58,9 +65,6 @@ const ensureCounterActive = async (counterId) => {
 };
 
 const ensureNoProcessingTicket = async (counterId, staffId = null) => {
-    // Nếu có staffId: chỉ check riêng nhân viên đó — nhiều nhân viên cùng quầy
-    // được phép xử lý đồng thời, mỗi người 1 vé của dịch vụ được gán.
-    // Nếu không có staffId (admin/fallback): check toàn quầy như cũ.
     const query = staffId
         ? { staffId, status: TicketStatus.PROCESSING }
         : { counterId, status: TicketStatus.PROCESSING };
@@ -195,10 +199,12 @@ const createTicket = async ({ serviceId, name, phone, counterId = null }) => {
     const formattedNumber = formatQueueNumber(nextNumber);
     const servicePrefix = typeof service.prefixNumber === 'number' ? service.prefixNumber : 0;
     const displayNumber = formatServiceDisplayNumber(servicePrefix, nextNumber);
+    const today = formatLocalYYYYMMDD();
 
     const ticket = await Ticket.create({
         number: nextNumber,
         ticketNumber: formattedNumber,
+        date: today,
         serviceId,
         queueCounterId: issueCounter._id,
         name,
@@ -229,7 +235,12 @@ const createTicket = async ({ serviceId, name, phone, counterId = null }) => {
         lastIssuedByCounter
     });
 
-    console.log(`\x1b[36m Đã phát hành vé mới: ${displayNumber} - ${service.name}\x1b[0m`);
+    const time = new Date().toLocaleTimeString('vi-VN');
+console.log(`\x1b[36m┌──── TICKET MỚI ────────────────┐\x1b[0m`);
+console.log(`\x1b[36m│\x1b[0m  Số      : \x1b[1m${displayNumber}\x1b[0m`);
+console.log(`\x1b[36m│\x1b[0m  Dịch vụ : \x1b[1m${service.name}\x1b[0m`);
+console.log(`\x1b[36m│\x1b[0m  Lúc     : \x1b[90m${time}\x1b[0m`);
+console.log(`\x1b[36m└────────────────────────────────┘\x1b[0m`);
 
     await emitStaffDisplayUpdateForCounters(
         extractCounterIdsFromRelations(availableCounters),
@@ -657,7 +668,12 @@ const completeTicket = async (ticketId, counterId = null, staffId = null) => {
     await ticket.save();
 
     emitTicketCompleted(ticket);
-    console.log(`\x1b[32m Vé đã được phát hành - hoàn tất: ${buildTicketPresentation(ticket).formattedNumber}\x1b[0m`);
+const _completedTime = new Date().toLocaleTimeString('vi-VN');
+const _completedNumber = buildTicketPresentation(ticket).formattedNumber;
+console.log(`\x1b[32m┌──── TICKET HOÀN TẤT ──────────────┐\x1b[0m`);
+console.log(`\x1b[32m│\x1b[0m  Số      : \x1b[1m${_completedNumber}\x1b[0m`);
+console.log(`\x1b[32m│\x1b[0m  Lúc     : \x1b[90m${_completedTime}\x1b[0m`);
+console.log(`\x1b[32m└───────────────────────────────────┘\x1b[0m`);
 
     if (ticket.counterId) {
         await Counter.findByIdAndUpdate(ticket.counterId, {

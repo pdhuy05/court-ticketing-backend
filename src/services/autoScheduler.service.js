@@ -54,19 +54,12 @@ const start = async () => {
   }
 
   await seedShiftDefaults();
-
-  // Khôi phục trạng thái isOpen cho các dịch vụ theo lịch hiện tại
   await applyCurrentScheduleState();
-
-  // Gọi ngay lập tức để không bỏ lỡ phút đầu tiên sau restart
   await runAutoShiftStart();
   await runAutoServiceSchedule();
 
   _shiftIntervalId = setInterval(runAutoShiftStart, 60 * 1000);
   _serviceIntervalId = setInterval(runAutoServiceSchedule, 60 * 1000);
-
-  logger.info('Đã khởi động scheduler auto mở ca staff');
-  logger.info('Đã khởi động scheduler tự động mở/đóng dịch vụ');
 };
 
 const stop = () => {

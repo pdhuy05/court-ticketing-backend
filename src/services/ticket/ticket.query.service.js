@@ -273,9 +273,6 @@ const getStaffDisplay = async (counterId, staffId = null) => {
         .populate('queueCounterId', 'number')
         .sort({ createdAt: 1, number: 1 });
 
-    // Lấy TẤT CẢ ticket đang xử lý trong quầy (không lọc theo staffId).
-    // Một quầy có thể có nhiều nhân viên cùng phục vụ các dịch vụ khác nhau,
-    // màn hình display công cộng cần hiển thị đầy đủ tất cả.
     const processingTickets = await Ticket.find({
         counterId,
         status: TicketStatus.PROCESSING,
@@ -287,8 +284,6 @@ const getStaffDisplay = async (counterId, staffId = null) => {
 
     const formatTicket = (ticket) => buildTicketPresentation(ticket, counter);
 
-    // currentTicket: chỉ lấy ticket mà chính nhân viên đó đang xử lý
-    // Nếu chưa gọi ai thì null, không fallback sang ticket của nhân viên khác
     const currentTicket = staffId
         ? (processingTickets.find(t => String(t.staffId) === String(staffId)) || null)
         : (processingTickets[0] || null);

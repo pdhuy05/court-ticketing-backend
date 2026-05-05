@@ -98,6 +98,7 @@ exports.create = asyncHandler(async (req, res) => {
         name: result.ticket.name,
         phone: result.ticket.phone,
         status: result.ticket.status,
+        date: result.ticket.date,
         createdAt: result.ticket.createdAt,
         qrData: result.qrData
     };

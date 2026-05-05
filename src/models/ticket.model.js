@@ -13,6 +13,13 @@ const TicketSchema = new mongoose.Schema({
     required: true,
   },
 
+  date: {
+    type: String,
+    required: true,
+    index: true,
+    match: [/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD']
+  },
+
   serviceId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Service',
@@ -169,20 +176,20 @@ TicketSchema.index({ status: 1, isRecall: 1, createdAt: 1 });
 TicketSchema.index({ recallCounterId: 1, isRecall: 1, status: 1 });
 
 TicketSchema.index(
-  { queueCounterId: 1, number: 1 },
-  { 
-    unique: true, 
+  { queueCounterId: 1, number: 1, date: 1 },
+  {
+    unique: true,
     sparse: true,
-    name: 'unique_queueCounterId_number'
+    name: 'unique_queueCounterId_number_date'
   }
 );
 
 TicketSchema.index(
-  { queueCounterId: 1, ticketNumber: 1 },
-  { 
-    unique: true, 
+  { queueCounterId: 1, ticketNumber: 1, date: 1 },
+  {
+    unique: true,
     sparse: true,
-    name: 'unique_queueCounterId_ticketNumber'
+    name: 'unique_queueCounterId_ticketNumber_date'
   }
 );
 

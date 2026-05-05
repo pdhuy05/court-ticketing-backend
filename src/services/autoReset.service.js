@@ -60,11 +60,9 @@ const start = async () => {
 
   await seedAutoResetDefaults();
 
-  // Gọi ngay lập tức để không bỏ lỡ phút đầu tiên sau restart
   await runAutoReset();
 
   _intervalId = setInterval(runAutoReset, 60 * 1000);
-  logger.info('Đã khởi động scheduler auto reset ticket');
 };
 
 const stop = () => {

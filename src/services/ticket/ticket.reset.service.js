@@ -20,7 +20,11 @@ const resetCounterSequences = async (counterIds = null) => {
         $set: { lastNumber: 0 }
     });
 
-    console.log(`Đã reset ${result.modifiedCount || 0} counter sequences về 0`);
+    const _resetTime = new Date().toLocaleTimeString('vi-VN');
+console.log(`\x1b[33m┌──── RESET SEQUENCE ───────────────┐\x1b[0m`);
+console.log(`\x1b[33m│\x1b[0m  Quầy reset : \x1b[1m${result.modifiedCount || 0}\x1b[0m`);
+console.log(`\x1b[33m│\x1b[0m  Lúc        : \x1b[90m${_resetTime}\x1b[0m`);
+console.log(`\x1b[33m└───────────────────────────────────┘\x1b[0m`);
 
     return result;
 };
@@ -61,7 +65,6 @@ const resetTicketsByDate = async (dateString, actor) => {
 };
 
 const resetAllTickets = async (actor) => {
-    // Lưu thống kê ngày hôm nay trước khi reset
     const { start, end } = getDateRange();
     await calculateDailyStatistics(start, end, actor);
 

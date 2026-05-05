@@ -162,13 +162,7 @@ io.on('connection', (socket) => {
 
 setIO(io);
 
-server.listen(config.port, () => {
-  autoResetScheduler.start().catch((error) => {
-    console.error(`Khởi động auto reset thất bại: ${error.message}`);
-  });
-  autoSchedulerService.start().catch((error) => {
-    console.error(`Khởi động auto scheduler thất bại: ${error.message}`);
-  });
+server.listen(config.port, async () => {
   console.log(`
 \x1b[42m\x1b[30m ✓ \x1b[0m \x1b[36mServer\x1b[0m: Khởi động thành công!
 \x1b[90m  ├─ URL: \x1b[0m\x1b[33mhttp://localhost:${config.port}\x1b[0m
@@ -177,4 +171,26 @@ server.listen(config.port, () => {
 \x1b[90m  └─ Developer: \x1b[0m\x1b[35m[HuyPham]\x1b[0m \x1b[35m[KhanhPhuong]\x1b[0m
 \x1b[90m  └─ Copyright: \x1b[0m\x1b[32m© 2026 Phạm Đình Huy & Trần Phương Khánh\x1b[0m
 `);
+
+  const schedulerResults = await Promise.allSettled([
+    autoResetScheduler.start(),
+    autoSchedulerService.start()
+  ]);
+
+  const labels = [
+    'Auto reset ticket',
+    'Auto mở ca staff & tự động mở/đóng dịch vụ'
+  ];
+
+  const lines = schedulerResults.map((result, i) => {
+    const isLast = i === schedulerResults.length - 1;
+    const prefix = isLast ? '  └─' : '  ├─';
+    if (result.status === 'fulfilled') {
+      return `\x1b[90m${prefix}\x1b[0m \x1b[32m✓\x1b[0m ${labels[i]}`;
+    } else {
+      return `\x1b[90m${prefix}\x1b[0m \x1b[31m✗\x1b[0m ${labels[i]}: ${result.reason?.message}`;
+    }
+  });
+
+  console.log(`\x1b[42m\x1b[30m ✓ \x1b[0m \x1b[36mSchedulers\x1b[0m:\n${lines.join('\n')}\n`);
 });

@@ -155,7 +155,7 @@ const speak = (text) => {
 };
 
 const speakCallTicket = (displayNumber, counterName) => {
-  const message = `Vui lòng mời ông bà số ${displayNumber} đến ${counterName}`;
+  const message = `Mời ông bà số ${displayNumber} đến ${counterName}`;
   return speak(message).catch((error) => {
     logger.error(`Không thể đọc số: ${error.message}`);
   });

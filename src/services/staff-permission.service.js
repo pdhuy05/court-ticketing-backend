@@ -17,7 +17,6 @@ const getCounterServiceRelations = async (counterId) => {
   }).populate('serviceId', 'name code icon displayOrder isActive');
 };
 
-// Lấy danh sách dịch vụ của quầy để phục vụ validate khi gán cho nhân viên
 const getCounterServiceRelationsForAssignment = async (counterId) => {
   if (!counterId) {
     return [];
@@ -103,38 +102,18 @@ const assignServicesToStaff = async (staffId, serviceIds = []) => {
     throw new ApiError(400, 'Nhân viên chưa được gán quầy nên chưa thể gán dịch vụ');
   }
 
-  // Validate: chỉ được gán dịch vụ mà quầy đang phục vụ VÀ dịch vụ đang hoạt động
   const counterRelationsForAssignment = await getCounterServiceRelationsForAssignment(staff.counterId);
-  const counterServices = counterRelationsForAssignment
-    .map((relation) => relation.serviceId)
-    .filter(Boolean);
-  const counterServiceById = new Map(counterServices.map((service) => [String(service._id), service]));
-  const allCounterServiceIdSet = new Set(counterServices.map((service) => String(service._id)));
-
+  const allCounterServiceIds = counterRelationsForAssignment
+    .map((r) => r.serviceId)
+    .filter(Boolean)
+    .map((s) => String(s._id));
+  const allCounterServiceIdSet = new Set(allCounterServiceIds);
   const invalidServiceIds = normalizedServiceIds.filter((serviceId) => !allCounterServiceIdSet.has(serviceId));
-  const inactiveServiceIds = normalizedServiceIds.filter((serviceId) => {
-    const service = counterServiceById.get(serviceId);
-    return service && !service.isActive;
-  });
 
   const counterAccess = await getStaffServiceAccess(null, staff.counterId);
 
   if (invalidServiceIds.length > 0) {
     throw new ApiError(400, 'Chỉ được gán các dịch vụ mà quầy của nhân viên đang phục vụ');
-  }
-
-  if (inactiveServiceIds.length > 0) {
-    const inactiveNames = inactiveServiceIds
-      .map((serviceId) => counterServiceById.get(serviceId))
-      .filter(Boolean)
-      .map((service) => service.name || service.code || String(service._id));
-
-    throw new ApiError(
-      400,
-      inactiveNames.length > 0
-        ? `Không thể gán dịch vụ đã bị vô hiệu hóa: ${inactiveNames.join(', ')}`
-        : 'Không thể gán dịch vụ đã bị vô hiệu hóa'
-    );
   }
 
   const existingAssignments = await StaffService.find({ staffId });
@@ -185,7 +164,7 @@ const assignServicesToStaff = async (staffId, serviceIds = []) => {
 
   return getStaffServiceAccess(staffId, staff.counterId);
 };
-
+  
 const getStaffServiceSummary = async (staffId) => {
   const staff = await ensureStaffAssignable(staffId);
   const access = await getStaffServiceAccess(staffId, staff.counterId);
