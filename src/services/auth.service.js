@@ -1,6 +1,7 @@
 const User = require('../models/user.model');
 const jwt = require('jsonwebtoken');
 const ApiError = require('../utils/ApiError');
+const Counter = require('../models/counter.model');
 const { getStaffServiceAccess } = require('./staff-permission.service');
 
 const login = async (username, password) => {
@@ -16,6 +17,11 @@ const login = async (username, password) => {
     if (!user.counterId) {
       throw new ApiError(403, 'Tài khoản chưa được gán quầy. Vui lòng liên hệ quản trị viên.');
     }
+
+    const counter = await Counter.findById(user.counterId);
+    if (!counter || !counter.isActive) {
+        throw new ApiError(403, 'Quầy của bạn đã bị vô hiệu hóa. Vui lòng liên hệ quản trị viên.');
+    } 
 
     const access = await getStaffServiceAccess(user._id, user.counterId);
 
