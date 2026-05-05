@@ -273,7 +273,6 @@ const createTicket = async ({ serviceId, name, phone, counterId = null }) => {
     lastIssuedByCounter,
   });
 
-  // Emit counter alerts for dashboard
   try {
     const alerts = await dashboardService.getCounterAlerts();
     dashboardService.emitCounterAlerts(alerts);

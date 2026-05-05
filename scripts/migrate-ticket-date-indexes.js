@@ -1,26 +1,8 @@
-/**
- * Migration: thêm uniqueness theo ngày cho vé (Ticket.date + index compound).
- *
- * Bước 1 — Drop unique index cũ (không có date).
- * Bước 2 — Backfill date YYYY-MM-DD từ createdAt (timezone Asia/Ho_Chi_Minh).
- * Bước 3 — syncIndexes() theo ticket.model.js mới (tạo unique_queueCounterId_*_date).
- *
- * Chạy từ thư mục gốc repo: node scripts/migrate-ticket-date-indexes.js
- *
- * ---
- * Kiểm thử thủ công (manual test cases sau khi deploy):
- * - Ngày A phát vé → lastNumber trong CounterSequence tăng; vé có number 1,2,3…
- * - Sau reset ngày (resetTicketsByDate / auto) lastNumber về 0; ngày B phát lại từ 1
- * - Cùng queueCounterId, khác date → cùng number vẫn insert được (không E11000)
- * - Hai request tạo vé cùng ngày → CounterSequence $inc vẫn serialize, không trùng number
- */
-
 require('dotenv').config();
 
 const path = require('path');
 const mongoose = require('mongoose');
 
-// resolve config/model từ project root khi cwd là repo root
 const env = require(path.join(__dirname, '../src/config/env'));
 const Ticket = require(path.join(__dirname, '../src/models/ticket.model'));
 

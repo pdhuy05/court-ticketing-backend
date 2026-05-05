@@ -629,7 +629,6 @@ const emitDashboardUpdateSafe = async (reason = "updated") => {
   }
 };
 
-// API 1: Tổng vé từ trước đến nay
 const getTicketsOverview = async () => {
   const [totalTickets, statusCounts, serviceCounts] = await Promise.all([
     Ticket.countDocuments(),
@@ -686,7 +685,6 @@ const getTicketsOverview = async () => {
   };
 };
 
-// API 2: Thống kê Phòng/Quầy
 const getCountersStatus = async () => {
   const [totalCounters, activeCounters, countersList] = await Promise.all([
     Counter.countDocuments(),
@@ -702,7 +700,6 @@ const getCountersStatus = async () => {
   };
 };
 
-// API 3: Danh sách & thống kê nhân viên
 const getStaffList = async () => {
   const [totalStaff, staffList] = await Promise.all([
     User.countDocuments({ role: "staff" }),
@@ -723,9 +720,8 @@ const getStaffList = async () => {
   };
 };
 
-// API 4: Thống kê vé hôm nay
 const getTicketsToday = async () => {
-  const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+  const today = new Date().toISOString().split("T")[0]; 
   const [totalToday, statusCounts] = await Promise.all([
     Ticket.countDocuments({ date: today }),
     Ticket.aggregate([
@@ -770,7 +766,6 @@ const getTicketsToday = async () => {
   };
 };
 
-// API 5: Danh sách 5 vé gần nhất của mỗi phòng, mỗi quầy
 const getRecentTickets = async () => {
   const counters = await Counter.find({ isActive: true }).select("_id");
 
@@ -814,7 +809,6 @@ const getRecentTickets = async () => {
   };
 };
 
-// API 6: Tỷ lệ vé theo phòng/quầy từ trước đến nay
 const getTicketRatio = async () => {
   const counters = await Counter.find().select("name number");
 
@@ -855,7 +849,6 @@ const getTicketRatio = async () => {
   return ratios;
 };
 
-// API 7: Số lượng vé theo thời gian
 const getTicketTrend = async (groupBy = "day") => {
   let pipeline = [];
   let limit = 30;
@@ -926,7 +919,6 @@ const getTicketTrend = async (groupBy = "day") => {
     ];
     limit = 5;
   } else {
-    // day
     pipeline = [
       {
         $group: {
@@ -983,10 +975,9 @@ const getTicketTrend = async (groupBy = "day") => {
     };
   });
 
-  return trend.reverse(); // Đảo ngược để từ cũ đến mới
+  return trend.reverse();
 };
 
-// API 8: Cảnh báo quầy quá tải
 const getCounterAlerts = async () => {
   const counters = await Counter.find({ isActive: true }).select("name number");
 
@@ -1014,7 +1005,6 @@ const getCounterAlerts = async () => {
   return alerts.filter((alert) => alert.isAlert);
 };
 
-// Socket emit functions
 const emitTicketsOverview = (data) => {
   if (hasIO()) {
     emitToRoom(ADMIN_DASHBOARD_ROOM, "dashboard:ticketOverview", data);
@@ -1071,7 +1061,6 @@ module.exports = {
   getReport,
   emitDashboardUpdate,
   emitDashboardUpdateSafe,
-  // New APIs
   getTicketsOverview,
   getCountersStatus,
   getStaffList,
