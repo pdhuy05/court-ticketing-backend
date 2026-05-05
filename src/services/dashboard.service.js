@@ -629,6 +629,440 @@ const emitDashboardUpdateSafe = async (reason = "updated") => {
   }
 };
 
+// API 1: Tổng vé từ trước đến nay
+const getTicketsOverview = async () => {
+  const [totalTickets, statusCounts, serviceCounts] = await Promise.all([
+    Ticket.countDocuments(),
+    Ticket.aggregate([
+      {
+        $group: {
+          _id: "$status",
+          count: { $sum: 1 },
+        },
+      },
+    ]),
+    Ticket.aggregate([
+      {
+        $group: {
+          _id: "$serviceId",
+          count: { $sum: 1 },
+        },
+      },
+      {
+        $lookup: {
+          from: "services",
+          localField: "_id",
+          foreignField: "_id",
+          as: "service",
+        },
+      },
+      {
+        $unwind: "$service",
+      },
+      {
+        $project: {
+          serviceId: "$_id",
+          serviceName: "$service.name",
+          count: 1,
+        },
+      },
+    ]),
+  ]);
+
+  const statusMap = {};
+  statusCounts.forEach((item) => {
+    statusMap[item._id] = item.count;
+  });
+
+  return {
+    totalTickets,
+    statusCounts: {
+      waiting: statusMap[TicketStatus.WAITING] || 0,
+      processing: statusMap[TicketStatus.PROCESSING] || 0,
+      completed: statusMap[TicketStatus.COMPLETED] || 0,
+      skipped: statusMap[TicketStatus.SKIPPED] || 0,
+    },
+    serviceCounts,
+  };
+};
+
+// API 2: Thống kê Phòng/Quầy
+const getCountersStatus = async () => {
+  const [totalCounters, activeCounters, countersList] = await Promise.all([
+    Counter.countDocuments(),
+    Counter.countDocuments({ isActive: true }),
+    Counter.find().select("code name number isActive").sort({ number: 1 }),
+  ]);
+
+  return {
+    totalCounters,
+    activeCounters,
+    inactiveCounters: totalCounters - activeCounters,
+    countersList,
+  };
+};
+
+// API 3: Danh sách & thống kê nhân viên
+const getStaffList = async () => {
+  const [totalStaff, staffList] = await Promise.all([
+    User.countDocuments({ role: "staff" }),
+    User.find({ role: "staff" })
+      .populate("counterId", "name number")
+      .select("fullName username isActive onDuty counterId")
+      .sort({ fullName: 1 }),
+  ]);
+
+  const onDutyStaff = staffList.filter((staff) => staff.onDuty);
+  const offDutyStaff = staffList.filter((staff) => !staff.onDuty);
+
+  return {
+    totalStaff,
+    onDutyStaff,
+    offDutyStaff,
+    staffList,
+  };
+};
+
+// API 4: Thống kê vé hôm nay
+const getTicketsToday = async () => {
+  const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+  const [totalToday, statusCounts] = await Promise.all([
+    Ticket.countDocuments({ date: today }),
+    Ticket.aggregate([
+      {
+        $match: { date: today },
+      },
+      {
+        $group: {
+          _id: "$status",
+          count: { $sum: 1 },
+        },
+      },
+    ]),
+  ]);
+
+  const statusMap = {};
+  statusCounts.forEach((item) => {
+    statusMap[item._id] = item.count;
+  });
+
+  const completed = statusMap[TicketStatus.COMPLETED] || 0;
+  const skipped = statusMap[TicketStatus.SKIPPED] || 0;
+  const waiting = statusMap[TicketStatus.WAITING] || 0;
+  const processing = statusMap[TicketStatus.PROCESSING] || 0;
+
+  return {
+    totalToday,
+    statusCounts: {
+      completed,
+      skipped,
+      waiting,
+      processing,
+    },
+    percentages: {
+      completed:
+        totalToday > 0 ? Math.round((completed / totalToday) * 100) : 0,
+      skipped: totalToday > 0 ? Math.round((skipped / totalToday) * 100) : 0,
+      waiting: totalToday > 0 ? Math.round((waiting / totalToday) * 100) : 0,
+      processing:
+        totalToday > 0 ? Math.round((processing / totalToday) * 100) : 0,
+    },
+  };
+};
+
+// API 5: Danh sách 5 vé gần nhất của mỗi phòng, mỗi quầy
+const getRecentTickets = async () => {
+  const counters = await Counter.find({ isActive: true }).select("_id");
+
+  const recentByCounter = await Promise.all(
+    counters.map(async (counter) => {
+      const tickets = await Ticket.find({ counterId: counter._id })
+        .populate("serviceId", "name code")
+        .populate("staffId", "fullName username")
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .select("number ticketNumber status createdAt");
+
+      return {
+        counterId: counter._id,
+        tickets,
+      };
+    }),
+  );
+
+  const services = await Service.find({ isActive: true }).select("_id");
+
+  const recentByService = await Promise.all(
+    services.map(async (service) => {
+      const tickets = await Ticket.find({ serviceId: service._id })
+        .populate("counterId", "name number")
+        .populate("staffId", "fullName username")
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .select("number ticketNumber status createdAt");
+
+      return {
+        serviceId: service._id,
+        tickets,
+      };
+    }),
+  );
+
+  return {
+    recentByCounter,
+    recentByService,
+  };
+};
+
+// API 6: Tỷ lệ vé theo phòng/quầy từ trước đến nay
+const getTicketRatio = async () => {
+  const counters = await Counter.find().select("name number");
+
+  const ratios = await Promise.all(
+    counters.map(async (counter) => {
+      const [total, completed, skipped, waiting] = await Promise.all([
+        Ticket.countDocuments({ counterId: counter._id }),
+        Ticket.countDocuments({
+          counterId: counter._id,
+          status: TicketStatus.COMPLETED,
+        }),
+        Ticket.countDocuments({
+          counterId: counter._id,
+          status: TicketStatus.SKIPPED,
+        }),
+        Ticket.countDocuments({
+          counterId: counter._id,
+          status: TicketStatus.WAITING,
+        }),
+      ]);
+
+      return {
+        counterId: counter._id,
+        counterName: counter.name,
+        total,
+        completed,
+        skipped,
+        waiting,
+        percentages: {
+          completed: total > 0 ? Math.round((completed / total) * 100) : 0,
+          skipped: total > 0 ? Math.round((skipped / total) * 100) : 0,
+          waiting: total > 0 ? Math.round((waiting / total) * 100) : 0,
+        },
+      };
+    }),
+  );
+
+  return ratios;
+};
+
+// API 7: Số lượng vé theo thời gian
+const getTicketTrend = async (groupBy = "day") => {
+  let pipeline = [];
+  let limit = 30;
+
+  if (groupBy === "month") {
+    pipeline = [
+      {
+        $group: {
+          _id: {
+            year: { $year: "$createdAt" },
+            month: { $month: "$createdAt" },
+          },
+          completed: {
+            $sum: {
+              $cond: [{ $eq: ["$status", TicketStatus.COMPLETED] }, 1, 0],
+            },
+          },
+          skipped: {
+            $sum: {
+              $cond: [{ $eq: ["$status", TicketStatus.SKIPPED] }, 1, 0],
+            },
+          },
+          waiting: {
+            $sum: {
+              $cond: [{ $eq: ["$status", TicketStatus.WAITING] }, 1, 0],
+            },
+          },
+          total: { $sum: 1 },
+        },
+      },
+      {
+        $sort: { "_id.year": -1, "_id.month": -1 },
+      },
+      {
+        $limit: 12,
+      },
+    ];
+    limit = 12;
+  } else if (groupBy === "year") {
+    pipeline = [
+      {
+        $group: {
+          _id: { year: { $year: "$createdAt" } },
+          completed: {
+            $sum: {
+              $cond: [{ $eq: ["$status", TicketStatus.COMPLETED] }, 1, 0],
+            },
+          },
+          skipped: {
+            $sum: {
+              $cond: [{ $eq: ["$status", TicketStatus.SKIPPED] }, 1, 0],
+            },
+          },
+          waiting: {
+            $sum: {
+              $cond: [{ $eq: ["$status", TicketStatus.WAITING] }, 1, 0],
+            },
+          },
+          total: { $sum: 1 },
+        },
+      },
+      {
+        $sort: { "_id.year": -1 },
+      },
+      {
+        $limit: 5,
+      },
+    ];
+    limit = 5;
+  } else {
+    // day
+    pipeline = [
+      {
+        $group: {
+          _id: {
+            year: { $year: "$createdAt" },
+            month: { $month: "$createdAt" },
+            day: { $dayOfMonth: "$createdAt" },
+          },
+          completed: {
+            $sum: {
+              $cond: [{ $eq: ["$status", TicketStatus.COMPLETED] }, 1, 0],
+            },
+          },
+          skipped: {
+            $sum: {
+              $cond: [{ $eq: ["$status", TicketStatus.SKIPPED] }, 1, 0],
+            },
+          },
+          waiting: {
+            $sum: {
+              $cond: [{ $eq: ["$status", TicketStatus.WAITING] }, 1, 0],
+            },
+          },
+          total: { $sum: 1 },
+        },
+      },
+      {
+        $sort: { "_id.year": -1, "_id.month": -1, "_id.day": -1 },
+      },
+      {
+        $limit: 30,
+      },
+    ];
+  }
+
+  const results = await Ticket.aggregate(pipeline);
+
+  const trend = results.map((item) => {
+    let label = "";
+    if (groupBy === "month") {
+      label = `${item._id.year}-${String(item._id.month).padStart(2, "0")}`;
+    } else if (groupBy === "year") {
+      label = `${item._id.year}`;
+    } else {
+      label = `${item._id.year}-${String(item._id.month).padStart(2, "0")}-${String(item._id.day).padStart(2, "0")}`;
+    }
+
+    return {
+      label,
+      completed: item.completed,
+      skipped: item.skipped,
+      waiting: item.waiting,
+      total: item.total,
+    };
+  });
+
+  return trend.reverse(); // Đảo ngược để từ cũ đến mới
+};
+
+// API 8: Cảnh báo quầy quá tải
+const getCounterAlerts = async () => {
+  const counters = await Counter.find({ isActive: true }).select("name number");
+
+  const alerts = await Promise.all(
+    counters.map(async (counter) => {
+      const serviceIds = await ServiceCounter.find({
+        counterId: counter._id,
+        isActive: true,
+      }).distinct("serviceId");
+
+      const waitingCount = await Ticket.countDocuments({
+        serviceId: { $in: serviceIds },
+        status: TicketStatus.WAITING,
+      });
+
+      return {
+        counterId: counter._id,
+        counterName: counter.name,
+        waitingCount,
+        isAlert: waitingCount >= 50,
+      };
+    }),
+  );
+
+  return alerts.filter((alert) => alert.isAlert);
+};
+
+// Socket emit functions
+const emitTicketsOverview = (data) => {
+  if (hasIO()) {
+    emitToRoom(ADMIN_DASHBOARD_ROOM, "dashboard:ticketOverview", data);
+  }
+};
+
+const emitCountersStatus = (data) => {
+  if (hasIO()) {
+    emitToRoom(ADMIN_DASHBOARD_ROOM, "dashboard:counterStatus", data);
+  }
+};
+
+const emitStaffList = (data) => {
+  if (hasIO()) {
+    emitToRoom(ADMIN_DASHBOARD_ROOM, "dashboard:staffList", data);
+  }
+};
+
+const emitTicketsToday = (data) => {
+  if (hasIO()) {
+    emitToRoom(ADMIN_DASHBOARD_ROOM, "dashboard:ticketsToday", data);
+  }
+};
+
+const emitRecentTickets = (data) => {
+  if (hasIO()) {
+    emitToRoom(ADMIN_DASHBOARD_ROOM, "dashboard:recentTickets", data);
+  }
+};
+
+const emitTicketRatio = (data) => {
+  if (hasIO()) {
+    emitToRoom(ADMIN_DASHBOARD_ROOM, "dashboard:ticketRatio", data);
+  }
+};
+
+const emitTicketTrend = (data) => {
+  if (hasIO()) {
+    emitToRoom(ADMIN_DASHBOARD_ROOM, "dashboard:ticketTrend", data);
+  }
+};
+
+const emitCounterAlerts = (data) => {
+  if (hasIO()) {
+    emitToRoom(ADMIN_DASHBOARD_ROOM, "dashboard:counterAlert", data);
+  }
+};
+
 module.exports = {
   ADMIN_DASHBOARD_ROOM,
   ADMIN_DASHBOARD_EVENT,
@@ -637,4 +1071,21 @@ module.exports = {
   getReport,
   emitDashboardUpdate,
   emitDashboardUpdateSafe,
+  // New APIs
+  getTicketsOverview,
+  getCountersStatus,
+  getStaffList,
+  getTicketsToday,
+  getRecentTickets,
+  getTicketRatio,
+  getTicketTrend,
+  getCounterAlerts,
+  emitTicketsOverview,
+  emitCountersStatus,
+  emitStaffList,
+  emitTicketsToday,
+  emitRecentTickets,
+  emitTicketRatio,
+  emitTicketTrend,
+  emitCounterAlerts,
 };

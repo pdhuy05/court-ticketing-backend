@@ -8,6 +8,7 @@ const StaffService = require("../../models/staffService.model");
 const { TicketStatus } = require("../../constants/enums");
 const ApiError = require("../../utils/ApiError");
 const { emitDashboardUpdateSafe } = require("../dashboard.service");
+const dashboardService = require("../dashboard.service");
 const { generateQRData } = require("../../utils/qrData.util");
 const {
   getStaffServiceAccess,
@@ -271,6 +272,14 @@ const createTicket = async ({ serviceId, name, phone, counterId = null }) => {
     totalWaiting: waitingCount,
     lastIssuedByCounter,
   });
+
+  // Emit counter alerts for dashboard
+  try {
+    const alerts = await dashboardService.getCounterAlerts();
+    dashboardService.emitCounterAlerts(alerts);
+  } catch (error) {
+    console.error(`Không thể emit counter alerts: ${error.message}`);
+  }
 
   const time = new Date().toLocaleTimeString("vi-VN");
   console.log(`\x1b[36m┌──── TICKET MỚI ────────────────┐\x1b[0m`);

@@ -12,6 +12,7 @@ const AdminTicketRoute = require("./routers/admin/ticket.route");
 const AdminSettingsRoute = require("./routers/admin/settings.route");
 const AdminShiftRoute = require("./routers/admin/shift.route");
 const StatisticsRoute = require("./routers/statistics.route");
+const DashboardRoute = require("./routers/dashboard.routes");
 const { notifySystemError } = require("./services/admin-notification.service");
 
 const duplicateFieldLabelMap = {
@@ -107,6 +108,7 @@ app.use("/api/admin/tickets", AdminTicketRoute);
 app.use("/api/admin/settings", AdminSettingsRoute);
 app.use("/api/admin/shift", AdminShiftRoute);
 app.use("/api/statistics", StatisticsRoute);
+app.use("/api/dashboard", DashboardRoute);
 
 app.use((err, req, res, next) => {
   const normalizedError = normalizeError(err);

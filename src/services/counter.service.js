@@ -257,14 +257,21 @@ exports.addServices = async (id, serviceIds) => {
       counterId: counter._id,
     });
 
-    if (!existing) {
-      const relation = await ServiceCounter.create({
-        serviceId,
-        counterId: counter._id,
-        isActive: true,
-      });
-      addedServices.push(relation);
+    if (existing) {
+      if (!existing.isActive) {
+        existing.isActive = true;
+        await existing.save();
+        addedServices.push(existing);
+      }
+      continue;
     }
+
+    const relation = await ServiceCounter.create({
+      serviceId,
+      counterId: counter._id,
+      isActive: true,
+    });
+    addedServices.push(relation);
   }
 
   const serviceRelations = await ServiceCounter.find({
