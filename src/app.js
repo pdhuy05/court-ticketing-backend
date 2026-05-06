@@ -7,12 +7,12 @@ const TicketsRoute = require("./routers/ticket.route");
 const PrintersRoute = require("./routers/printer.route");
 const AuthRoute = require("./routers/auth.route");
 const AdminUserRoute = require("./routers/admin/user.route");
-const AdminDashboardRoute = require("./routers/admin/dashboard.route");
+const { adminRouter: AdminDashboardRoute, publicRouter: DashboardRoute } = require("./routers/admin/dashboard.route");
 const AdminTicketRoute = require("./routers/admin/ticket.route");
 const AdminSettingsRoute = require("./routers/admin/settings.route");
 const AdminShiftRoute = require("./routers/admin/shift.route");
 const StatisticsRoute = require("./routers/statistics.route");
-const DashboardRoute = require("./routes/dashboard.routes");
+
 const { notifySystemError } = require("./services/admin-notification.service");
 
 const duplicateFieldLabelMap = {
