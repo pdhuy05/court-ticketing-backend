@@ -39,13 +39,12 @@ const runAutoReset = async () => {
     }
 
     const today = getTodayString();
-    const lastResetDate = await getLastResetDate(); // ← đọc từ DB thay vì biến in-memory
+    const lastResetDate = await getLastResetDate(); 
 
     if (lastResetDate === today) {
       return;
     }
 
-    // Ghi vào DB TRƯỚC khi reset để tránh reset lại nếu server restart giữa chừng
     await setLastResetDate(today);
 
     const yesterday = getYesterdayString();

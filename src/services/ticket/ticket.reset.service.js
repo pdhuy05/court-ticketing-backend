@@ -18,7 +18,6 @@ const resetCounterSequences = async (counterIds = null) => {
     $set: { lastNumber: 0 },
   });
 
-  // Reset processedCount về 0 theo ngày
   const counterQuery = counterIds?.length ? { _id: { $in: counterIds } } : {};
   await Counter.updateMany(counterQuery, { $set: { processedCount: 0 } });
 

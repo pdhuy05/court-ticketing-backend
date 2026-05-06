@@ -1053,6 +1053,42 @@ const emitCounterAlerts = (data) => {
   }
 };
 
+const getCounterCompletedTotal = async (date = null) => {
+  const match = { 
+    status: TicketStatus.COMPLETED, 
+    counterId: { $ne: null } 
+  };
+
+  if (date) {
+    const [year, month, day] = date.split('-').map(Number);
+    const start = new Date(year, month - 1, day, 0, 0, 0, 0);
+    const end = new Date(year, month - 1, day + 1, 0, 0, 0, 0);
+    match.completedAt = { $gte: start, $lt: end };
+  }
+
+  const results = await Ticket.aggregate([
+    { $match: match },
+    { $group: { _id: "$counterId", totalCompleted: { $sum: 1 } } }
+  ]);
+
+  const counters = await Counter.find({ isActive: true })
+    .select("name number code")
+    .sort({ number: 1 })
+    .lean();
+
+  const totalMap = new Map(
+    results.map((r) => [String(r._id), r.totalCompleted])
+  );
+
+  return counters.map((counter) => ({
+    counterId: counter._id,
+    counterName: counter.name,
+    counterNumber: counter.number,
+    counterCode: counter.code,
+    totalCompleted: totalMap.get(String(counter._id)) || 0,
+  }));
+};
+
 module.exports = {
   ADMIN_DASHBOARD_ROOM,
   ADMIN_DASHBOARD_EVENT,
@@ -1077,4 +1113,5 @@ module.exports = {
   emitTicketRatio,
   emitTicketTrend,
   emitCounterAlerts,
+  getCounterCompletedTotal,
 };

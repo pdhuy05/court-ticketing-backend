@@ -19,6 +19,12 @@ exports.getReport = async (req, res) => {
   });
 };
 
+exports.getCounterCompletedTotal = asyncHandler(async (req, res) => {
+  const { date } = req.query;
+  const data = await dashboardService.getCounterCompletedTotal(date);
+  res.json({ success: true, data });
+});
+
 Object.keys(module.exports).forEach((key) => {
   module.exports[key] = asyncHandler(module.exports[key]);
 });

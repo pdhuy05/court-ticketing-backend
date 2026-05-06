@@ -19,4 +19,6 @@ publicRouter.get('/tickets/ratio', dashboardController.getTicketRatio);
 publicRouter.get('/tickets/trend', dashboardController.getTicketTrend);
 publicRouter.get('/counters/alert', dashboardController.getCounterAlerts);
 
+adminRouter.get('/counters/total', authMiddleware, adminOnly, adminDashboardController.getCounterCompletedTotal);
+
 module.exports = { adminRouter, publicRouter };
