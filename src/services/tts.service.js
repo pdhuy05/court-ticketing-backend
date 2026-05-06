@@ -62,7 +62,7 @@ const playAudio = (filePath) => new Promise((resolve, reject) => {
       command = `afplay "${filePath}"`;
       break;
     case 'win32':
-      command = `powershell -Command "$wmp = New-Object -ComObject WMPlayer.OCX; $media = $wmp.newMedia('${filePath}'); $wmp.currentPlaylist = $wmp.newPlaylist('playlist', '', $null); $wmp.currentPlaylist.appendItem($media); $wmp.controls.play(); while($wmp.playState -ne 1 -and $wmp.playState -ne 10 -and $wmp.playState -ne 0){Start-Sleep -Milliseconds 100}; $wmp.controls.stop(); $wmp.close(); exit 0"`;
+      command = `powershell -Command "Add-Type -AssemblyName PresentationCore; $mp = New-Object System.Windows.Media.MediaPlayer; $mp.Open([Uri]'${filePath}'); $mp.Play(); Start-Sleep -Seconds 10; $mp.Stop(); exit 0"`;
       break;
     case 'linux':
       command = `aplay "${filePath}" 2>/dev/null || mpg123 "${filePath}" 2>/dev/null || ffplay -nodisp -autoexit "${filePath}" 2>/dev/null`;
