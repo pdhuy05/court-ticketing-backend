@@ -25,28 +25,48 @@ const cacheSet = (text, buffer) => {
 };
 
 const downloadInFlight = new Map();
-
 let speakerQueue = Promise.resolve();
+
+// Xoay vòng User-Agent để tránh bị Google block
+const USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15',
+];
+let uaIndex = 0;
+const nextUserAgent = () => USER_AGENTS[uaIndex++ % USER_AGENTS.length];
+
+const TTS_VARIANTS = [
+  (text, lang) => ({
+    url: `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${lang}&client=tw-ob`,
+    referer: 'https://translate.google.com/',
+  }),
+  (text, lang) => ({
+    url: `https://translate.googleapis.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${lang}&client=gtx`,
+    referer: 'https://translate.google.com/',
+  }),
+];
 
 const sanitizeText = (text = '') =>
   String(text).replace(/"/g, '\\"').replace(/'/g, "\\'").trim();
 
-const fetchGoogleTTS = (text) =>
+const fetchOnce = (url, referer) =>
   new Promise((resolve, reject) => {
-    const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${TTS_LANG}&client=tw-ob`;
-
     const request = https.get(
       url,
       {
         headers: {
-          'User-Agent': 'Mozilla/5.0',
-          Referer: 'https://translate.google.com/',
+          'User-Agent': nextUserAgent(),
+          Referer: referer,
+          Accept: 'audio/mpeg, audio/*, */*',
+          'Accept-Language': 'vi-VN,vi;q=0.9,en;q=0.8',
         },
         timeout: TTS_TIMEOUT_MS,
       },
       (response) => {
         if (response.statusCode !== 200) {
-          reject(new Error(`Google TTS status ${response.statusCode}`));
+          response.resume();
+          reject(new Error(`HTTP ${response.statusCode}`));
           return;
         }
         const chunks = [];
@@ -55,13 +75,27 @@ const fetchGoogleTTS = (text) =>
         response.on('error', reject);
       }
     );
-
     request.on('error', reject);
     request.on('timeout', () => {
       request.destroy();
-      reject(new Error('Google TTS timeout'));
+      reject(new Error('timeout'));
     });
   });
+
+const fetchGoogleTTS = async (text) => {
+  // Thử lần lượt từng variant, variant nào thành công thì dùng
+  for (let i = 0; i < TTS_VARIANTS.length; i++) {
+    const { url, referer } = TTS_VARIANTS[i](text, TTS_LANG);
+    try {
+      const buffer = await fetchOnce(url, referer);
+      if (i > 0) logger.info(`TTS dùng variant #${i} thành công`);
+      return buffer;
+    } catch (err) {
+      logger.warning(`TTS variant #${i} thất bại: ${err.message}`);
+    }
+  }
+  throw new Error('Tất cả TTS variant đều thất bại');
+};
 
 const getAudioBuffer = (text) => {
   const cached = cacheGet(text);
@@ -112,7 +146,7 @@ const playBuffer = (buffer) =>
         case 'win32':
           command = [
             'powershell -NoProfile -Command "',
-            `$p = '${tmpFile.replace(/'/g, "''")}';`,
+            `$p = '${tmpFile.replace(/\\/g, '\\\\').replace(/'/g, "''")}';`,
             '$wmp = New-Object -ComObject WMPlayer.OCX;',
             '$wmp.settings.autoStart = $true;',
             '$wmp.URL = $p;',
@@ -193,7 +227,7 @@ const speak = (text) => {
       }
 
       if (!TTS_NATIVE_FALLBACK_ENABLED) {
-        logger.error('Google TTS thất bại, fallback native đang tắt');
+        logger.error('Google TTS thất bại, fallback native đang tắt — bật bằng TTS_NATIVE_FALLBACK_ENABLED=true');
         return;
       }
 
