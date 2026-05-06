@@ -3,7 +3,7 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const logger = require('../utils/Logger'); // Giả sử bạn có logger này, nếu không thì comment hoặc thay bằng console
+const logger = require('../utils/Logger');
 
 const TTS_TIMEOUT_MS = Number(process.env.TTS_TIMEOUT_MS || 10000);
 const TTS_ENABLED = process.env.TTS_ENABLED !== 'false';
@@ -12,27 +12,24 @@ const TTS_NATIVE_FALLBACK_ENABLED = process.env.TTS_NATIVE_FALLBACK_ENABLED
   ? process.env.TTS_NATIVE_FALLBACK_ENABLED === 'true'
   : os.platform() !== 'win32';
 
-const CACHE_MAX = 100;
-const audioCache = new Map();
-const downloadInFlight = new Map();
-
+// ---------- Hàng đợi phát nối tiếp ----------
 let speechQueue = Promise.resolve();
 
-// ---------- Tối ưu Windows: giữ một PowerShell process duy nhất ----------
+// ---------- Tối ưu Windows: một PowerShell process dùng WMPlayer.OCX ----------
 let powerShellProcess = null;
 let psStdin = null;
 let psReady = false;
-let psStdoutBuffer = '';
-let pendingPlayResolvers = [];
+let pendingPlayResolvers = []; // Mỗi lần gọi play sẽ thêm một resolver, được gọi khi có "DONE"
 
+// Khởi tạo PowerShell process một lần duy nhất
 const initPowerShell = () => {
   if (powerShellProcess && psReady) return Promise.resolve();
   if (powerShellProcess && !psReady) {
-    // đang khởi tạo, chờ
+    // Đang khởi tạo, chờ
     return new Promise((resolve) => {
-      const checkInterval = setInterval(() => {
+      const interval = setInterval(() => {
         if (psReady) {
-          clearInterval(checkInterval);
+          clearInterval(interval);
           resolve();
         }
       }, 50);
@@ -44,12 +41,12 @@ const initPowerShell = () => {
     ]);
     psStdin = powerShellProcess.stdin;
     psReady = false;
-    psStdoutBuffer = '';
 
+    let stdoutBuffer = '';
     powerShellProcess.stdout.on('data', (data) => {
-      psStdoutBuffer += data.toString();
-      let lines = psStdoutBuffer.split('\n');
-      psStdoutBuffer = lines.pop() || '';
+      stdoutBuffer += data.toString();
+      const lines = stdoutBuffer.split('\n');
+      stdoutBuffer = lines.pop() || '';
       for (const line of lines) {
         const trimmed = line.trim();
         if (trimmed === 'READY') {
@@ -71,37 +68,31 @@ const initPowerShell = () => {
       powerShellProcess = null;
       psReady = false;
       psStdin = null;
+      // Báo lỗi cho tất cả pending
       while (pendingPlayResolvers.length) {
         const rejector = pendingPlayResolvers.shift();
         if (rejector) rejector(new Error('PowerShell process died'));
       }
     });
 
-    // SCRIPT ĐÃ SỬA: dùng nháy đơn cho đường dẫn, không có backtick rối
+    // Script định nghĩa hàm Play-MP3 dùng WMPlayer.OCX (chạy chắc chắn)
     const initScript = `
-Add-Type -TypeDefinition @"
-using System;
-using System.Text;
-using System.Runtime.InteropServices;
-public class WinMCI {
-  [DllImport("winmm.dll", CharSet=CharSet.Auto)]
-  public static extern int mciSendString(string cmd, StringBuilder ret, int len, IntPtr hwnd);
-}
-"@
 function Play-MP3([string]$path) {
-  $fixedPath = $path -replace '/', '\\'
-  [WinMCI]::mciSendString("open '$fixedPath' type mpegvideo alias tts", $null, 0, [IntPtr]::Zero) | Out-Null
-  [WinMCI]::mciSendString("play tts wait", $null, 0, [IntPtr]::Zero) | Out-Null
-  [WinMCI]::mciSendString("close tts", $null, 0, [IntPtr]::Zero) | Out-Null
+  $wmp = New-Object -ComObject WMPlayer.OCX
+  $wmp.settings.autoStart = $true
+  $wmp.URL = $path
+  $wmp.controls.play()
+  # Chờ playState == 1 (stopped)
+  while ($wmp.playState -ne 1) { Start-Sleep -Milliseconds 100 }
+  $wmp.close()
+  [System.Runtime.Interopservices.Marshal]::ReleaseComObject($wmp) | Out-Null
   Write-Host "DONE"
 }
 Write-Host "READY"
 `;
     psStdin.write(initScript + '\n');
     const timeout = setTimeout(() => {
-      if (!psReady) {
-        reject(new Error('PowerShell init timeout'));
-      }
+      if (!psReady) reject(new Error('PowerShell init timeout'));
     }, 5000);
     const originalResolve = resolve;
     resolve = (val) => {
@@ -111,67 +102,64 @@ Write-Host "READY"
   });
 };
 
+// Phát buffer MP3 trên Windows (không spawn process mới)
 const playBufferOnWindows = (buffer) => {
   return new Promise(async (resolve, reject) => {
     const tmpMp3 = path.join(os.tmpdir(), `tts_${Date.now()}_${Math.random().toString(36).slice(2)}.mp3`);
-    fs.writeFile(tmpMp3, buffer, async (writeErr) => {
-      if (writeErr) {
-        reject(writeErr);
-        return;
-      }
+    fs.writeFile(tmpMp3, buffer, async (err) => {
+      if (err) return reject(err);
       try {
         await initPowerShell();
-        if (!psReady || !psStdin) {
-          throw new Error('PowerShell not ready');
-        }
-        const mp3Path = tmpMp3.replace(/\//g, '\\');
-        // Đưa resolver vào hàng đợi
+        if (!psReady || !psStdin) throw new Error('PowerShell not ready');
+        const mp3Path = tmpMp3.replace(/\//g, '\\'); // backslash cho Windows
+        // Tạo promise để chờ tín hiệu DONE
         const donePromise = new Promise((res, rej) => {
+          const resolved = false;
           const timeoutId = setTimeout(() => {
-            const idx = pendingPlayResolvers.findIndex(r => r === doneResolver);
+            const idx = pendingPlayResolvers.findIndex(r => r === resolver);
             if (idx !== -1) pendingPlayResolvers.splice(idx, 1);
             fs.unlink(tmpMp3, () => {});
             rej(new Error('Play timeout'));
           }, TTS_TIMEOUT_MS);
-          const doneResolver = () => {
+          const resolver = () => {
             clearTimeout(timeoutId);
+            fs.unlink(tmpMp3, () => {});
             res();
           };
-          pendingPlayResolvers.push(doneResolver);
+          pendingPlayResolvers.push(resolver);
         });
         psStdin.write(`Play-MP3 '${mp3Path}'\n`);
         await donePromise;
         resolve();
-      } catch (err) {
+      } catch (e) {
         fs.unlink(tmpMp3, () => {});
-        reject(err);
+        reject(e);
       }
     });
   });
 };
-// ---------- Kết thúc tối ưu Windows ----------
 
-const sanitizeText = (text = '') => String(text).replace(/"/g, '\\"').replace(/'/g, "\\'").trim();
+// ---------- Hàm tải Google TTS và xuất buffer (giữ nguyên cache) ----------
+const audioCache = new Map();
+const downloadInFlight = new Map();
+const CACHE_MAX = 100;
 
 const fetchGoogleTTS = (text) =>
   new Promise((resolve, reject) => {
     const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${TTS_LANG}&client=tw-ob`;
     const request = https.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0',
-        'Referer': 'https://translate.google.com/',
-      },
+      headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://translate.google.com/' },
       timeout: TTS_TIMEOUT_MS,
-    }, (response) => {
-      if (response.statusCode !== 200) {
-        response.resume();
-        reject(new Error(`Google TTS status ${response.statusCode}`));
+    }, (res) => {
+      if (res.statusCode !== 200) {
+        res.resume();
+        reject(new Error(`Google TTS status ${res.statusCode}`));
         return;
       }
       const chunks = [];
-      response.on('data', (c) => chunks.push(c));
-      response.on('end', () => resolve(Buffer.concat(chunks)));
-      response.on('error', reject);
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => resolve(Buffer.concat(chunks)));
+      res.on('error', reject);
     });
     request.on('error', reject);
     request.on('timeout', () => { request.destroy(); reject(new Error('Google TTS timeout')); });
@@ -179,17 +167,10 @@ const fetchGoogleTTS = (text) =>
 
 const getAudioBuffer = (text) => {
   const cached = audioCache.get(text);
-  if (cached) {
-    logger.info(`TTS cache hit: "${text}"`);
-    return Promise.resolve(cached);
-  }
-  if (downloadInFlight.has(text)) {
-    logger.info(`TTS dedup download: "${text}"`);
-    return downloadInFlight.get(text);
-  }
-  logger.info(`TTS download: "${text}"`);
+  if (cached) return Promise.resolve(cached);
+  if (downloadInFlight.has(text)) return downloadInFlight.get(text);
   const promise = fetchGoogleTTS(text)
-    .then((buffer) => {
+    .then(buffer => {
       if (audioCache.size >= CACHE_MAX) audioCache.delete(audioCache.keys().next().value);
       audioCache.set(text, buffer);
       return buffer;
@@ -199,56 +180,52 @@ const getAudioBuffer = (text) => {
   return promise;
 };
 
-const playBuffer = (buffer) =>
-  new Promise((resolve, reject) => {
-    const platform = os.platform();
-    if (platform === 'win32') {
-      return playBufferOnWindows(buffer).then(resolve).catch(reject);
-    }
+// ---------- Play buffer theo platform ----------
+const playBuffer = (buffer) => {
+  const platform = os.platform();
+  if (platform === 'win32') {
+    return playBufferOnWindows(buffer);
+  }
+  // Các OS khác dùng exec như cũ (tạm thời)
+  return new Promise((resolve, reject) => {
     const tmpMp3 = path.join(os.tmpdir(), `tts_${Date.now()}_${Math.random().toString(36).slice(2)}.mp3`);
-    fs.writeFile(tmpMp3, buffer, (writeErr) => {
-      if (writeErr) { reject(writeErr); return; }
+    fs.writeFile(tmpMp3, buffer, (err) => {
+      if (err) return reject(err);
       let command;
-      switch (platform) {
-        case 'darwin':
-          command = `afplay "${tmpMp3}"`;
-          break;
-        case 'linux':
-          command = `aplay "${tmpMp3}" 2>/dev/null || mpg123 "${tmpMp3}" 2>/dev/null || ffplay -nodisp -autoexit "${tmpMp3}" 2>/dev/null`;
-          break;
-        default:
-          fs.unlink(tmpMp3, () => {});
-          reject(new Error(`Không hỗ trợ phát audio trên OS: ${platform}`));
-          return;
-      }
+      if (platform === 'darwin') command = `afplay "${tmpMp3}"`;
+      else if (platform === 'linux') command = `aplay "${tmpMp3}" 2>/dev/null || mpg123 "${tmpMp3}" 2>/dev/null || ffplay -nodisp -autoexit "${tmpMp3}" 2>/dev/null`;
+      else return reject(new Error(`Unsupported OS: ${platform}`));
       exec(command, { timeout: TTS_TIMEOUT_MS }, (error) => {
         fs.unlink(tmpMp3, () => {});
-        if (error) reject(error); else resolve();
+        if (error) reject(error);
+        else resolve();
       });
     });
   });
+};
 
-const speakNativeFallback = (text) =>
-  new Promise((resolve, reject) => {
-    const platform = os.platform();
-    const escaped = sanitizeText(text);
-    let command;
-    switch (platform) {
-      case 'win32':
-        command = `powershell -NoProfile -Command "Add-Type -AssemblyName System.Speech; $synth = New-Object System.Speech.Synthesis.SpeechSynthesizer; $synth.Speak('${escaped.replace(/'/g, "''")}')"`;
-        break;
-      case 'darwin': command = `say "${escaped}"`; break;
-      case 'linux':  command = `espeak "${escaped}" 2>/dev/null`; break;
-      default: reject(new Error(`OS not supported: ${platform}`)); return;
-    }
-    exec(command, { timeout: TTS_TIMEOUT_MS }, (err) => { if (err) reject(err); else resolve(); });
-  });
+// ---------- Fallback native (giữ nguyên) ----------
+const speakNativeFallback = (text) => new Promise((resolve, reject) => {
+  const platform = os.platform();
+  const escaped = text.replace(/"/g, '\\"').replace(/'/g, "\\'").trim();
+  let command;
+  switch (platform) {
+    case 'win32':
+      command = `powershell -NoProfile -Command "Add-Type -AssemblyName System.Speech; $synth = New-Object System.Speech.Synthesis.SpeechSynthesizer; $synth.Speak('${escaped.replace(/'/g, "''")}')"`;
+      break;
+    case 'darwin': command = `say "${escaped}"`; break;
+    case 'linux':  command = `espeak "${escaped}" 2>/dev/null`; break;
+    default: reject(new Error(`OS not supported: ${platform}`)); return;
+  }
+  exec(command, { timeout: TTS_TIMEOUT_MS }, (err) => { if (err) reject(err); else resolve(); });
+});
 
+// ---------- Hàm speak chính (có queue) ----------
 const speak = (text) => {
   if (!TTS_ENABLED) { logger.info('TTS đang bị tắt'); return Promise.resolve(); }
   if (!text || !text.trim()) return Promise.resolve();
 
-  const downloadPromise = getAudioBuffer(text).catch((err) => {
+  const downloadPromise = getAudioBuffer(text).catch(err => {
     logger.warning(`Google TTS download thất bại: ${err.message}`);
     return null;
   });
@@ -256,7 +233,7 @@ const speak = (text) => {
   const task = speechQueue
     .catch(() => {})
     .then(async () => {
-      const buffer = await downloadPromise; 
+      const buffer = await downloadPromise;
       if (buffer) {
         try {
           await playBuffer(buffer);
@@ -266,7 +243,6 @@ const speak = (text) => {
           logger.warning(`Lỗi phát MP3: ${playErr.message}`);
         }
       }
-
       if (!TTS_NATIVE_FALLBACK_ENABLED) {
         logger.error('Google TTS thất bại, fallback native đang tắt');
         return;
@@ -285,15 +261,12 @@ const speak = (text) => {
 
 const speakCallTicket = (displayNumber, counterName) => {
   const message = `Mời ông bà số ${displayNumber} đến ${counterName}`;
-  return speak(message).catch((error) => {
-    logger.error(`Không thể đọc số: ${error.message}`);
-  });
+  return speak(message).catch(error => logger.error(`Không thể đọc số: ${error.message}`));
 };
 
+// Dọn dẹp khi app tắt
 process.on('exit', () => {
-  if (powerShellProcess) {
-    powerShellProcess.kill();
-  }
+  if (powerShellProcess) powerShellProcess.kill();
 });
 
 module.exports = { speak, speakCallTicket };
