@@ -3,7 +3,7 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const logger = require('../utils/Logger');
+const logger = require('../utils/Logger'); // Giả sử bạn có logger này, nếu không thì comment hoặc thay bằng console
 
 const TTS_TIMEOUT_MS = Number(process.env.TTS_TIMEOUT_MS || 10000);
 const TTS_ENABLED = process.env.TTS_ENABLED !== 'false';
@@ -23,7 +23,7 @@ let powerShellProcess = null;
 let psStdin = null;
 let psReady = false;
 let psStdoutBuffer = '';
-let pendingPlayResolvers = []; // hàng đợi resolve khi có DONE
+let pendingPlayResolvers = [];
 
 const initPowerShell = () => {
   if (powerShellProcess && psReady) return Promise.resolve();
@@ -48,9 +48,8 @@ const initPowerShell = () => {
 
     powerShellProcess.stdout.on('data', (data) => {
       psStdoutBuffer += data.toString();
-      // Xử lý từng dòng
       let lines = psStdoutBuffer.split('\n');
-      psStdoutBuffer = lines.pop() || ''; // giữ phần chưa hoàn chỉnh
+      psStdoutBuffer = lines.pop() || '';
       for (const line of lines) {
         const trimmed = line.trim();
         if (trimmed === 'READY') {
@@ -68,18 +67,17 @@ const initPowerShell = () => {
     });
 
     powerShellProcess.on('exit', (code) => {
-      logger.warning(`PowerShell process exited with code ${code}, sẽ khởi tạo lại lần sau`);
+      logger.warning(`PowerShell process exited with code ${code}`);
       powerShellProcess = null;
       psReady = false;
       psStdin = null;
-      // Từ chối tất cả pending
       while (pendingPlayResolvers.length) {
         const rejector = pendingPlayResolvers.shift();
         if (rejector) rejector(new Error('PowerShell process died'));
       }
     });
 
-    // Gửi script khởi tạo MCI và hàm Play-MP3
+    // SCRIPT ĐÃ SỬA: dùng nháy đơn cho đường dẫn, không có backtick rối
     const initScript = `
 Add-Type -TypeDefinition @"
 using System;
@@ -92,7 +90,7 @@ public class WinMCI {
 "@
 function Play-MP3([string]$path) {
   $fixedPath = $path -replace '/', '\\'
-  [WinMCI]::mciSendString("open \\"$fixedPath\\" type mpegvideo alias tts", $null, 0, [IntPtr]::Zero) | Out-Null
+  [WinMCI]::mciSendString("open '$fixedPath' type mpegvideo alias tts", $null, 0, [IntPtr]::Zero) | Out-Null
   [WinMCI]::mciSendString("play tts wait", $null, 0, [IntPtr]::Zero) | Out-Null
   [WinMCI]::mciSendString("close tts", $null, 0, [IntPtr]::Zero) | Out-Null
   Write-Host "DONE"
@@ -100,13 +98,11 @@ function Play-MP3([string]$path) {
 Write-Host "READY"
 `;
     psStdin.write(initScript + '\n');
-    // timeout phòng trường hợp lỗi
     const timeout = setTimeout(() => {
       if (!psReady) {
         reject(new Error('PowerShell init timeout'));
       }
     }, 5000);
-    // Khi resolve sẽ clear timeout
     const originalResolve = resolve;
     resolve = (val) => {
       clearTimeout(timeout);
@@ -128,15 +124,9 @@ const playBufferOnWindows = (buffer) => {
         if (!psReady || !psStdin) {
           throw new Error('PowerShell not ready');
         }
-        // Chuyển đường dẫn sang dạng Windows backslash
         const mp3Path = tmpMp3.replace(/\//g, '\\');
-        // Thêm promise vào hàng đợi
+        // Đưa resolver vào hàng đợi
         const donePromise = new Promise((res, rej) => {
-          pendingPlayResolvers.push(() => {
-            fs.unlink(tmpMp3, () => {});
-            res();
-          });
-          // timeout
           const timeoutId = setTimeout(() => {
             const idx = pendingPlayResolvers.findIndex(r => r === doneResolver);
             if (idx !== -1) pendingPlayResolvers.splice(idx, 1);
@@ -147,8 +137,7 @@ const playBufferOnWindows = (buffer) => {
             clearTimeout(timeoutId);
             res();
           };
-          // Thay thế resolver vừa tạo
-          pendingPlayResolvers[pendingPlayResolvers.length - 1] = doneResolver;
+          pendingPlayResolvers.push(doneResolver);
         });
         psStdin.write(`Play-MP3 '${mp3Path}'\n`);
         await donePromise;
@@ -167,7 +156,6 @@ const sanitizeText = (text = '') => String(text).replace(/"/g, '\\"').replace(/'
 const fetchGoogleTTS = (text) =>
   new Promise((resolve, reject) => {
     const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${TTS_LANG}&client=tw-ob`;
-
     const request = https.get(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0',
@@ -185,7 +173,6 @@ const fetchGoogleTTS = (text) =>
       response.on('end', () => resolve(Buffer.concat(chunks)));
       response.on('error', reject);
     });
-
     request.on('error', reject);
     request.on('timeout', () => { request.destroy(); reject(new Error('Google TTS timeout')); });
   });
@@ -200,7 +187,6 @@ const getAudioBuffer = (text) => {
     logger.info(`TTS dedup download: "${text}"`);
     return downloadInFlight.get(text);
   }
-
   logger.info(`TTS download: "${text}"`);
   const promise = fetchGoogleTTS(text)
     .then((buffer) => {
@@ -209,7 +195,6 @@ const getAudioBuffer = (text) => {
       return buffer;
     })
     .finally(() => downloadInFlight.delete(text));
-
   downloadInFlight.set(text, promise);
   return promise;
 };
@@ -217,18 +202,12 @@ const getAudioBuffer = (text) => {
 const playBuffer = (buffer) =>
   new Promise((resolve, reject) => {
     const platform = os.platform();
-
-    // Windows đã tối ưu
     if (platform === 'win32') {
       return playBufferOnWindows(buffer).then(resolve).catch(reject);
     }
-
-    // Các nền tảng khác giữ nguyên logic cũ (không spawn nhiều lần)
     const tmpMp3 = path.join(os.tmpdir(), `tts_${Date.now()}_${Math.random().toString(36).slice(2)}.mp3`);
-
     fs.writeFile(tmpMp3, buffer, (writeErr) => {
       if (writeErr) { reject(writeErr); return; }
-
       let command;
       switch (platform) {
         case 'darwin':
@@ -242,7 +221,6 @@ const playBuffer = (buffer) =>
           reject(new Error(`Không hỗ trợ phát audio trên OS: ${platform}`));
           return;
       }
-
       exec(command, { timeout: TTS_TIMEOUT_MS }, (error) => {
         fs.unlink(tmpMp3, () => {});
         if (error) reject(error); else resolve();
@@ -312,7 +290,6 @@ const speakCallTicket = (displayNumber, counterName) => {
   });
 };
 
-// Đóng PowerShell process khi app kết thúc
 process.on('exit', () => {
   if (powerShellProcess) {
     powerShellProcess.kill();

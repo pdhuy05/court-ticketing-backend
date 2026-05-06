@@ -1,299 +1,388 @@
-const { exec, spawn } = require('child_process');
-const https = require('https');
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
-const logger = require('../utils/Logger'); // Giả sử bạn có logger này, nếu không thì comment hoặc thay bằng console
+const ticketService = require("../services/ticket.service");
+const printerService = require("../services/printer.service");
+const settingService = require("../services/setting.service");
+const { speakCallTicket } = require("../services/tts.service");
+const Printer = require("../models/printer.model");
+const Counter = require("../models/counter.model");
+const Ticket = require("../models/ticket.model");
+const ApiError = require("../utils/ApiError");
+const asyncHandler = require("../utils/asyncHandler");
+const logger = require("../utils/Logger");
+const {
+  emitAdminNotificationSafe,
+} = require("../services/admin-notification.service");
+const {
+  buildTicketPresentation,
+} = require("../services/ticket/ticket.helpers");
 
-const TTS_TIMEOUT_MS = Number(process.env.TTS_TIMEOUT_MS || 10000);
-const TTS_ENABLED = process.env.TTS_ENABLED !== 'false';
-const TTS_LANG = process.env.TTS_LANG || 'vi';
-const TTS_NATIVE_FALLBACK_ENABLED = process.env.TTS_NATIVE_FALLBACK_ENABLED
-  ? process.env.TTS_NATIVE_FALLBACK_ENABLED === 'true'
-  : os.platform() !== 'win32';
+const ensureAssignedCounterId = (req) => {
+  const counterId = req.user?.counterId;
 
-const CACHE_MAX = 100;
-const audioCache = new Map();
-const downloadInFlight = new Map();
-
-let speechQueue = Promise.resolve();
-
-// ---------- Tối ưu Windows: giữ một PowerShell process duy nhất ----------
-let powerShellProcess = null;
-let psStdin = null;
-let psReady = false;
-let psStdoutBuffer = '';
-let pendingPlayResolvers = [];
-
-const initPowerShell = () => {
-  if (powerShellProcess && psReady) return Promise.resolve();
-  if (powerShellProcess && !psReady) {
-    // đang khởi tạo, chờ
-    return new Promise((resolve) => {
-      const checkInterval = setInterval(() => {
-        if (psReady) {
-          clearInterval(checkInterval);
-          resolve();
-        }
-      }, 50);
-    });
+  if (!counterId) {
+    throw new ApiError(400, "Tài khoản chưa được gán phòng");
   }
-  return new Promise((resolve, reject) => {
-    powerShellProcess = spawn('powershell.exe', [
-      '-NoProfile', '-ExecutionPolicy', 'Bypass', '-NoExit', '-Command', '-'
-    ]);
-    psStdin = powerShellProcess.stdin;
-    psReady = false;
-    psStdoutBuffer = '';
 
-    powerShellProcess.stdout.on('data', (data) => {
-      psStdoutBuffer += data.toString();
-      let lines = psStdoutBuffer.split('\n');
-      psStdoutBuffer = lines.pop() || '';
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (trimmed === 'READY') {
-          psReady = true;
-          resolve();
-        } else if (trimmed === 'DONE') {
-          const resolver = pendingPlayResolvers.shift();
-          if (resolver) resolver();
-        }
-      }
-    });
+  return counterId;
+};
 
-    powerShellProcess.stderr.on('data', (data) => {
-      logger.warning(`PowerShell stderr: ${data.toString()}`);
-    });
+const speakTicketIfTtsEnabled = async (displayNumber, counterName) => {
+  if (!(await settingService.isTtsEnabled())) {
+    return;
+  }
 
-    powerShellProcess.on('exit', (code) => {
-      logger.warning(`PowerShell process exited with code ${code}`);
-      powerShellProcess = null;
-      psReady = false;
-      psStdin = null;
-      while (pendingPlayResolvers.length) {
-        const rejector = pendingPlayResolvers.shift();
-        if (rejector) rejector(new Error('PowerShell process died'));
-      }
-    });
-
-    // SCRIPT ĐÃ SỬA: dùng nháy đơn cho đường dẫn, không có backtick rối
-    const initScript = `
-Add-Type -TypeDefinition @"
-using System;
-using System.Text;
-using System.Runtime.InteropServices;
-public class WinMCI {
-  [DllImport("winmm.dll", CharSet=CharSet.Auto)]
-  public static extern int mciSendString(string cmd, StringBuilder ret, int len, IntPtr hwnd);
-}
-"@
-function Play-MP3([string]$path) {
-  $fixedPath = $path -replace '/', '\\'
-  [WinMCI]::mciSendString("open '$fixedPath' type mpegvideo alias tts", $null, 0, [IntPtr]::Zero) | Out-Null
-  [WinMCI]::mciSendString("play tts wait", $null, 0, [IntPtr]::Zero) | Out-Null
-  [WinMCI]::mciSendString("close tts", $null, 0, [IntPtr]::Zero) | Out-Null
-  Write-Host "DONE"
-}
-Write-Host "READY"
-`;
-    psStdin.write(initScript + '\n');
-    const timeout = setTimeout(() => {
-      if (!psReady) {
-        reject(new Error('PowerShell init timeout'));
-      }
-    }, 5000);
-    const originalResolve = resolve;
-    resolve = (val) => {
-      clearTimeout(timeout);
-      originalResolve(val);
-    };
+  speakCallTicket(displayNumber, counterName).catch((error) => {
+    logger.error(`Lỗi phát âm thanh: ${error.message}`);
   });
 };
 
-const playBufferOnWindows = (buffer) => {
-  return new Promise(async (resolve, reject) => {
-    const tmpMp3 = path.join(os.tmpdir(), `tts_${Date.now()}_${Math.random().toString(36).slice(2)}.mp3`);
-    fs.writeFile(tmpMp3, buffer, async (writeErr) => {
-      if (writeErr) {
-        reject(writeErr);
-        return;
-      }
-      try {
-        await initPowerShell();
-        if (!psReady || !psStdin) {
-          throw new Error('PowerShell not ready');
-        }
-        const mp3Path = tmpMp3.replace(/\//g, '\\');
-        // Đưa resolver vào hàng đợi
-        const donePromise = new Promise((res, rej) => {
-          const timeoutId = setTimeout(() => {
-            const idx = pendingPlayResolvers.findIndex(r => r === doneResolver);
-            if (idx !== -1) pendingPlayResolvers.splice(idx, 1);
-            fs.unlink(tmpMp3, () => {});
-            rej(new Error('Play timeout'));
-          }, TTS_TIMEOUT_MS);
-          const doneResolver = () => {
-            clearTimeout(timeoutId);
-            res();
-          };
-          pendingPlayResolvers.push(doneResolver);
-        });
-        psStdin.write(`Play-MP3 '${mp3Path}'\n`);
-        await donePromise;
-        resolve();
-      } catch (err) {
-        fs.unlink(tmpMp3, () => {});
-        reject(err);
-      }
-    });
-  });
-};
-// ---------- Kết thúc tối ưu Windows ----------
-
-const sanitizeText = (text = '') => String(text).replace(/"/g, '\\"').replace(/'/g, "\\'").trim();
-
-const fetchGoogleTTS = (text) =>
-  new Promise((resolve, reject) => {
-    const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${TTS_LANG}&client=tw-ob`;
-    const request = https.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0',
-        'Referer': 'https://translate.google.com/',
-      },
-      timeout: TTS_TIMEOUT_MS,
-    }, (response) => {
-      if (response.statusCode !== 200) {
-        response.resume();
-        reject(new Error(`Google TTS status ${response.statusCode}`));
-        return;
-      }
-      const chunks = [];
-      response.on('data', (c) => chunks.push(c));
-      response.on('end', () => resolve(Buffer.concat(chunks)));
-      response.on('error', reject);
-    });
-    request.on('error', reject);
-    request.on('timeout', () => { request.destroy(); reject(new Error('Google TTS timeout')); });
-  });
-
-const getAudioBuffer = (text) => {
-  const cached = audioCache.get(text);
-  if (cached) {
-    logger.info(`TTS cache hit: "${text}"`);
-    return Promise.resolve(cached);
-  }
-  if (downloadInFlight.has(text)) {
-    logger.info(`TTS dedup download: "${text}"`);
-    return downloadInFlight.get(text);
-  }
-  logger.info(`TTS download: "${text}"`);
-  const promise = fetchGoogleTTS(text)
-    .then((buffer) => {
-      if (audioCache.size >= CACHE_MAX) audioCache.delete(audioCache.keys().next().value);
-      audioCache.set(text, buffer);
-      return buffer;
-    })
-    .finally(() => downloadInFlight.delete(text));
-  downloadInFlight.set(text, promise);
-  return promise;
-};
-
-const playBuffer = (buffer) =>
-  new Promise((resolve, reject) => {
-    const platform = os.platform();
-    if (platform === 'win32') {
-      return playBufferOnWindows(buffer).then(resolve).catch(reject);
-    }
-    const tmpMp3 = path.join(os.tmpdir(), `tts_${Date.now()}_${Math.random().toString(36).slice(2)}.mp3`);
-    fs.writeFile(tmpMp3, buffer, (writeErr) => {
-      if (writeErr) { reject(writeErr); return; }
-      let command;
-      switch (platform) {
-        case 'darwin':
-          command = `afplay "${tmpMp3}"`;
-          break;
-        case 'linux':
-          command = `aplay "${tmpMp3}" 2>/dev/null || mpg123 "${tmpMp3}" 2>/dev/null || ffplay -nodisp -autoexit "${tmpMp3}" 2>/dev/null`;
-          break;
-        default:
-          fs.unlink(tmpMp3, () => {});
-          reject(new Error(`Không hỗ trợ phát audio trên OS: ${platform}`));
-          return;
-      }
-      exec(command, { timeout: TTS_TIMEOUT_MS }, (error) => {
-        fs.unlink(tmpMp3, () => {});
-        if (error) reject(error); else resolve();
+const queueAutoPrintTicket = ({ ticket, service, ticketNumberDisplay }) => {
+  setImmediate(async () => {
+    try {
+      const defaultPrinter = await Printer.findOne({
+        isDefault: true,
+        isActive: true,
       });
-    });
-  });
 
-const speakNativeFallback = (text) =>
-  new Promise((resolve, reject) => {
-    const platform = os.platform();
-    const escaped = sanitizeText(text);
-    let command;
-    switch (platform) {
-      case 'win32':
-        command = `powershell -NoProfile -Command "Add-Type -AssemblyName System.Speech; $synth = New-Object System.Speech.Synthesis.SpeechSynthesizer; $synth.Speak('${escaped.replace(/'/g, "''")}')"`;
-        break;
-      case 'darwin': command = `say "${escaped}"`; break;
-      case 'linux':  command = `espeak "${escaped}" 2>/dev/null`; break;
-      default: reject(new Error(`OS not supported: ${platform}`)); return;
-    }
-    exec(command, { timeout: TTS_TIMEOUT_MS }, (err) => { if (err) reject(err); else resolve(); });
-  });
-
-const speak = (text) => {
-  if (!TTS_ENABLED) { logger.info('TTS đang bị tắt'); return Promise.resolve(); }
-  if (!text || !text.trim()) return Promise.resolve();
-
-  const downloadPromise = getAudioBuffer(text).catch((err) => {
-    logger.warning(`Google TTS download thất bại: ${err.message}`);
-    return null;
-  });
-
-  const task = speechQueue
-    .catch(() => {})
-    .then(async () => {
-      const buffer = await downloadPromise; 
-      if (buffer) {
-        try {
-          await playBuffer(buffer);
-          logger.info(`Đã đọc (Google TTS): "${text}"`);
-          return;
-        } catch (playErr) {
-          logger.warning(`Lỗi phát MP3: ${playErr.message}`);
-        }
-      }
-
-      if (!TTS_NATIVE_FALLBACK_ENABLED) {
-        logger.error('Google TTS thất bại, fallback native đang tắt');
+      if (!defaultPrinter) {
+        logger.warning("Không tìm thấy máy in mặc định");
         return;
       }
-      try {
-        await speakNativeFallback(text);
-        logger.info(`Đã đọc (native fallback): "${text}"`);
-      } catch (nativeErr) {
-        logger.error(`Cả 2 TTS đều thất bại: ${nativeErr.message}`);
+
+      if (
+        defaultPrinter.type !== "network" ||
+        !defaultPrinter.connection?.host
+      ) {
+        logger.warning(
+          `Máy in ${defaultPrinter.name} chưa hỗ trợ loại kết nối ${defaultPrinter.type}`,
+        );
+        return;
       }
-    });
 
-  speechQueue = task.catch(() => {});
-  return task;
-};
+      if (!printerService.hasPrinter(defaultPrinter.code)) {
+        printerService.addNetworkPrinter(
+          defaultPrinter.code,
+          defaultPrinter.connection.host,
+          defaultPrinter.connection.port || 9100,
+        );
+      }
 
-const speakCallTicket = (displayNumber, counterName) => {
-  const message = `Mời ông bà số ${displayNumber} đến ${counterName}`;
-  return speak(message).catch((error) => {
-    logger.error(`Không thể đọc số: ${error.message}`);
+      await printerService.printTicket(defaultPrinter.code, ticket, service);
+
+      logger.success(
+        `Đã in ticket ${ticketNumberDisplay} trên máy ${defaultPrinter.name}`,
+      );
+    } catch (printError) {
+      logger.error(`Lỗi in ticket: ${printError.message}`);
+      emitAdminNotificationSafe({
+        type: "printer-error",
+        severity: "warning",
+        title: "Lỗi in ticket",
+        message: printError.message,
+        source: "ticket.controller.queueAutoPrintTicket",
+        meta: {
+          printer: "default",
+          serviceId: service?._id,
+          ticketId: ticket?._id,
+        },
+      });
+    }
   });
 };
 
-process.on('exit', () => {
-  if (powerShellProcess) {
-    powerShellProcess.kill();
-  }
+exports.create = asyncHandler(async (req, res) => {
+  const result = await ticketService.createTicket(req.body);
+  result.ticket.displayNumber = result.ticketNumberDisplay;
+
+  const ticketData = {
+    _id: result.ticket._id,
+    number: result.ticket.number,
+    ticketNumber: result.ticket.ticketNumber,
+    formattedNumber: result.ticketNumberFormatted,
+    displayNumber: result.ticketNumberDisplay,
+    name: result.ticket.name,
+    phone: result.ticket.phone,
+    status: result.ticket.status,
+    date: result.ticket.date,
+    createdAt: result.ticket.createdAt,
+    qrData: result.qrData,
+  };
+
+  const serviceData = {
+    _id: result.service._id,
+    code: result.service.code,
+    name: result.service.name,
+  };
+
+  const availableCountersData = result.availableCounters.map((counter) => ({
+    _id: counter._id,
+    code: counter.code,
+    name: counter.name,
+    number: counter.number,
+  }));
+
+  res.status(201).json({
+    success: true,
+    data: ticketData,
+    service: serviceData,
+    availableCounters: availableCountersData,
+    message: `Đã cấp số ${result.ticketNumberDisplay} cho quầy ${result.service.name}`,
+  });
 });
 
-module.exports = { speak, speakCallTicket };
+exports.printTicket = asyncHandler(async (req, res) => {
+  const ticket = await Ticket.findById(req.params.id)
+    .populate("serviceId", "code name prefixNumber")
+    .populate("queueCounterId", "code name number")
+    .populate("counterId", "code name number");
+
+  if (!ticket) {
+    throw new ApiError(404, "Không tìm thấy vé");
+  }
+
+  const presentation = buildTicketPresentation(ticket);
+  ticket.displayNumber = presentation.displayNumber || ticket.ticketNumber;
+
+  queueAutoPrintTicket({
+    ticket,
+    service: ticket.serviceId,
+    ticketNumberDisplay: ticket.displayNumber || ticket.ticketNumber,
+  });
+
+  res.json({
+    success: true,
+    message: `Đã gửi lệnh in vé ${ticket.ticketNumber}`,
+    printStatus: "queued",
+  });
+});
+
+exports.getAllWaiting = asyncHandler(async (req, res) => {
+  const { tickets, lastIssuedByCounter } =
+    await ticketService.getWaitingRoomData();
+
+  res.json({
+    success: true,
+    count: tickets.length,
+    data: tickets,
+    lastIssuedByCounter,
+  });
+});
+
+exports.getTicketByQR = asyncHandler(async (req, res) => {
+  const data = await ticketService.getTicketByQR(req.params.qrData);
+
+  res.json({
+    success: true,
+    data,
+  });
+});
+
+exports.callNext = asyncHandler(async (req, res) => {
+  const counterId = ensureAssignedCounterId(req);
+
+  if (req.body.counterId && String(counterId) !== String(req.body.counterId)) {
+    throw new ApiError(403, "Bạn chỉ được phép gọi số cho phòng được gán");
+  }
+
+  const { nextTicket, counter } = await ticketService.callNext(
+    counterId,
+    req.user?._id,
+  );
+
+  logger.success(`Đã gọi số ${nextTicket.formattedNumber} đến ${counter.name}`);
+  await speakTicketIfTtsEnabled(nextTicket.displayNumber, counter.name);
+
+  res.json({
+    success: true,
+    data: nextTicket,
+    message: `Xin mời ông bà có số vé ${nextTicket.formattedNumber} đến ${counter.name}`,
+  });
+});
+
+exports.callById = asyncHandler(async (req, res) => {
+  const counterId = ensureAssignedCounterId(req);
+
+  const { ticket, counter } = await ticketService.callById(
+    req.body.ticketId,
+    counterId,
+    req.user?._id,
+  );
+
+  logger.success(
+    `Đã gọi số ${ticket.formattedNumber} đến ${counter.name} theo ticketId`,
+  );
+  await speakTicketIfTtsEnabled(ticket.displayNumber, counter.name);
+
+  res.json({
+    success: true,
+    data: ticket,
+    message: `Xin mời ông bà có số vé ${ticket.formattedNumber} đến ${counter.name}`,
+  });
+});
+
+exports.complete = asyncHandler(async (req, res) => {
+  const ticket = await ticketService.completeTicket(
+    req.params.id,
+    req.user?.counterId,
+    req.user?._id,
+  );
+
+  res.json({
+    success: true,
+    data: ticket,
+    message: `Hoàn thành số ${ticket.formattedNumber}`,
+  });
+});
+
+exports.skip = asyncHandler(async (req, res) => {
+  const { reason } = req.body || {};
+  const ticketId = req.params.id;
+  const counterId = req.user?.counterId;
+
+  const ticket = await ticketService.skipTicket(
+    ticketId,
+    reason,
+    counterId,
+    req.user?._id,
+  );
+
+  logger.warning(
+    `Đã bỏ qua số ${ticket.formattedNumber} - Lý do: ${reason || "Khách vắng mặt "}`,
+  );
+
+  const message = ticket.isRecall
+    ? `Đã chuyển số ${ticket.formattedNumber} vào danh sách cần gọi lại`
+    : `Đã đóng ticket ${ticket.formattedNumber} sau ${ticket.skipCount} lần bỏ qua`;
+
+  res.json({
+    success: true,
+    data: ticket,
+    message,
+  });
+});
+
+exports.backToWaiting = asyncHandler(async (req, res) => {
+  const counterId = ensureAssignedCounterId(req);
+  const ticket = await ticketService.backToWaiting(
+    req.params.id,
+    counterId,
+    req.user?._id,
+    req.body?.position || "front",
+  );
+
+  res.json({
+    success: true,
+    data: ticket,
+    message: `Đã trả số ${ticket.formattedNumber} về hàng chờ`,
+  });
+});
+
+exports.getRecallList = asyncHandler(async (req, res) => {
+  const counterId = ensureAssignedCounterId(req);
+  const recallList = await ticketService.getRecallList(
+    counterId,
+    req.user?._id,
+  );
+
+  res.json({
+    success: true,
+    count: recallList.length,
+    data: recallList,
+  });
+});
+
+exports.recallTicket = asyncHandler(async (req, res) => {
+  const counterId = ensureAssignedCounterId(req);
+  const ticket = await ticketService.recallTicket(
+    req.params.id,
+    counterId,
+    req.user?._id,
+  );
+  const counter = await Counter.findById(counterId).select("name");
+
+  await speakTicketIfTtsEnabled(
+    ticket.displayNumber,
+    counter?.name || "Phòng hiện tại",
+  );
+
+  res.json({
+    success: true,
+    data: ticket,
+    message: `Đã gọi lại số ${ticket.formattedNumber}`,
+  });
+});
+
+exports.recallProcessingTicket = asyncHandler(async (req, res) => {
+  const counterId = ensureAssignedCounterId(req);
+  const ticket = await ticketService.recallProcessingTicket(
+    req.params.id,
+    counterId,
+    req.user?._id,
+  );
+  const counter = await Counter.findById(counterId).select("name");
+
+  logger.success(`Đã gọi lại vé đang xử lý ${ticket.formattedNumber}`);
+  await speakTicketIfTtsEnabled(
+    ticket.displayNumber,
+    counter?.name || "Phòng hiện tại",
+  );
+
+  res.json({
+    success: true,
+    data: ticket,
+    message: `Đã gọi lại vé đang xử lý ${ticket.formattedNumber}`,
+  });
+});
+
+exports.cancelRecallTicket = asyncHandler(async (req, res) => {
+  const counterId = ensureAssignedCounterId(req);
+  const ticket = await ticketService.cancelRecallTicket(
+    req.params.id,
+    counterId,
+    req.user?._id,
+    req.body?.reason,
+  );
+
+  res.json({
+    success: true,
+    data: ticket,
+    message: `Đã hủy ticket recall số ${ticket.formattedNumber}`,
+  });
+});
+
+exports.getCounterDisplay = asyncHandler(async (req, res) => {
+  const { counterId } = req.params;
+  const data = await ticketService.getCounterDisplay(counterId);
+
+  res.json({
+    success: true,
+    data,
+  });
+});
+
+exports.getMyCounter = asyncHandler(async (req, res) => {
+  const counterId = ensureAssignedCounterId(req);
+  const data = await ticketService.getMyCounter(counterId, req.user?._id);
+
+  res.json({
+    success: true,
+    data: {
+      ...data,
+      staffName: req.user.fullName,
+      staffId: req.user._id,
+    },
+  });
+});
+
+exports.getStaffDisplay = asyncHandler(async (req, res) => {
+  const counterId = ensureAssignedCounterId(req);
+  const data = await ticketService.getStaffDisplay(counterId, req.user?._id);
+
+  res.json({
+    success: true,
+    data: {
+      ...data,
+      staffName: req.user.fullName,
+      staffId: req.user._id,
+    },
+  });
+});
