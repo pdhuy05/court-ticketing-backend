@@ -108,12 +108,25 @@ const playBuffer = (buffer) =>
         case 'darwin':
           command = `afplay "${tmpFile}"`;
           break;
+
         case 'win32':
-          command = `powershell -Command "Add-Type -AssemblyName PresentationCore; $mp = New-Object System.Windows.Media.MediaPlayer; $mp.Open([Uri]'${tmpFile}'); $mp.Play(); Start-Sleep -Seconds 10; $mp.Stop(); exit 0"`;
+          command = [
+            'powershell -NoProfile -Command "',
+            `$p = '${tmpFile.replace(/'/g, "''")}';`,
+            '$wmp = New-Object -ComObject WMPlayer.OCX;',
+            '$wmp.settings.autoStart = $true;',
+            '$wmp.URL = $p;',
+            '$wmp.controls.play();',
+            'do { Start-Sleep -Milliseconds 200 } while ($wmp.playState -ne 1);',
+            '$wmp.close();',
+            '[System.Runtime.Interopservices.Marshal]::ReleaseComObject($wmp) | Out-Null"',
+          ].join(' ');
           break;
+
         case 'linux':
           command = `aplay "${tmpFile}" 2>/dev/null || mpg123 "${tmpFile}" 2>/dev/null || ffplay -nodisp -autoexit "${tmpFile}" 2>/dev/null`;
           break;
+
         default:
           fs.unlink(tmpFile, () => {});
           reject(new Error(`Không hỗ trợ phát audio trên OS: ${platform}`));
@@ -135,7 +148,7 @@ const speakNativeFallback = (text) =>
     let command;
     switch (platform) {
       case 'win32':
-        command = `powershell -Command "Add-Type -AssemblyName System.Speech; $synth = New-Object System.Speech.Synthesis.SpeechSynthesizer; $synth.Speak('${escaped.replace(/'/g, "''")}')"`;
+        command = `powershell -NoProfile -Command "Add-Type -AssemblyName System.Speech; $synth = New-Object System.Speech.Synthesis.SpeechSynthesizer; $synth.Speak('${escaped.replace(/'/g, "''")}')"`;
         break;
       case 'darwin':
         command = `say "${escaped}"`;
@@ -160,10 +173,6 @@ const speak = (text) => {
   }
   if (!text || !text.trim()) return Promise.resolve();
 
-  // ✅ KEY FIX: Download NGAY LẬP TỨC khi speak() được gọi
-  // Không nằm trong .then() của queue nữa
-  // → Clip 2 download song song trong lúc clip 1 đang phát
-  // → Khi clip 1 xong, clip 2 đã sẵn sàng → 0 delay
   const downloadPromise = getAudioBuffer(text).catch((err) => {
     logger.warning(`Google TTS thất bại khi download: ${err.message}`);
     return null;
@@ -172,7 +181,7 @@ const speak = (text) => {
   const task = speakerQueue
     .catch(() => {})
     .then(async () => {
-      const buffer = await downloadPromise; // hầu hết trường hợp đã xong từ lâu
+      const buffer = await downloadPromise;
       if (buffer) {
         try {
           await playBuffer(buffer);
