@@ -79,17 +79,21 @@ const createStaff = async (data) => {
 };
 
 const updateStaff = async (id, data) => {
-  const staff = await User.findOneAndUpdate(
-    { _id: id, role: 'staff' },
-    data,
-    { returnDocument: 'after', runValidators: true }
-  );
-  if (!staff) {
-    throw new ApiError(404, 'Không tìm thấy nhân viên');
+  const staff = await User.findOne({ _id: id, role: 'staff' });
+  if (!staff) throw new ApiError(404, 'Không tìm thấy nhân viên');
+
+  if (data.password) {
+    ensureStrongPassword(staff.username, data.password);
+    staff.password = data.password; 
   }
 
-  await emitDashboardUpdateSafe('staff-updated');
+  if (data.fullName !== undefined) staff.fullName = data.fullName;
+  if (data.counterId !== undefined) staff.counterId = data.counterId;
+  if (data.isActive !== undefined) staff.isActive = data.isActive;
 
+  await staff.save(); 
+
+  await emitDashboardUpdateSafe('staff-updated');
   return enrichStaff(staff);
 };
 
