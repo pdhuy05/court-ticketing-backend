@@ -3,6 +3,7 @@ const Setting = require('../models/setting.model');
 const TTS_ENABLED_KEY = 'tts_enabled';
 const AUTO_RESET_ENABLED_KEY = 'auto_reset_enabled';
 const AUTO_RESET_TIME_KEY = 'auto_reset_time';
+const AUTO_RESET_LAST_DATE_KEY = 'auto_reset_last_date';
 const SHIFT_AUTO_START_TIME_KEY = 'shift_auto_start_time';
 const SHIFT_REMINDER_MINUTES_KEY = 'shift_reminder_minutes';
 
@@ -142,6 +143,18 @@ const getAutoResetSettings = async () => {
   return { enabled, time };
 };
 
+const getLastResetDate = async () => {
+  return await getSetting(AUTO_RESET_LAST_DATE_KEY, null);
+};
+
+const setLastResetDate = async (dateString) => {
+  await setSetting(
+    AUTO_RESET_LAST_DATE_KEY,
+    dateString,
+    'Ngày reset ticket gần nhất (YYYY-MM-DD)'
+  );
+};
+
 const getShiftAutoStartTime = async () => {
   const rawValue = await getSetting(SHIFT_AUTO_START_TIME_KEY, '07:30');
   const value = typeof rawValue === 'string' ? rawValue : '07:30';
@@ -222,11 +235,13 @@ const seedShiftDefaults = async () => {
 module.exports = {
   AUTO_RESET_ENABLED_KEY,
   AUTO_RESET_TIME_KEY,
+  AUTO_RESET_LAST_DATE_KEY,
   SHIFT_AUTO_START_TIME_KEY,
   SHIFT_REMINDER_MINUTES_KEY,
   TTS_ENABLED_KEY,
   getAutoResetSettings,
   getAutoResetTime,
+  getLastResetDate,
   getSetting,
   getShiftAutoStartTime,
   getShiftReminderMinutes,
@@ -237,6 +252,7 @@ module.exports = {
   seedShiftDefaults,
   setAutoResetEnabled,
   setAutoResetTime,
+  setLastResetDate,
   setSetting,
   setShiftAutoStartTime,
   setShiftReminderMinutes,

@@ -1,18 +1,19 @@
-const logger = require("../utils/Logger");
+const logger = require('../utils/Logger');
 const {
   getAutoResetTime,
   isAutoResetEnabled,
   seedAutoResetDefaults,
-} = require("./setting.service");
-const { resetTicketsByDate } = require("./ticket");
+  getLastResetDate,
+  setLastResetDate,
+} = require('./setting.service');
+const { resetTicketsByDate } = require('./ticket');
 const {
   pad,
   getDateString,
   getCurrentHHMM,
-} = require("../utils/dateTime.util");
+} = require('../utils/dateTime.util');
 
 let _intervalId = null;
-let _lastResetDate = null;
 
 const getTodayString = () => getDateString(new Date());
 
@@ -38,12 +39,14 @@ const runAutoReset = async () => {
     }
 
     const today = getTodayString();
+    const lastResetDate = await getLastResetDate(); // ← đọc từ DB thay vì biến in-memory
 
-    if (_lastResetDate === today) {
+    if (lastResetDate === today) {
       return;
     }
 
-    _lastResetDate = today;
+    // Ghi vào DB TRƯỚC khi reset để tránh reset lại nếu server restart giữa chừng
+    await setLastResetDate(today);
 
     const yesterday = getYesterdayString();
 
@@ -73,7 +76,7 @@ const stop = () => {
   if (_intervalId) {
     clearInterval(_intervalId);
     _intervalId = null;
-    logger.info("Đã dừng scheduler auto reset ticket");
+    logger.info('Đã dừng scheduler auto reset ticket');
   }
 };
 

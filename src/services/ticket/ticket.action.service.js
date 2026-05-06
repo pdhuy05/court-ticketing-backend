@@ -792,7 +792,7 @@ const completeTicket = async (ticketId, counterId = null, staffId = null) => {
   ticket.completedByStaffId = ticket.staffId;
   ticket.staffId = null;
   ticket.processingDuration = getDurationInSeconds(
-    ticket.calledAt || ticket.processingAt || ticket.createdAt,
+    ticket.processingAt || ticket.calledAt || ticket.createdAt,
     ticket.completedAt,
   );
   ticket.totalDuration = getDurationInSeconds(
