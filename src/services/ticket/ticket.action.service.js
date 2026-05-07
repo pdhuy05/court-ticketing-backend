@@ -872,15 +872,15 @@ const skipTicket = async (ticketId, reason = "", counterId, staffId = null) => {
 
   ticket.skipCount = (ticket.skipCount || 0) + 1;
   ticket.skippedAt = new Date();
-  ticket.counterId = null;
-  ticket.staffId = null;
+  ticket.completedByStaffId = ticket.staffId;  
+  ticket.lastCounterId = ticket.counterId;       
   ticket.serviceCounterId = null;
   ticket.processingAt = null;
 
   if (ticket.skipCount > MAX_RECALLABLE_SKIP_COUNT) {
     ticket.isRecall = false;
-    ticket.recalledAt = null;
-    ticket.recallCounterId = null;
+    ticket.recalledAt = ticket.recalledAt || ticket.skippedAt;
+    ticket.recallCounterId = ticket.recallCounterId || ticket.counterId;
     ticket.status = TicketStatus.SKIPPED;
   } else {
     ticket.isRecall = true;
@@ -889,12 +889,9 @@ const skipTicket = async (ticketId, reason = "", counterId, staffId = null) => {
     ticket.status = TicketStatus.WAITING;
   }
 
-  if (reason) {
-    ticket.note = reason;
-  }
+  ticket.note = reason?.trim() || `Khách hàng không có mặt tại quầy (lần ${ticket.skipCount})`;
 
   await ticket.save();
-
   if (currentCounterId) {
     await refreshCounterCurrentTicket(currentCounterId);
   }
