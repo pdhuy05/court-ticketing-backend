@@ -10,7 +10,11 @@ const CounterSequenceSchema = new mongoose.Schema({
     type: Number,
     default: 0,
     min: 0
-  }
+  },
+    lastResetDate: {
+    type: String,
+    default: null,
+  },
 }, {
   timestamps: true
 });

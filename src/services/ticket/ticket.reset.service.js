@@ -1,10 +1,14 @@
 const Counter = require("../../models/counter.model");
 const ServiceCounter = require("../../models/serviceCounter.model");
 const CounterSequence = require("../../models/counterSequence.model");
+
 const { emitDashboardUpdateSafe } = require("../dashboard.service");
 const { calculateDailyStatistics } = require("../statistics.service");
-const { getDateRange } = require("./ticket.helpers");
+
+const { getDateRange, formatLocalYYYYMMDD } = require("./ticket.helpers");
+
 const { getLastIssuedByCounter } = require("./ticket.query.service");
+
 const {
   emitStaffDisplayUpdateForCounters,
   emitTicketsResetAll,
@@ -12,11 +16,19 @@ const {
 } = require("./ticket.socket");
 
 const resetCounterSequences = async (counterIds = null) => {
-  const query = counterIds?.length ? { counterId: { $in: counterIds } } : {};
+  const query = counterIds?.length
+    ? { counterId: { $in: counterIds } }
+    : {};
 
-  const result = await CounterSequence.updateMany(query, {
-    $set: { lastNumber: 0 },
-  });
+  const result = await CounterSequence.updateMany(
+    query,
+    {
+      $set: {
+        lastNumber: 0,
+        lastResetDate: formatLocalYYYYMMDD(),
+      },
+    }
+  );
 
   const counterQuery = counterIds?.length ? { _id: { $in: counterIds } } : {};
   await Counter.updateMany(counterQuery, { $set: { processedCount: 0 } });

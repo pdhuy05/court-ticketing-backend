@@ -64,10 +64,10 @@ exports.getAll = async () => {
 };
 
 exports.getActive = async () => {
-  const services = await Service.find({ isActive: true })
+  const services = await Service.find()
     .sort({ displayOrder: 1 })
     .select(
-      "code name description displayOrder icon backgroundColor prefixNumber",
+      "code name description displayOrder icon backgroundColor prefixNumber isActive",
     );
 
   const servicesWithCounters = [];
@@ -78,11 +78,9 @@ exports.getActive = async () => {
       isActive: true,
     }).populate("counterId", "code name number");
 
-    if (counterRelations.length > 0) {
-      const serviceObj = service.toObject();
-      serviceObj.counters = counterRelations.map((rel) => rel.counterId);
-      servicesWithCounters.push(serviceObj);
-    }
+    const serviceObj = service.toObject();
+    serviceObj.counters = counterRelations.map((rel) => rel.counterId);
+    servicesWithCounters.push(serviceObj);
   }
 
   return servicesWithCounters;

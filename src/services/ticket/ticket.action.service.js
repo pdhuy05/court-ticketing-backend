@@ -180,15 +180,31 @@ const resolveIssueCounter = async (serviceId, requestedCounterId = null) => {
 };
 
 const getNextCounterNumber = async (counterId) => {
-  const sequence = await CounterSequence.findOneAndUpdate(
-    { counterId },
-    { $inc: { lastNumber: 1 } },
-    {
-      returnDocument: "after",
-      upsert: true,
-      setDefaultsOnInsert: true,
-    },
-  );
+  const today = formatLocalYYYYMMDD();
+
+  let sequence = await CounterSequence.findOne({ counterId });
+
+  if (!sequence) {
+    sequence = await CounterSequence.create({
+      counterId,
+      lastNumber: 1,
+      lastResetDate: today,
+    });
+
+    return 1;
+  }
+
+  if (sequence.lastResetDate !== today) {
+    sequence.lastNumber = 1;
+    sequence.lastResetDate = today;
+
+    await sequence.save();
+
+    return 1;
+  }
+
+  sequence.lastNumber += 1;
+  await sequence.save();
 
   return sequence.lastNumber;
 };

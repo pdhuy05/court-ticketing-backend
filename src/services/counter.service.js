@@ -210,15 +210,18 @@ exports.update = async (id, data) => {
 
     await assertCanRemoveServicesFromCounter(counter._id, removedServiceIds);
 
-    await ServiceCounter.deleteMany({ counterId: counter._id });
-
-    for (const serviceId of normalizedServiceIds) {
-      await ServiceCounter.create({
+    await ServiceCounter.insertMany(
+      normalizedServiceIds.map(serviceId => ({
         serviceId,
         counterId: counter._id,
         isActive: true,
-      });
-    }
+      }))
+    );
+
+    await ServiceCounter.deleteMany({
+      counterId: counter._id,
+      serviceId: { $nin: normalizedServiceIds },
+    });
   }
 
   const serviceRelations = await ServiceCounter.find({
