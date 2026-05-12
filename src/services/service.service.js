@@ -33,7 +33,7 @@ const assertPrefixNumberUnique = async (prefixNumber, excludeId = null) => {
   if (existingService) {
     throw new ApiError(
       400,
-      `Prefix số ${p} đã được sử dụng bởi quầy "${existingService.name}". Vui lòng chọn prefix khác.`,
+      `Mã tiền tố số ${p} đã được sử dụng bởi quầy "${existingService.name}". Vui lòng chọn tiền tố khác.`,
     );
   }
 };
