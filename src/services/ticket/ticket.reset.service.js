@@ -36,7 +36,7 @@ const resetCounterSequences = async (counterIds = null) => {
   const _resetTime = new Date().toLocaleTimeString("vi-VN");
   console.log(`\x1b[33m┌──── RESET SEQUENCE ───────────────┐\x1b[0m`);
   console.log(
-    `\x1b[33m│\x1b[0m  phòng reset : \x1b[1m${result.modifiedCount || 0}\x1b[0m`,
+    `\x1b[33m│\x1b[0m  Phòng reset : \x1b[1m${result.modifiedCount || 0}\x1b[0m`,
   );
   console.log(`\x1b[33m│\x1b[0m  Lúc        : \x1b[90m${_resetTime}\x1b[0m`);
   console.log(`\x1b[33m└───────────────────────────────────┘\x1b[0m`);

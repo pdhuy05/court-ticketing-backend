@@ -11,6 +11,15 @@ exports.login = async (req, res) => {
     });
 };
 
+exports.me = async (req, res) => {
+    const user = await authService.getMe(req.user._id);
+
+    res.json({
+        success: true,
+        data: user
+    });
+};
+
 Object.keys(module.exports).forEach((key) => {
     module.exports[key] = asyncHandler(module.exports[key]);
 });

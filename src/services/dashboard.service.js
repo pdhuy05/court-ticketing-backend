@@ -274,7 +274,7 @@ const getOverloadAlerts = (counters, overloadThreshold) => {
       counterNumber: counter.number,
       waiting: counter.waiting,
       threshold: overloadThreshold,
-      message: `phòng ${counter.name} đang quá tải với ${counter.waiting} ticket chờ`,
+      message: `Phòng ${counter.name} đang quá tải với ${counter.waiting} ticket chờ`,
     }));
 };
 

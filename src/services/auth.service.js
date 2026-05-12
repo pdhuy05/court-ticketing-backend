@@ -4,6 +4,76 @@ const ApiError = require("../utils/ApiError");
 const Counter = require("../models/counter.model");
 const { getStaffServiceAccess } = require("./staff-permission.service");
 
+const toCounterSnapshot = (counter) => {
+  if (!counter) {
+    return null;
+  }
+
+  return {
+    _id: counter._id,
+    id: counter._id,
+    code: counter.code,
+    name: counter.name,
+    number: counter.number,
+    isActive: counter.isActive,
+  };
+};
+
+const buildUserProfile = async (user) => {
+  const userObject =
+    typeof user.toObject === "function" ? user.toObject() : { ...user };
+  const counter =
+    userObject.counterId && typeof userObject.counterId === "object"
+      ? userObject.counterId
+      : userObject.counterId
+        ? await Counter.findById(userObject.counterId)
+            .select("code name number isActive")
+            .lean()
+        : null;
+
+  let serviceAccess = {
+    availableServices: [],
+    assignedServices: [],
+    effectiveServices: [],
+    serviceRestrictionConfigured: userObject.role === "staff",
+  };
+
+  if (userObject.role === "staff" && userObject._id && userObject.counterId) {
+    const access = await getStaffServiceAccess(
+      userObject._id,
+      counter?._id || userObject.counterId,
+    );
+
+    serviceAccess = {
+      availableServices: access.availableServices,
+      assignedServices: access.assignedServices,
+      effectiveServices: access.allowedServices,
+      serviceRestrictionConfigured: access.serviceRestrictionConfigured,
+    };
+  }
+
+  return {
+    _id: userObject._id,
+    id: userObject._id,
+    username: userObject.username,
+    fullName: userObject.fullName,
+    role: userObject.role,
+    counterId: counter?._id ? String(counter._id) : null,
+    counter: toCounterSnapshot(counter),
+    isActive: userObject.isActive,
+    lastLoginAt: userObject.lastLoginAt || null,
+    onDuty: userObject.onDuty,
+    lastShiftStart: userObject.lastShiftStart || null,
+    lastShiftEnd: userObject.lastShiftEnd || null,
+    createdAt: userObject.createdAt || null,
+    updatedAt: userObject.updatedAt || null,
+    email: userObject.email || null,
+    phone: userObject.phone || null,
+    address: userObject.address || null,
+    ...serviceAccess,
+  };
+};
+
 const login = async (username, password) => {
   const user = await User.findOne({ username });
   if (!user) throw new ApiError(401, "Tên đăng nhập không tồn tại");
@@ -52,14 +122,20 @@ const login = async (username, password) => {
 
   return {
     token,
-    user: {
-      id: user._id,
-      username: user.username,
-      fullName: user.fullName,
-      role: user.role,
-      counterId: user.counterId,
-    },
+    user: await buildUserProfile(user),
   };
 };
 
-module.exports = { login };
+const getMe = async (userId) => {
+  const user = await User.findById(userId)
+    .select("-password")
+    .populate("counterId", "code name number isActive");
+
+  if (!user || !user.isActive) {
+    throw new ApiError(401, "Tài khoản không tồn tại hoặc đã bị vô hiệu hóa");
+  }
+
+  return buildUserProfile(user);
+};
+
+module.exports = { getMe, login };

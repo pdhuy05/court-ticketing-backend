@@ -62,7 +62,7 @@ const markTicketAsCalled = (ticket, calledTime = new Date()) => {
 const ensureCounterActive = async (counterId) => {
   const counter = await Counter.findById(counterId);
   if (!counter?.isActive) {
-    throw new ApiError(400, "phòng không tồn tại hoặc không hoạt động");
+    throw new ApiError(400, "Phòng không tồn tại hoặc không hoạt động");
   }
 
   return counter;
@@ -89,7 +89,7 @@ const ensureNoProcessingTicket = async (counterId, staffId = null) => {
 
     throw new ApiError(
       400,
-      `phòng đang xử lý vé ${presentation.formattedNumber}. Vui lòng hoàn thành hoặc bỏ qua vé hiện tại trước`,
+      `Phòng đang xử lý vé ${presentation.formattedNumber}. Vui lòng hoàn thành hoặc bỏ qua vé hiện tại trước`,
     );
   }
 };
@@ -335,7 +335,7 @@ const callNext = async (counterId, staffId = null) => {
   ensureStaffHasAccessibleServices(accessScope);
 
   if (accessScope.allowedServiceIds.length === 0) {
-    throw new ApiError(400, "phòng chưa được gán quầy");
+    throw new ApiError(400, "Phòng chưa được gán quầy");
   }
 
   await ensureNoProcessingTicket(counterId, staffId);
@@ -394,7 +394,7 @@ const callNext = async (counterId, staffId = null) => {
           ensureStaffHasAccessibleServices(accessScope);
 
           if (accessScope.allowedServiceIds.length === 0) {
-            throw new ApiError(400, "phòng chưa được gán quầy");
+            throw new ApiError(400, "Phòng chưa được gán quầy");
           }
 
           continue;
