@@ -148,6 +148,42 @@ THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString("vi-VN")}
     `;
   }
 
+  // Tờ nhỏ: chỉ hiển thị số thứ tự
+  generateSmallSVG(ticket, service) {
+    const width = 576;
+    const height = 400;
+
+    const timeStr = new Date().toLocaleString("vi-VN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+
+    return `
+      <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+        <rect width="100%" height="100%" fill="white"/>
+
+        <!-- HEADER -->
+        <text x="50%" y="50" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="24" font-weight="bold" fill="black">TÒA ÁN NHÂN DÂN KHU VỰC 1</text>
+
+        <!-- Dashed Line Top -->
+        <line x1="40" y1="105" x2="${width - 40}" y2="105" stroke="black" stroke-width="2" stroke-dasharray="6,4"/>
+
+        <!-- TICKET NUMBER (to lớn, nổi bật) -->
+        <text x="50%" y="280" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="220" font-weight="bold" fill="black">${getDisplayTicketNumber(ticket)}</text>
+
+        <!-- SERVICE NAME -->
+        <text x="50%" y="330" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="26" font-weight="bold" fill="black">- ${service?.name || "quầy"} -</text>
+
+        <!-- Dashed Line Bottom -->
+        <line x1="40" y1="355" x2="${width - 40}" y2="355" stroke="black" stroke-width="2" stroke-dasharray="6,4"/>
+        
+      </svg>
+    `;
+  }
+
   async convertToEscPos(svgBuffer, printWidth) {
     const pngBuffer = await sharp(svgBuffer).png().toBuffer();
 
@@ -201,11 +237,16 @@ THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString("vi-VN")}
       throw new Error(`Máy in ${printerId} chưa được cấu hình`);
     }
 
+    // Tờ 1: phiếu đầy đủ
     const qrBuffer = await this.generateQRCode(ticket, service);
     const svg = await this.generateSVG(ticket, service, qrBuffer);
-    const imageBuffer = await this.convertToEscPos(Buffer.from(svg), 576);
+    const fullTicketBuffer = await this.convertToEscPos(Buffer.from(svg), 576);
 
-    return this.printNetwork(printer, imageBuffer);
+    // Tờ 2: phiếu nhỏ chỉ có số thứ tự
+    const smallSvg = this.generateSmallSVG(ticket, service);
+    const smallTicketBuffer = await this.convertToEscPos(Buffer.from(smallSvg), 576);
+
+    return this.printNetwork(printer, fullTicketBuffer, smallTicketBuffer);
   }
 
   async testPrint(printerId) {
@@ -225,28 +266,38 @@ THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString("vi-VN")}
     );
   }
 
-  printNetwork(printer, imageBuffer) {
+  printNetwork(printer, fullTicketBuffer, smallTicketBuffer) {
     return new Promise((resolve, reject) => {
       const client = net.createConnection(
         { host: printer.host, port: printer.port },
         () => {
-          const init = Buffer.from([0x1b, 0x40, 0x1b, 0x33, 0x00]);
+          const init   = Buffer.from([0x1b, 0x40, 0x1b, 0x33, 0x00]);
           const center = Buffer.from([0x1b, 0x61, 0x01]);
-          const feed = Buffer.from([0x0a, 0x0a, 0x0a]);
-          const cut = Buffer.from([0x1d, 0x56, 0x42, 0x00]);
+          const feed   = Buffer.from([0x0a, 0x0a, 0x0a]);
+          const cut    = Buffer.from([0x1d, 0x56, 0x42, 0x00]);
 
+          // -- Tờ 1: phiếu đầy đủ --
           client.write(init);
           client.write(center);
-          client.write(imageBuffer, () => {
+          client.write(fullTicketBuffer, () => {
             client.write(feed);
             client.write(cut);
-            setTimeout(() => {
-              client.end();
-              resolve({
-                success: true,
-                message: "In ticket thành công",
-              });
-            }, 300);
+
+            // -- Tờ 2: phiếu nhỏ số thứ tự --
+            client.write(init);
+            client.write(center);
+            client.write(smallTicketBuffer, () => {
+              client.write(feed);
+              client.write(cut);
+
+              setTimeout(() => {
+                client.end();
+                resolve({
+                  success: true,
+                  message: "In ticket thành công (2 tờ)",
+                });
+              }, 300);
+            });
           });
         },
       );
