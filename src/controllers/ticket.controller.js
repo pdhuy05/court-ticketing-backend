@@ -131,7 +131,7 @@ exports.create = asyncHandler(async (req, res) => {
 
 exports.printTicket = asyncHandler(async (req, res) => {
   const ticket = await Ticket.findById(req.params.id)
-    .populate("serviceId", "code name prefixNumber")
+    .populate("serviceId", "code name prefixNumber doublePrint")
     .populate("queueCounterId", "code name number")
     .populate("counterId", "code name number");
 

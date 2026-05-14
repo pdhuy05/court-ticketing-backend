@@ -41,6 +41,10 @@ const ServiceSchema = new mongoose.Schema({
     default: 0,
     min: 0,
     max: 99
+  },
+  doublePrint: {
+    type: Boolean,
+    default: false
   }
 }, {
   timestamps: true,

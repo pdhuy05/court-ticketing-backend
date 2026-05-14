@@ -9,7 +9,8 @@ const {
   serviceCounterParamsSchema,
   createServiceSchema,
   updateServiceSchema,
-  addCountersSchema
+  addCountersSchema,
+  toggleDoublePrintSchema,
 } = require('../validations/service.validation');
 
 const ServiceController = require("../controllers/service.controller");
@@ -27,6 +28,14 @@ router.get("/:id", validate(serviceIdParamSchema, 'params'), ServiceController.g
 // ====================================
 router.post("/", authMiddleware, adminOnly, validate(createServiceSchema), ServiceController.createService);
 router.put("/:id", authMiddleware, adminOnly, validate(serviceIdParamSchema, 'params'), validate(updateServiceSchema), ServiceController.updateService);
+router.patch(
+  "/:id/double-print",
+  authMiddleware,
+  adminOnly,
+  validate(serviceIdParamSchema, "params"),
+  validate(toggleDoublePrintSchema),
+  ServiceController.toggleDoublePrint,
+);
 router.delete("/:id", authMiddleware, adminOnly, validate(serviceIdParamSchema, 'params'), ServiceController.deleteService);
 
 router.get("/:id/counters", authMiddleware, adminOnly, validate(serviceIdParamSchema, 'params'), ServiceController.getCountersByService);

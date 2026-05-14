@@ -92,6 +92,16 @@ exports.getStats = async (req, res, next) => {
   });
 };
 
+exports.toggleDoublePrint = async (req, res, next) => {
+  const { doublePrint } = req.body;
+  const service = await Service.toggleDoublePrint(req.params.id, doublePrint);
+  res.json({
+    success: true,
+    data: service,
+    message: `Đã ${doublePrint ? "bật" : "tắt"} in 2 vé cho dịch vụ "${service.name}"`,
+  });
+};
+
 Object.keys(module.exports).forEach((key) => {
   module.exports[key] = asyncHandler(module.exports[key]);
 });

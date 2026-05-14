@@ -67,7 +67,7 @@ exports.getActive = async () => {
   const services = await Service.find()
     .sort({ displayOrder: 1 })
     .select(
-      "code name description displayOrder icon backgroundColor prefixNumber isActive",
+      "code name description displayOrder icon backgroundColor prefixNumber isActive doublePrint",
     );
 
   const servicesWithCounters = [];
@@ -322,6 +322,22 @@ exports.getCounters = async (id) => {
     service,
     counters: counterRelations.map((rel) => rel.counterId),
   };
+};
+
+exports.toggleDoublePrint = async (id, doublePrint) => {
+  const service = await Service.findByIdAndUpdate(
+    id,
+    { doublePrint: Boolean(doublePrint) },
+    { returnDocument: "after", runValidators: true },
+  );
+
+  if (!service) {
+    throw new ApiError(404, "Không tìm thấy dịch vụ");
+  }
+
+  await emitDashboardUpdateSafe("service-updated");
+
+  return service;
 };
 
 exports.getStats = async (id) => {

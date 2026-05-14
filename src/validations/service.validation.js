@@ -33,6 +33,7 @@ const createServiceSchema = Joi.object({
       "number.min": "prefixNumber tối thiểu là 0",
       "number.max": "prefixNumber tối đa là 99",
     }),
+  doublePrint: Joi.boolean().default(false).optional(),
 });
 
 const updateServiceSchema = Joi.object({
@@ -54,7 +55,15 @@ const updateServiceSchema = Joi.object({
     "number.min": "prefixNumber tối thiểu là 0",
     "number.max": "prefixNumber tối đa là 99",
   }),
+  doublePrint: Joi.boolean().optional(),
 }).min(1);
+
+const toggleDoublePrintSchema = Joi.object({
+  doublePrint: Joi.boolean().required().messages({
+    "any.required": "doublePrint là bắt buộc",
+    "boolean.base": "doublePrint phải là true hoặc false",
+  }),
+});
 
 const addCountersSchema = Joi.object({
   counterIds: Joi.array().items(objectId).min(1).required().messages({
@@ -78,4 +87,5 @@ module.exports = {
   createServiceSchema,
   updateServiceSchema,
   addCountersSchema,
+  toggleDoublePrintSchema,
 };

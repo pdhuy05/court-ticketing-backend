@@ -166,23 +166,48 @@ THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString("vi-VN")}
         <rect width="100%" height="100%" fill="white"/>
 
         <!-- HEADER -->
-        <text x="50%" y="50" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="24" font-weight="bold" fill="black">TÒA ÁN NHÂN DÂN KHU VỰC 1</text>
+        <text x="50%" y="50" text-anchor="middle"
+          font-family="DejaVu Sans, Arial, sans-serif"
+          font-size="24" font-weight="bold" fill="black">
+          TÒA ÁN NHÂN DÂN KHU VỰC 1
+        </text>
 
-        <!-- Tên đương sự -->
-        <text x="50%" y="380" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="22" fill="black">${ticket.name || ""}</text>
+        <!-- NGÀY GIỜ -->
+        <text x="50%" y="85" text-anchor="middle"
+          font-family="DejaVu Sans, Arial, sans-serif"
+          font-size="20" font-weight="bold" fill="black">
+          ${new Date().toLocaleString("vi-VN")}
+        </text>
 
         <!-- Dashed Line Top -->
-        <line x1="40" y1="105" x2="${width - 40}" y2="105" stroke="black" stroke-width="2" stroke-dasharray="6,4"/>
+        <line x1="40" y1="105" x2="${width - 40}" y2="105"
+          stroke="black" stroke-width="2" stroke-dasharray="6,4"/>
 
-        <!-- TICKET NUMBER (to lớn, nổi bật) -->
-        <text x="50%" y="280" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="220" font-weight="bold" fill="black">${getDisplayTicketNumber(ticket)}</text>
+        <!-- TICKET NUMBER -->
+        <text x="50%" y="280" text-anchor="middle"
+          font-family="DejaVu Sans, Arial, sans-serif"
+          font-size="220" font-weight="bold" fill="black">
+          ${getDisplayTicketNumber(ticket)}
+        </text>
 
         <!-- SERVICE NAME -->
-        <text x="50%" y="330" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="26" font-weight="bold" fill="black">- ${service?.name || "quầy"} -</text>
+        <text x="50%" y="330" text-anchor="middle"
+          font-family="DejaVu Sans, Arial, sans-serif"
+          font-size="26" font-weight="bold" fill="black">
+          - ${service?.name || "quầy"} -
+        </text>
+
+        <!-- Tên đương sự -->
+        <text x="50%" y="380" text-anchor="middle"
+          font-family="DejaVu Sans, Arial, sans-serif"
+          font-size="22" fill="black">
+          ${ticket.name || ""}
+        </text>
 
         <!-- Dashed Line Bottom -->
-        <line x1="40" y1="355" x2="${width - 40}" y2="355" stroke="black" stroke-width="2" stroke-dasharray="6,4"/>
-        
+        <line x1="40" y1="355" x2="${width - 40}" y2="355"
+          stroke="black" stroke-width="2" stroke-dasharray="6,4"/>
+
       </svg>
     `;
   }
@@ -245,9 +270,13 @@ THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString("vi-VN")}
     const svg = await this.generateSVG(ticket, service, qrBuffer);
     const fullTicketBuffer = await this.convertToEscPos(Buffer.from(svg), 576);
 
-    // Tờ 2: phiếu nhỏ chỉ có số thứ tự
-    const smallSvg = this.generateSmallSVG(ticket, service);
-    const smallTicketBuffer = await this.convertToEscPos(Buffer.from(smallSvg), 576);
+    const smallTicketBuffer =
+      service?.doublePrint === true
+        ? await this.convertToEscPos(
+            Buffer.from(this.generateSmallSVG(ticket, service)),
+            576,
+          )
+        : null;
 
     return this.printNetwork(printer, fullTicketBuffer, smallTicketBuffer);
   }
@@ -265,11 +294,12 @@ THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString("vi-VN")}
       {
         name: "NỘP ĐƠN",
         code: "ND",
+        doublePrint: true,
       },
     );
   }
 
-  printNetwork(printer, fullTicketBuffer, smallTicketBuffer) {
+  printNetwork(printer, fullTicketBuffer, smallTicketBuffer = null) {
     return new Promise((resolve, reject) => {
       const client = net.createConnection(
         { host: printer.host, port: printer.port },
@@ -279,25 +309,32 @@ THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString("vi-VN")}
           const feed   = Buffer.from([0x0a, 0x0a, 0x0a]);
           const cut    = Buffer.from([0x1d, 0x56, 0x42, 0x00]);
 
-          // -- Tờ 1: phiếu đầy đủ --
-          client.write(init);
-          client.write(center);
-          client.write(fullTicketBuffer, () => {
-            client.write(feed);
-            client.write(cut);
-
-            // -- Tờ 2: phiếu nhỏ số thứ tự --
+          const printSmall = (cb) => {
+            if (!smallTicketBuffer) {
+              return cb();
+            }
             client.write(init);
             client.write(center);
             client.write(smallTicketBuffer, () => {
               client.write(feed);
               client.write(cut);
+              cb();
+            });
+          };
 
+          client.write(init);
+          client.write(center);
+          client.write(fullTicketBuffer, () => {
+            client.write(feed);
+            client.write(cut);
+            printSmall(() => {
               setTimeout(() => {
                 client.end();
                 resolve({
                   success: true,
-                  message: "In ticket thành công (2 tờ)",
+                  message: smallTicketBuffer
+                    ? "In ticket thành công (2 tờ)"
+                    : "In ticket thành công (1 tờ)",
                 });
               }, 300);
             });
