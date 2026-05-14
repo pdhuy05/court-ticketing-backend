@@ -1,5 +1,6 @@
 const User = require("../../models/user.model");
 const { TicketStatus } = require("../../constants/enums");
+const logger = require("../../utils/Logger");
 const { emitGlobal, emitToRoom, hasIO } = require("../../utils/socketEmitter");
 const { buildTicketPresentation } = require("./ticket.helpers");
 const { getStaffDisplay } = require("./ticket.query.service");
@@ -93,6 +94,40 @@ const emitTicketCalled = async (ticket, counter, reason = "ticket-called") => {
       status: TicketStatus.PROCESSING,
     },
   });
+};
+
+/** Broadcast cho toàn bộ client (staff dashboard): vé mới được cấp. */
+const emitNewTicketBroadcast = ({ ticket, service, displayNumber }) => {
+  try {
+    if (!hasIO()) {
+      return;
+    }
+
+    emitGlobal("new_ticket", {
+      ticket: {
+        _id: ticket._id,
+        ticketNumber: ticket.ticketNumber,
+        displayNumber:
+          displayNumber !== undefined && displayNumber !== null
+            ? displayNumber
+            : ticket.displayNumber ?? null,
+        name: ticket.name || "",
+        phone: ticket.phone || "",
+        createdAt: ticket.createdAt,
+      },
+      service: {
+        _id: service._id,
+        name: service.name || "",
+        code: service.code || "",
+      },
+    });
+
+    logger.info(
+      `[Socket] Emitted new_ticket: số ${ticket.ticketNumber} — ${service.name}`,
+    );
+  } catch (emitError) {
+    logger.warning(`[Socket] Emit thất bại: ${emitError.message}`);
+  }
 };
 
 const emitWaitingRoomNewTicket = ({
@@ -310,4 +345,5 @@ module.exports = {
   emitTicketsResetAll,
   emitTicketsResetDay,
   emitWaitingRoomNewTicket,
+  emitNewTicketBroadcast,
 };

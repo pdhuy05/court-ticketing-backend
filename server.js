@@ -7,7 +7,8 @@ const ticketService = require("./src/services/ticket.service");
 const autoResetScheduler = require("./src/services/autoReset.service");
 const autoSchedulerService = require("./src/services/autoScheduler.service");
 const User = require("./src/models/user.model");
-const { setIO } = require("./src/utils/socketEmitter");
+const logger = require("./src/utils/Logger");
+const { setIO } = require("./src/socket");
 
 database();
 
@@ -18,12 +19,11 @@ const io = socketIo(server, {
     origin: "*",
     methods: ["GET", "POST"],
   },
+  transports: ["websocket", "polling"],
 });
 
 io.on("connection", (socket) => {
-  console.log(
-    `\x1b[44m\x1b[37m \x1b[0m \x1b[36mSocket\x1b[0m: Client connected - ID: \x1b[33m${socket.id}\x1b[0m`,
-  );
+  logger.info(`Socket client kết nối: ${socket.id}`);
 
   const joinCounterRoom = (counterId) => {
     if (!counterId) {
@@ -168,16 +168,15 @@ io.on("connection", (socket) => {
     );
   });
 
-  socket.on("disconnect", () => {
-    console.log(
-      `\x1b[41m\x1b[37m \x1b[0m \x1b[36mSocket\x1b[0m: Client disconnected - ID: \x1b[33m${socket.id}\x1b[0m`,
-    );
+  socket.on("disconnect", (reason) => {
+    logger.info(`Socket client ngắt kết nối: ${socket.id} — ${reason}`);
   });
 });
 
 setIO(io);
 
 server.listen(config.port, async () => {
+  logger.success(`Socket.IO sẵn sàng tại ws://localhost:${config.port}`);
   console.log(`
 \x1b[42m\x1b[30m ✓ \x1b[0m \x1b[36mServer\x1b[0m: Khởi động thành công!
 \x1b[90m  ├─ URL: \x1b[0m\x1b[33mhttp://localhost:${config.port}\x1b[0m

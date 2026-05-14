@@ -168,6 +168,9 @@ THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString("vi-VN")}
         <!-- HEADER -->
         <text x="50%" y="50" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="24" font-weight="bold" fill="black">TÒA ÁN NHÂN DÂN KHU VỰC 1</text>
 
+        <!-- Tên đương sự -->
+        <text x="50%" y="380" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="22" fill="black">${ticket.name || ""}</text>
+
         <!-- Dashed Line Top -->
         <line x1="40" y1="105" x2="${width - 40}" y2="105" stroke="black" stroke-width="2" stroke-dasharray="6,4"/>
 

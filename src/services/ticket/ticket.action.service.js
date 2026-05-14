@@ -34,6 +34,7 @@ const {
   emitTicketRecalled,
   emitTicketSkipped,
   emitWaitingRoomNewTicket,
+  emitNewTicketBroadcast,
 } = require("./ticket.socket");
 
 const MAX_RECALLABLE_SKIP_COUNT = 1;
@@ -288,6 +289,8 @@ const createTicket = async ({ serviceId, name, phone, counterId = null }) => {
     totalWaiting: waitingCount,
     lastIssuedByCounter,
   });
+
+  emitNewTicketBroadcast({ ticket, service, displayNumber });
 
   try {
     const alerts = await dashboardService.getCounterAlerts();
