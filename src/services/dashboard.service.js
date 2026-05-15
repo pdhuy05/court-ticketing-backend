@@ -702,15 +702,15 @@ const getCountersStatus = async () => {
 
 const getStaffList = async () => {
   const [totalStaff, staffList] = await Promise.all([
-    User.countDocuments({ role: "staff" }),
+    User.countDocuments({ role: "staff", isActive: true }),
     User.find({ role: "staff" })
-      .populate("counterId", "name number")
+      .populate("counterId", "name number isActive")
       .select("fullName username isActive onDuty counterId")
-      .sort({ fullName: 1 }),
+      .sort({ isActive: -1, fullName: 1 }),
   ]);
 
-  const onDutyStaff = staffList.filter((staff) => staff.onDuty);
-  const offDutyStaff = staffList.filter((staff) => !staff.onDuty);
+  const onDutyStaff = staffList.filter((staff) => staff.onDuty && staff.isActive);
+  const offDutyStaff = staffList.filter((staff) => !staff.onDuty || !staff.isActive);
 
   return {
     totalStaff,
@@ -814,8 +814,8 @@ const getTicketRatio = async () => {
 
   const ratios = await Promise.all(
     counters.map(async (counter) => {
-      const [total, completed, skipped, waiting] = await Promise.all([
-        Ticket.countDocuments({ counterId: counter._id }),
+      // Tickets with COMPLETED or SKIPPED status have counterId set correctly
+      const [completed, skipped] = await Promise.all([
         Ticket.countDocuments({
           counterId: counter._id,
           status: TicketStatus.COMPLETED,
@@ -824,11 +824,23 @@ const getTicketRatio = async () => {
           counterId: counter._id,
           status: TicketStatus.SKIPPED,
         }),
-        Ticket.countDocuments({
-          counterId: counter._id,
-          status: TicketStatus.WAITING,
-        }),
       ]);
+
+      // Waiting tickets are NOT yet assigned a counterId — query via the
+      // services linked to this counter through ServiceCounter instead
+      const serviceIds = await ServiceCounter.find({
+        counterId: counter._id,
+        isActive: true,
+      }).distinct("serviceId");
+
+      const waiting = serviceIds.length
+        ? await Ticket.countDocuments({
+            serviceId: { $in: serviceIds },
+            status: TicketStatus.WAITING,
+          })
+        : 0;
+
+      const total = completed + skipped + waiting;
 
       return {
         counterId: counter._id,
