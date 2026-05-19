@@ -45,6 +45,11 @@ const ServiceSchema = new mongoose.Schema({
   doublePrint: {
     type: Boolean,
     default: false
+  },
+  inactiveLabel: {
+    type: String,
+    default: 'ĐANG THỬ NGHIỆM',
+    trim: true
   }
 }, {
   timestamps: true,

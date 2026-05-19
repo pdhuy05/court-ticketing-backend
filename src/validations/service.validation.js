@@ -34,6 +34,7 @@ const createServiceSchema = Joi.object({
       "number.max": "prefixNumber tối đa là 99",
     }),
   doublePrint: Joi.boolean().default(false).optional(),
+  inactiveLabel: Joi.string().optional().allow("").max(40).trim(),
 });
 
 const updateServiceSchema = Joi.object({
@@ -56,6 +57,7 @@ const updateServiceSchema = Joi.object({
     "number.max": "prefixNumber tối đa là 99",
   }),
   doublePrint: Joi.boolean().optional(),
+  inactiveLabel: Joi.string().optional().allow("").max(40).trim(),
 }).min(1);
 
 const toggleDoublePrintSchema = Joi.object({
