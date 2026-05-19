@@ -18,6 +18,22 @@ const formatDateTime = (date) => {
   return new Date(date).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
 };
 
+const getDisplayNumber = (ticket) => {
+  const num = String(ticket.number).padStart(3, '0');
+  if (ticket.displayUsesServicePrefix === true) {
+    const prefix = ticket.serviceId?.prefixNumber;
+    if (typeof prefix === 'number' && prefix > 0) {
+      return `${prefix}${num}`;
+    }
+    return num;
+  }
+  const counterNum = ticket.queueCounterId?.number || ticket.counterId?.number;
+  if (counterNum) {
+    return `${String(counterNum).padStart(2, '0')}${num}`;
+  }
+  return num;
+};
+
 const styleHeader = (worksheet, row) => {
   row.eachCell((cell) => {
     cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
@@ -65,7 +81,7 @@ const buildDateQuery = (startDate, endDate) => ({
 
 const getTicketsInRange = (startDate, endDate) =>
   Ticket.find(buildDateQuery(startDate, endDate))
-    .populate('serviceId', 'name code')
+    .populate('serviceId', 'name code prefixNumber')
     .populate('counterId', 'name number')
     .populate('queueCounterId', 'name number')
     .populate('completedByStaffId', 'fullName username')
@@ -116,7 +132,7 @@ const buildTicketDetailSheet = async (workbook, tickets, startDate, endDate) => 
     const row = ws.addRow([
       i + 1,
       t.date,
-      t.ticketNumber,
+      getDisplayNumber(t),
       t.serviceId?.name || '—',
       t.counterId?.name || t.queueCounterId?.name || '—',
       t.name,
