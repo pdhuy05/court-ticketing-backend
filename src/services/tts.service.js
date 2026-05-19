@@ -159,8 +159,8 @@ const speak = (text) => {
   return task;
 };
 
-const speakCallTicket = (displayNumber, counterName) => {
-  const message = `Mời ông bà số ${displayNumber} đến ${counterName}`;
+const speakCallTicket = (displayNumber, serviceName) => {
+  const message = `Mời ông bà số ${displayNumber} đến quầy ${serviceName}`;
   return speak(message).catch((error) => {
     logger.error(`Không thể đọc số: ${error.message}`);
   });

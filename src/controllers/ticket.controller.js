@@ -25,12 +25,12 @@ const ensureAssignedCounterId = (req) => {
   return counterId;
 };
 
-const speakTicketIfTtsEnabled = async (displayNumber, counterName) => {
+const speakTicketIfTtsEnabled = async (displayNumber, serviceName) => {
   if (!(await settingService.isTtsEnabled())) {
     return;
   }
 
-  speakCallTicket(displayNumber, counterName).catch((error) => {
+  speakCallTicket(displayNumber, serviceName).catch((error) => {
     logger.error(`Lỗi phát âm thanh: ${error.message}`);
   });
 };
@@ -189,7 +189,7 @@ exports.callNext = asyncHandler(async (req, res) => {
   );
 
   logger.success(`Đã gọi số ${nextTicket.formattedNumber} đến ${counter.name}`);
-  await speakTicketIfTtsEnabled(nextTicket.displayNumber, counter.name);
+  await speakTicketIfTtsEnabled(nextTicket.displayNumber, nextTicket.serviceId?.name);
 
   res.json({
     success: true,
@@ -210,7 +210,7 @@ exports.callById = asyncHandler(async (req, res) => {
   logger.success(
     `Đã gọi số ${ticket.formattedNumber} đến ${counter.name} theo ticketId`,
   );
-  await speakTicketIfTtsEnabled(ticket.displayNumber, counter.name);
+  await speakTicketIfTtsEnabled(ticket.displayNumber, ticket.serviceId?.name);
 
   res.json({
     success: true,
@@ -297,11 +297,11 @@ exports.recallTicket = asyncHandler(async (req, res) => {
     counterId,
     req.user?._id,
   );
-  const counter = await Counter.findById(counterId).select("name");
+  const fullTicket = await Ticket.findById(ticket._id).populate("serviceId", "name");
 
   await speakTicketIfTtsEnabled(
     ticket.displayNumber,
-    counter?.name || "Phòng hiện tại",
+    fullTicket?.serviceId?.name || "dịch vụ",
   );
 
   res.json({
@@ -318,12 +318,12 @@ exports.recallProcessingTicket = asyncHandler(async (req, res) => {
     counterId,
     req.user?._id,
   );
-  const counter = await Counter.findById(counterId).select("name");
+  const fullTicket = await Ticket.findById(ticket._id).populate("serviceId", "name");
 
   logger.success(`Đã gọi lại vé đang xử lý ${ticket.formattedNumber}`);
   await speakTicketIfTtsEnabled(
     ticket.displayNumber,
-    counter?.name || "Phòng hiện tại",
+    fullTicket?.serviceId?.name || "dịch vụ",
   );
 
   res.json({

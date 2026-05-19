@@ -12,6 +12,7 @@ const AdminTicketRoute = require("./routers/admin/ticket.route");
 const AdminSettingsRoute = require("./routers/admin/settings.route");
 const AdminShiftRoute = require("./routers/admin/shift.route");
 const StatisticsRoute = require("./routers/statistics.route");
+const ReportRoute = require('./routers/report.route');
 
 const { notifySystemError } = require("./services/admin-notification.service");
 
@@ -109,6 +110,7 @@ app.use("/api/admin/settings", AdminSettingsRoute);
 app.use("/api/admin/shift", AdminShiftRoute);
 app.use("/api/statistics", StatisticsRoute);
 app.use("/api/dashboard", DashboardRoute);
+app.use('/api/reports', ReportRoute);
 
 app.use((err, req, res, next) => {
   const normalizedError = normalizeError(err);
