@@ -11,7 +11,7 @@ const CounterSequenceSchema = new mongoose.Schema({
     default: 0,
     min: 0
   },
-    lastResetDate: {
+  lastResetDate: {
     type: String,
     default: null,
   },
