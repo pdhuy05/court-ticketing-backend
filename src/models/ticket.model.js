@@ -148,6 +148,12 @@ const TicketSchema = new mongoose.Schema({
     index: true
   },
 
+  lastCounterId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Counter',
+    default: null,
+  },
+
   skipCount: { 
     type: Number, 
     default: 0 

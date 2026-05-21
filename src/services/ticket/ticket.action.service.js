@@ -741,6 +741,7 @@ const cancelRecallTicket = async (
   ticket.serviceCounterId = null;
   ticket.processingAt = null;
   ticket.skippedAt = new Date();
+  ticket.qrData = null;
 
   if (reason) {
     ticket.note = reason;
@@ -891,10 +892,11 @@ const skipTicket = async (ticketId, reason = "", counterId, staffId = null) => {
 
   ticket.skipCount = (ticket.skipCount || 0) + 1;
   ticket.skippedAt = new Date();
-  ticket.completedByStaffId = ticket.staffId;  
-  ticket.lastCounterId = ticket.counterId;       
+  ticket.completedByStaffId = ticket.staffId;
+  ticket.lastCounterId = ticket.counterId;
   ticket.serviceCounterId = null;
   ticket.processingAt = null;
+  ticket.qrData = null;
 
   if (ticket.skipCount > MAX_RECALLABLE_SKIP_COUNT) {
     ticket.isRecall = false;
