@@ -37,6 +37,11 @@ const CounterSchema = new mongoose.Schema({
   note: { 
     type: String, 
     default: '' 
+  },
+
+  ttsEnabled: {
+    type: Boolean,
+    default: false
   }
 }, {
   timestamps: true

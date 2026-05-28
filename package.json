@@ -21,6 +21,7 @@
     "joi": "^18.1.1",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.3.2",
+    "multer": "^2.1.1",
     "qr-image": "^3.2.0",
     "qrcode": "^1.5.4",
     "sharp": "^0.34.5",

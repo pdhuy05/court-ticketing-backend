@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const path = require("path");
 const ApiError = require("./utils/ApiError");
 const ServicesRoute = require("./routers/service.route");
 const CountersRoute = require("./routers/counter.route");
@@ -9,7 +10,7 @@ const AuthRoute = require("./routers/auth.route");
 const AdminUserRoute = require("./routers/admin/user.route");
 const { adminRouter: AdminDashboardRoute, publicRouter: DashboardRoute } = require("./routers/admin/dashboard.route");
 const AdminTicketRoute = require("./routers/admin/ticket.route");
-const AdminSettingsRoute = require("./routers/admin/settings.route");
+const { adminRouter: AdminSettingsRoute, publicRouter: PublicSettingsRoute } = require("./routers/admin/settings.route");
 const AdminShiftRoute = require("./routers/admin/shift.route");
 const StatisticsRoute = require("./routers/statistics.route");
 const ReportRoute = require('./routers/report.route');
@@ -98,6 +99,9 @@ app.use(cors());
 
 app.use(express.json());
 
+// Serve uploaded files (logo, etc.)
+app.use("/api/public", express.static(path.join(__dirname, "public")));
+
 app.use("/api/services", ServicesRoute);
 app.use("/api/counters", CountersRoute);
 app.use("/api/tickets", TicketsRoute);
@@ -107,6 +111,7 @@ app.use("/api/admin/users", AdminUserRoute);
 app.use("/api/admin/dashboard", AdminDashboardRoute);
 app.use("/api/admin/tickets", AdminTicketRoute);
 app.use("/api/admin/settings", AdminSettingsRoute);
+app.use("/api/settings", PublicSettingsRoute);
 app.use("/api/admin/shift", AdminShiftRoute);
 app.use("/api/statistics", StatisticsRoute);
 app.use("/api/dashboard", DashboardRoute);

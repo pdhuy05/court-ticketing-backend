@@ -20,6 +20,16 @@ exports.me = async (req, res) => {
     });
 };
 
+exports.updateProfile = async (req, res) => {
+    const user = await authService.updateMyProfile(req.user._id, req.body);
+
+    res.json({
+        success: true,
+        data: user,
+        message: 'Cập nhật hồ sơ thành công'
+    });
+};
+
 Object.keys(module.exports).forEach((key) => {
     module.exports[key] = asyncHandler(module.exports[key]);
 });

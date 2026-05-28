@@ -21,7 +21,6 @@ const formatLocalDateKey = (startDate) => [
 const getTicketActor = (ticket) => ticket.completedByStaffId || ticket.staffId || null;
 
 /**
- * Tính và lưu thống kê theo ngày (upsert theo date YYYY-MM-DD).
  * @param {Date} startDate - đầu ngày (inclusive)
  * @param {Date} endDate - cuối ngày (exclusive, giống reset ticket)
  * @param {object|null} actor - user thực hiện reset

@@ -362,6 +362,17 @@ exports.delete = async (id) => {
   return counter;
 };
 
+exports.toggleTts = async (id) => {
+  const counter = await Counter.findById(id);
+  if (!counter) throw new ApiError(404, "Không tìm thấy phòng");
+
+  counter.ttsEnabled = !counter.ttsEnabled;
+  await counter.save();
+
+  await emitDashboardUpdateSafe("counter-tts-toggled");
+  return counter;
+};
+
 exports.toggleActive = async (id) => {
   const counter = await Counter.findById(id);
   if (!counter) throw new ApiError(404, "Không tìm thấy phòng");

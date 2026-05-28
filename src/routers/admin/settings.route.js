@@ -1,31 +1,27 @@
 const express = require('express');
 
-const router = express.Router();
+const adminRouter = express.Router();
+const publicRouter = express.Router();
 const { authMiddleware, adminOnly } = require('../../middlewares/auth.middleware');
 const validate = require('../../middlewares/validate.middleware');
+const uploadLogo = require('../../middlewares/upload-logo.middleware');
 const {
   patchAutoResetEnabledSchema,
   patchAutoResetTimeSchema,
-  patchTtsEnabledSchema
+  patchTtsEnabledSchema,
+  patchSiteConfigSchema
 } = require('../../validations/admin-settings.validation');
 const SettingsController = require('../../controllers/admin/settings.controller');
 
-router.get('/tts', authMiddleware, adminOnly, SettingsController.getTtsEnabled);
-router.patch('/tts', authMiddleware, adminOnly, validate(patchTtsEnabledSchema), SettingsController.patchTtsEnabled);
-router.get('/auto-reset', authMiddleware, adminOnly, SettingsController.getAutoResetSettings);
-router.patch(
-  '/auto-reset/enabled',
-  authMiddleware,
-  adminOnly,
-  validate(patchAutoResetEnabledSchema),
-  SettingsController.patchAutoResetEnabled
-);
-router.patch(
-  '/auto-reset/time',
-  authMiddleware,
-  adminOnly,
-  validate(patchAutoResetTimeSchema),
-  SettingsController.patchAutoResetTime
-);
+adminRouter.get('/tts', authMiddleware, adminOnly, SettingsController.getTtsEnabled);
+adminRouter.patch('/tts', authMiddleware, adminOnly, validate(patchTtsEnabledSchema), SettingsController.patchTtsEnabled);
+adminRouter.get('/auto-reset', authMiddleware, adminOnly, SettingsController.getAutoResetSettings);
+adminRouter.patch('/auto-reset/enabled', authMiddleware, adminOnly, validate(patchAutoResetEnabledSchema), SettingsController.patchAutoResetEnabled);
+adminRouter.patch('/auto-reset/time', authMiddleware, adminOnly, validate(patchAutoResetTimeSchema), SettingsController.patchAutoResetTime);
+adminRouter.get('/site-config', authMiddleware, adminOnly, SettingsController.getSiteConfig);
+adminRouter.patch('/site-config', authMiddleware, adminOnly, validate(patchSiteConfigSchema), SettingsController.patchSiteConfig);
+adminRouter.post( '/upload-logo', authMiddleware, adminOnly, uploadLogo, SettingsController.uploadLogo );
 
-module.exports = router;
+publicRouter.get('/site-config', SettingsController.getSiteConfig);
+
+module.exports = { adminRouter, publicRouter };

@@ -110,7 +110,7 @@ const login = async (username, password) => {
   }
 
   user.lastLoginAt = new Date();
-  await user.save();
+  await user.save({ timestamps: false });
 
   const expiresIn = "8h";
 
@@ -138,4 +138,34 @@ const getMe = async (userId) => {
   return buildUserProfile(user);
 };
 
-module.exports = { getMe, login };
+const updateMyProfile = async (userId, updates) => {
+  const user = await User.findById(userId);
+  if (!user || !user.isActive) {
+    throw new ApiError(401, 'Tài khoản không tồn tại hoặc đã bị vô hiệu hóa');
+  }
+
+  // Handle password change
+  if (updates.newPassword) {
+    if (!updates.currentPassword) {
+      throw new ApiError(400, 'Vui lòng nhập mật khẩu hiện tại để đổi mật khẩu');
+    }
+    const isMatch = await user.comparePassword(updates.currentPassword);
+    if (!isMatch) throw new ApiError(400, 'Mật khẩu hiện tại không đúng');
+    user.password = updates.newPassword;
+  }
+
+  if (updates.fullName !== undefined) user.fullName = updates.fullName;
+  if (updates.email !== undefined) user.email = updates.email || null;
+  if (updates.phone !== undefined) user.phone = updates.phone || null;
+  if (updates.address !== undefined) user.address = updates.address || null;
+
+  await user.save();
+
+  const freshUser = await User.findById(userId)
+    .select('-password')
+    .populate('counterId', 'code name number isActive');
+
+  return buildUserProfile(freshUser);
+};
+
+module.exports = { getMe, login, updateMyProfile };

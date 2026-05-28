@@ -1,5 +1,4 @@
 /**
- * Middleware validate dữ liệu đầu vào
  * @param {Joi.Schema} schema - Schema Joi để validate
  * @param {string} property - Thuộc tính của request cần validate (body, query, params)
  * @returns {Function} Express middleware function

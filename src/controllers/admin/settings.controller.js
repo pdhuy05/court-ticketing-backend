@@ -1,5 +1,7 @@
 const settingService = require('../../services/setting.service');
 const asyncHandler = require('../../utils/asyncHandler');
+const path = require('path');
+const fs = require('fs');
 
 exports.patchTtsEnabled = async (req, res) => {
   const value = await settingService.setTtsEnabled(req.body.enabled);
@@ -54,6 +56,49 @@ exports.patchAutoResetTime = async (req, res) => {
       auto_reset_time: value
     },
     message: `Đã cập nhật thời gian tự động reset ticket thành ${value}`
+  });
+};
+
+exports.getSiteConfig = async (req, res) => {
+  const data = await settingService.getSiteConfig();
+  res.json({ success: true, data });
+};
+
+exports.patchSiteConfig = async (req, res) => {
+  const data = await settingService.updateSiteConfig(req.body);
+  res.json({
+    success: true,
+    data,
+    message: 'Đã cập nhật cấu hình giao diện thành công',
+  });
+};
+
+exports.uploadLogo = async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ success: false, message: 'Không có file được upload' });
+  }
+
+  const logoDir = path.join(__dirname, '../../public/logo');
+
+  if (!fs.existsSync(logoDir)) {
+    fs.mkdirSync(logoDir, { recursive: true });
+  }
+
+  const existingFiles = fs.readdirSync(logoDir);
+  for (const file of existingFiles) {
+    if (file !== 'logo.png' && file !== req.file.filename) {
+      try { fs.unlinkSync(path.join(logoDir, file)); } catch (_) {}
+    }
+  }
+
+  const logoUrl = `/api/public/logo/${req.file.filename}`;
+
+  await settingService.updateSiteConfig({ logoUrl });
+
+  res.json({
+    success: true,
+    data: { logoUrl },
+    message: 'Upload logo thành công',
   });
 };
 

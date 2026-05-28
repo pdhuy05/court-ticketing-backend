@@ -12,9 +12,6 @@ const {
   assignStaffServicesSchema
 } = require('../../validations/user.validation');
 
-// ====================================
-// ADMIN STAFF MANAGEMENT
-// ====================================
 router.get('/staff', authMiddleware, adminOnly, UserAdminController.getAllStaff);
 router.get('/staff/:id', authMiddleware, adminOnly, validate(staffIdParamSchema, 'params'), UserAdminController.getStaffById);
 router.post('/staff', authMiddleware, adminOnly, validate(createStaffSchema), UserAdminController.createStaff);
@@ -23,9 +20,6 @@ router.delete('/staff/:id', authMiddleware, adminOnly, validate(staffIdParamSche
 router.patch('/staff/:id/remove-counter', authMiddleware, adminOnly, validate(staffIdParamSchema, 'params'), UserAdminController.removeCounter);
 router.get('/staff/:id/services', authMiddleware, adminOnly, validate(staffIdParamSchema, 'params'), UserAdminController.getStaffServices);
 
-// ====================================
-// STAFF ACTIONS
-// ====================================
 router.patch('/staff/:id/assign-counter', authMiddleware, adminOnly, validate(staffIdParamSchema, 'params'), validate(assignCounterSchema), UserAdminController.assignCounter);
 router.put('/staff/:id/services', authMiddleware, adminOnly, validate(staffIdParamSchema, 'params'), validate(assignStaffServicesSchema), UserAdminController.assignServices);
 router.patch('/staff/:id/toggle-active', authMiddleware, adminOnly, validate(staffIdParamSchema, 'params'), UserAdminController.toggleActive);

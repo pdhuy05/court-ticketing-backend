@@ -2,7 +2,6 @@ const Ticket = require("../../models/ticket.model");
 const { buildTicketPresentation } = require("./ticket.helpers");
 
 /**
- * Tra cứu vé cho admin — hỗ trợ kết hợp nhiều tiêu chí.
  *
  * @param {object} filters
  * @param {string} [filters.phone]        - Số điện thoại (khớp một phần)

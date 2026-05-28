@@ -25,9 +25,17 @@ const ensureAssignedCounterId = (req) => {
   return counterId;
 };
 
-const speakTicketIfTtsEnabled = async (displayNumber, serviceName) => {
+const speakTicketIfTtsEnabled = async (displayNumber, serviceName, counterId = null) => {
   if (!(await settingService.isTtsEnabled())) {
     return;
+  }
+
+  if (counterId) {
+    const counter = await Counter.findById(counterId).select("ttsEnabled").lean();
+    if (!counter?.ttsEnabled) {
+      logger.info(`TTS bị tắt cho phòng ${counterId}, bỏ qua phát âm thanh`);
+      return;
+    }
   }
 
   speakCallTicket(displayNumber, serviceName).catch((error) => {
@@ -189,7 +197,7 @@ exports.callNext = asyncHandler(async (req, res) => {
   );
 
   logger.success(`Đã gọi số ${nextTicket.formattedNumber} đến ${counter.name}`);
-  await speakTicketIfTtsEnabled(nextTicket.displayNumber, nextTicket.serviceId?.name);
+  await speakTicketIfTtsEnabled(nextTicket.displayNumber, nextTicket.serviceId?.name, counterId);
 
   res.json({
     success: true,
@@ -210,7 +218,7 @@ exports.callById = asyncHandler(async (req, res) => {
   logger.success(
     `Đã gọi số ${ticket.formattedNumber} đến ${counter.name} theo ticketId`,
   );
-  await speakTicketIfTtsEnabled(ticket.displayNumber, ticket.serviceId?.name);
+  await speakTicketIfTtsEnabled(ticket.displayNumber, ticket.serviceId?.name, counterId);
 
   res.json({
     success: true,
@@ -302,6 +310,7 @@ exports.recallTicket = asyncHandler(async (req, res) => {
   await speakTicketIfTtsEnabled(
     ticket.displayNumber,
     fullTicket?.serviceId?.name || "dịch vụ",
+    counterId,
   );
 
   res.json({
@@ -324,6 +333,7 @@ exports.recallProcessingTicket = asyncHandler(async (req, res) => {
   await speakTicketIfTtsEnabled(
     ticket.displayNumber,
     fullTicket?.serviceId?.name || "dịch vụ",
+    counterId,
   );
 
   res.json({

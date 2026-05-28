@@ -4,8 +4,6 @@ const Counter = require('../models/counter.model');
 const { TicketStatus } = require('../constants/enums');
 const ExcelJS = require('exceljs');
 
-// ─── helpers ─────────────────────────────────────────────────────────────────
-
 const formatDuration = (seconds) => {
   if (!seconds || seconds <= 0) return '—';
   const m = Math.floor(seconds / 60);
@@ -73,8 +71,6 @@ const addTitleRow = (worksheet, title, colCount) => {
   worksheet.addRow([]);
 };
 
-// ─── query helpers ────────────────────────────────────────────────────────────
-
 const buildDateQuery = (startDate, endDate) => ({
   date: { $gte: startDate, $lte: endDate }
 });
@@ -86,8 +82,6 @@ const getTicketsInRange = (startDate, endDate) =>
     .populate('queueCounterId', 'name number')
     .populate('completedByStaffId', 'fullName username')
     .lean();
-
-// ─── Sheet 1: Danh sách vé chi tiết ──────────────────────────────────────────
 
 const buildTicketDetailSheet = async (workbook, tickets, startDate, endDate) => {
   const ws = workbook.addWorksheet('Chi tiết vé');
@@ -152,7 +146,6 @@ const buildTicketDetailSheet = async (workbook, tickets, startDate, endDate) => 
   });
 };
 
-// ─── Sheet 2: Thống kê theo ngày ─────────────────────────────────────────────
 
 const buildDailyStatsSheet = async (workbook, tickets, startDate, endDate) => {
   const ws = workbook.addWorksheet('Thống kê theo ngày');
@@ -178,7 +171,6 @@ const buildDailyStatsSheet = async (workbook, tickets, startDate, endDate) => {
   ]);
   styleHeader(ws, headerRow);
 
-  // group by date
   const byDate = {};
   tickets.forEach((t) => {
     if (!byDate[t.date]) byDate[t.date] = [];
@@ -206,7 +198,6 @@ const buildDailyStatsSheet = async (workbook, tickets, startDate, endDate) => {
     styleDataRow(ws, row, i % 2 === 0);
   });
 
-  // tổng kết
   ws.addRow([]);
   const completed = tickets.filter((t) => t.status === TicketStatus.COMPLETED);
   const avg2 = (key) => {
@@ -230,8 +221,6 @@ const buildDailyStatsSheet = async (workbook, tickets, startDate, endDate) => {
     cell.border = { top: { style: 'medium' }, bottom: { style: 'medium' }, left: { style: 'thin' }, right: { style: 'thin' } };
   });
 };
-
-// ─── Sheet 3: Thống kê theo dịch vụ ──────────────────────────────────────────
 
 const buildServiceStatsSheet = async (workbook, tickets, startDate, endDate) => {
   const ws = workbook.addWorksheet('Thống kê theo dịch vụ');
@@ -287,8 +276,6 @@ const buildServiceStatsSheet = async (workbook, tickets, startDate, endDate) => 
     });
 };
 
-// ─── Sheet 4: Thống kê theo quầy ─────────────────────────────────────────────
-
 const buildCounterStatsSheet = async (workbook, tickets, startDate, endDate) => {
   const ws = workbook.addWorksheet('Thống kê theo quầy');
 
@@ -312,7 +299,6 @@ const buildCounterStatsSheet = async (workbook, tickets, startDate, endDate) => 
   ]);
   styleHeader(ws, headerRow);
 
-  // chỉ tính vé đã được gán phòng (counterId != null)
   const handled = tickets.filter((t) => t.counterId);
   const byCounter = {};
   handled.forEach((t) => {
@@ -342,8 +328,6 @@ const buildCounterStatsSheet = async (workbook, tickets, startDate, endDate) => 
       styleDataRow(ws, row, i % 2 === 0);
     });
 };
-
-// ─── main export ──────────────────────────────────────────────────────────────
 
 const exportReport = async (startDate, endDate) => {
   const tickets = await getTicketsInRange(startDate, endDate);

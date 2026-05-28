@@ -50,6 +50,24 @@ const UserSchema = new mongoose.Schema(
       default: true
     },
 
+    email: {
+      type: String,
+      trim: true,
+      default: null
+    },
+
+    phone: {
+      type: String,
+      trim: true,
+      default: null
+    },
+
+    address: {
+      type: String,
+      trim: true,
+      default: null
+    },
+
     lastShiftStart: {
       type: Date,
       default: null

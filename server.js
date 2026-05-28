@@ -6,6 +6,7 @@ const database = require("./src/config/database");
 const ticketService = require("./src/services/ticket.service");
 const autoResetScheduler = require("./src/services/autoReset.service");
 const autoSchedulerService = require("./src/services/autoScheduler.service");
+const settingService = require("./src/services/setting.service");
 const User = require("./src/models/user.model");
 const logger = require("./src/utils/Logger");
 const { setIO } = require("./src/socket");
@@ -189,11 +190,13 @@ server.listen(config.port, async () => {
   const schedulerResults = await Promise.allSettled([
     autoResetScheduler.start(),
     autoSchedulerService.start(),
+    settingService.seedSiteConfigDefaults(),
   ]);
 
   const labels = [
     "Auto reset ticket",
     "Auto mở ca staff & tự động mở/đóng quầy",
+    "Seed site config defaults",
   ];
 
   const lines = schedulerResults.map((result, i) => {

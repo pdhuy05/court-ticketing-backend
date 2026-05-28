@@ -96,7 +96,6 @@ const emitTicketCalled = async (ticket, counter, reason = "ticket-called") => {
   });
 };
 
-/** Broadcast cho toàn bộ client (staff dashboard): vé mới được cấp. */
 const emitNewTicketBroadcast = ({ ticket, service, displayNumber }) => {
   try {
     if (!hasIO()) {

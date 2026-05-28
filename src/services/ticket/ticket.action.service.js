@@ -39,7 +39,6 @@ const {
 
 const MAX_RECALLABLE_SKIP_COUNT = 1;
 
-/** YYYY-MM-DD theo timezone local của server (production nên đặt TZ=Asia/Ho_Chi_Minh / UTC+7). */
 const formatLocalYYYYMMDD = (now = new Date()) =>
   [
     now.getFullYear(),

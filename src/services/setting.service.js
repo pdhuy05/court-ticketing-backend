@@ -1,5 +1,23 @@
 const Setting = require('../models/setting.model');
 
+const SITE_BRANCH_NAME_KEY = 'site_branch_name';
+const SITE_LOGO_URL_KEY = 'site_logo_url';
+const SITE_PRIMARY_COLOR_KEY = 'site_primary_color';
+const SITE_TICKER_TEXT_KEY = 'site_ticker_text';
+const SITE_WORKING_HOURS_KEY = 'site_working_hours';
+const SITE_ADDRESS_KEY = 'site_address';
+const SITE_ANNOUNCEMENT_KEY = 'site_announcement';
+
+const SITE_CONFIG_DEFAULTS = {
+  [SITE_BRANCH_NAME_KEY]: 'Tòa án nhân dân',
+  [SITE_LOGO_URL_KEY]: '/assets/logotoaan.png',
+  [SITE_PRIMARY_COLOR_KEY]: '#1a3c6e',
+  [SITE_TICKER_TEXT_KEY]: '',
+  [SITE_WORKING_HOURS_KEY]: '07:30 - 11:30 | 13:00 - 17:00',
+  [SITE_ADDRESS_KEY]: '',
+  [SITE_ANNOUNCEMENT_KEY]: '',
+};
+
 const TTS_ENABLED_KEY = 'tts_enabled';
 const AUTO_RESET_ENABLED_KEY = 'auto_reset_enabled';
 const AUTO_RESET_TIME_KEY = 'auto_reset_time';
@@ -232,6 +250,54 @@ const seedShiftDefaults = async () => {
   );
 };
 
+
+const getSiteConfig = async () => {
+  const keys = Object.keys(SITE_CONFIG_DEFAULTS);
+  const docs = await Setting.find({ key: { $in: keys } }).lean();
+  const map = {};
+  docs.forEach((doc) => { map[doc.key] = doc.value; });
+
+  return {
+    branchName: map[SITE_BRANCH_NAME_KEY] ?? SITE_CONFIG_DEFAULTS[SITE_BRANCH_NAME_KEY],
+    logoUrl: map[SITE_LOGO_URL_KEY] ?? SITE_CONFIG_DEFAULTS[SITE_LOGO_URL_KEY],
+    primaryColor: map[SITE_PRIMARY_COLOR_KEY] ?? SITE_CONFIG_DEFAULTS[SITE_PRIMARY_COLOR_KEY],
+    tickerText: map[SITE_TICKER_TEXT_KEY] ?? SITE_CONFIG_DEFAULTS[SITE_TICKER_TEXT_KEY],
+    workingHours: map[SITE_WORKING_HOURS_KEY] ?? SITE_CONFIG_DEFAULTS[SITE_WORKING_HOURS_KEY],
+    address: map[SITE_ADDRESS_KEY] ?? SITE_CONFIG_DEFAULTS[SITE_ADDRESS_KEY],
+    announcement: map[SITE_ANNOUNCEMENT_KEY] ?? SITE_CONFIG_DEFAULTS[SITE_ANNOUNCEMENT_KEY],
+  };
+};
+
+const updateSiteConfig = async (fields) => {
+  const FIELD_MAP = {
+    branchName: SITE_BRANCH_NAME_KEY,
+    logoUrl: SITE_LOGO_URL_KEY,
+    primaryColor: SITE_PRIMARY_COLOR_KEY,
+    tickerText: SITE_TICKER_TEXT_KEY,
+    workingHours: SITE_WORKING_HOURS_KEY,
+    address: SITE_ADDRESS_KEY,
+    announcement: SITE_ANNOUNCEMENT_KEY,
+  };
+
+  const ops = Object.entries(fields)
+    .filter(([k]) => FIELD_MAP[k] !== undefined)
+    .map(([k, v]) => setSetting(FIELD_MAP[k], v));
+
+  await Promise.all(ops);
+  return getSiteConfig();
+};
+
+const seedSiteConfigDefaults = async () => {
+  const ops = Object.entries(SITE_CONFIG_DEFAULTS).map(([key, value]) =>
+    Setting.findOneAndUpdate(
+      { key },
+      { $setOnInsert: { key, value, description: `Site config: ${key}` } },
+      { upsert: true, runValidators: true }
+    )
+  );
+  await Promise.all(ops);
+};
+
 module.exports = {
   AUTO_RESET_ENABLED_KEY,
   AUTO_RESET_TIME_KEY,
@@ -256,5 +322,15 @@ module.exports = {
   setSetting,
   setShiftAutoStartTime,
   setShiftReminderMinutes,
-  setTtsEnabled
+  setTtsEnabled,
+  getSiteConfig,
+  updateSiteConfig,
+  seedSiteConfigDefaults,
+  SITE_BRANCH_NAME_KEY,
+  SITE_LOGO_URL_KEY,
+  SITE_PRIMARY_COLOR_KEY,
+  SITE_TICKER_TEXT_KEY,
+  SITE_WORKING_HOURS_KEY,
+  SITE_ADDRESS_KEY,
+  SITE_ANNOUNCEMENT_KEY,
 };

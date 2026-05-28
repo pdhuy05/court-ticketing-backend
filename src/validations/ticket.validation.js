@@ -10,7 +10,7 @@ const createTicketSchema = Joi.object({
       "any.required": "Vui lòng chọn quầy",
       "string.pattern.base": "ID quầy không hợp lệ",
     }),
-  name: Joi.string().required().trim().min(2).max(100).messages({
+  name: Joi.string().required().trim().min(2).messages({
     "any.required": "Tên khách hàng là bắt buộc",
     "string.empty": "Tên khách hàng không được để trống",
     "string.min": "Tên khách hàng phải có ít nhất 2 ký tự",

@@ -81,6 +81,15 @@ exports.toggleActive = async (req, res) => {
   });
 };
 
+exports.toggleTts = async (req, res) => {
+  const counter = await CounterService.toggleTts(req.params.id);
+  res.json({
+    success: true,
+    data: counter,
+    message: `${counter.ttsEnabled ? "Bật" : "Tắt"} loa TTS cho phòng ${counter.name} thành công`,
+  });
+};
+
 exports.getServices = async (req, res) => {
   const result = await CounterService.getServices(req.params.id);
   res.json({
