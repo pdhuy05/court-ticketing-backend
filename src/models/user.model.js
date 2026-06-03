@@ -78,6 +78,27 @@ const UserSchema = new mongoose.Schema(
       default: null
     },
 
+    adminPermissions: {
+      type: [String],
+      enum: [
+        'dashboard',   
+        'users',       
+        'counter',    
+        'services',    
+        'printers',   
+        'settings',    
+        'reports',    
+        'search',     
+        'shift',       
+      ],
+      default: null,
+    },
+
+    isSuperAdmin: {
+      type: Boolean,
+      default: false,
+    },
+
     shiftHistory: [
       {
         action: {

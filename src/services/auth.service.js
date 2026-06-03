@@ -70,6 +70,8 @@ const buildUserProfile = async (user) => {
     email: userObject.email || null,
     phone: userObject.phone || null,
     address: userObject.address || null,
+    isSuperAdmin: userObject.isSuperAdmin ?? false,
+    adminPermissions: userObject.adminPermissions ?? null,
     ...serviceAccess,
   };
 };
@@ -144,7 +146,6 @@ const updateMyProfile = async (userId, updates) => {
     throw new ApiError(401, 'Tài khoản không tồn tại hoặc đã bị vô hiệu hóa');
   }
 
-  // Handle password change
   if (updates.newPassword) {
     if (!updates.currentPassword) {
       throw new ApiError(400, 'Vui lòng nhập mật khẩu hiện tại để đổi mật khẩu');

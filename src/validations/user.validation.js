@@ -117,3 +117,64 @@ module.exports = {
   assignCounterSchema,
   assignStaffServicesSchema,
 };
+
+const createAdminSchema = Joi.object({
+  username: Joi.string()
+    .trim().lowercase().min(3).max(30).pattern(USERNAME_PATTERN).required()
+    .messages({
+      "any.required": "Tên đăng nhập là bắt buộc",
+      "string.empty": "Tên đăng nhập không được để trống",
+      "string.min": "Tên đăng nhập phải có ít nhất 3 ký tự",
+      "string.max": "Tên đăng nhập không được vượt quá 30 ký tự",
+      "string.pattern.base": "Tên đăng nhập chỉ được chứa chữ cái, số, dấu chấm và gạch dưới",
+    }),
+  password: Joi.string()
+    .trim().min(8).max(64).pattern(PASSWORD_PATTERN).custom(validatePasswordStrength).required()
+    .messages({
+      "any.required": "Mật khẩu là bắt buộc",
+      "string.empty": "Mật khẩu không được để trống",
+      "string.min": "Mật khẩu phải có ít nhất 8 ký tự",
+      "string.max": "Mật khẩu không được vượt quá 64 ký tự",
+      "string.pattern.base": "Mật khẩu phải có chữ hoa, chữ thường, số và ký tự đặc biệt (@, !, #, $, %, ^, &, *)",
+      "password.containsUsername": "Mật khẩu không được chứa tên đăng nhập",
+      "password.tooWeak": 'Mật khẩu quá yếu',
+    }),
+  fullName: Joi.string().trim().min(2).max(100).required().messages({
+    "any.required": "Họ tên là bắt buộc",
+    "string.empty": "Họ tên không được để trống",
+    "string.min": "Họ tên phải có ít nhất 2 ký tự",
+    "string.max": "Họ tên không được vượt quá 100 ký tự",
+  }),
+  isSuperAdmin: Joi.boolean().default(false),
+  adminPermissions: Joi.when('isSuperAdmin', {
+    is: true,
+    then: Joi.any().strip(),          // bỏ qua khi là super admin
+    otherwise: Joi.array()
+      .items(Joi.string().valid(
+        'dashboard','users','counter','services',
+        'printers','settings','reports','search','shift'
+      ))
+      .default([]),
+  }),
+});
+
+const updateAdminSchema = Joi.object({
+  password: Joi.string()
+    .trim().min(8).max(64).pattern(PASSWORD_PATTERN)
+    .messages({
+      "string.min": "Mật khẩu phải có ít nhất 8 ký tự",
+      "string.max": "Mật khẩu không được vượt quá 64 ký tự",
+      "string.pattern.base": "Mật khẩu phải có chữ hoa, chữ thường, số và ký tự đặc biệt (@, !, #, $, %, ^, &, *)",
+    }),
+  fullName: Joi.string().trim().min(2).max(100).messages({
+    "string.min": "Họ tên phải có ít nhất 2 ký tự",
+    "string.max": "Họ tên không được vượt quá 100 ký tự",
+  }),
+  isActive: Joi.boolean(),
+}).min(1).messages({ "object.min": "Vui lòng nhập ít nhất 1 trường cần cập nhật" });
+
+module.exports = {
+  ...module.exports,
+  createAdminSchema,
+  updateAdminSchema,
+};

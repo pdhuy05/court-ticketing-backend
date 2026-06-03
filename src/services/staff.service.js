@@ -182,3 +182,98 @@ module.exports = {
   toggleActive,
   removeCounter
 };
+
+// ── QUẢN LÝ ADMIN ACCOUNTS ───────────────────────────────────────────────────
+
+const getAllAdmins = async () => {
+  const admins = await User.find({ role: 'admin' }).select('-password -shiftHistory');
+  return admins.map(a => typeof a.toObject === 'function' ? a.toObject() : { ...a });
+};
+
+const getAdminById = async (id) => {
+  const admin = await User.findOne({ _id: id, role: 'admin' }).select('-password -shiftHistory');
+  if (!admin) throw new ApiError(404, 'Không tìm thấy tài khoản admin');
+  return typeof admin.toObject === 'function' ? admin.toObject() : { ...admin };
+};
+
+const createAdmin = async (data) => {
+  const { username, password, fullName, isSuperAdmin, adminPermissions } = data;
+
+  const existing = await User.findOne({ username });
+  if (existing) throw new ApiError(400, 'Tên đăng nhập đã tồn tại');
+
+  ensureStrongPassword(username, password);
+
+  // Nếu isSuperAdmin = true => adminPermissions = null (toàn quyền)
+  // Nếu adminPermissions được truyền vào (mảng) => dùng mảng đó
+  // Nếu không truyền gì => mặc định [] (không có quyền)
+  let resolvedPermissions;
+  if (isSuperAdmin) {
+    resolvedPermissions = null;
+  } else if (Array.isArray(adminPermissions)) {
+    resolvedPermissions = adminPermissions;
+  } else {
+    resolvedPermissions = [];
+  }
+
+  const admin = await User.create({
+    username,
+    password,
+    fullName,
+    role: 'admin',
+    isActive: true,
+    isSuperAdmin: isSuperAdmin || false,
+    adminPermissions: resolvedPermissions,
+  });
+
+  return typeof admin.toObject === 'function' ? admin.toObject() : { ...admin };
+};
+
+const updateAdmin = async (id, data) => {
+  const admin = await User.findOne({ _id: id, role: 'admin' });
+  if (!admin) throw new ApiError(404, 'Không tìm thấy tài khoản admin');
+
+  if (data.password) {
+    ensureStrongPassword(admin.username, data.password);
+    admin.password = data.password;
+  }
+  if (data.fullName !== undefined) admin.fullName = data.fullName;
+  if (data.isActive !== undefined) admin.isActive = data.isActive;
+
+  await admin.save();
+  const obj = typeof admin.toObject === 'function' ? admin.toObject() : { ...admin };
+  delete obj.password;
+  return obj;
+};
+
+const deleteAdmin = async (id, requesterId) => {
+  if (String(id) === String(requesterId)) {
+    throw new ApiError(400, 'Không thể xóa tài khoản của chính mình');
+  }
+  const admin = await User.findOneAndDelete({ _id: id, role: 'admin' });
+  if (!admin) throw new ApiError(404, 'Không tìm thấy tài khoản admin');
+  return admin;
+};
+
+const toggleAdminActive = async (id, requesterId) => {
+  if (String(id) === String(requesterId)) {
+    throw new ApiError(400, 'Không thể thay đổi trạng thái của chính mình');
+  }
+  const admin = await User.findOne({ _id: id, role: 'admin' });
+  if (!admin) throw new ApiError(404, 'Không tìm thấy tài khoản admin');
+  admin.isActive = !admin.isActive;
+  await admin.save();
+  const obj = typeof admin.toObject === 'function' ? admin.toObject() : { ...admin };
+  delete obj.password;
+  return obj;
+};
+
+module.exports = {
+  ...module.exports,
+  getAllAdmins,
+  getAdminById,
+  createAdmin,
+  updateAdmin,
+  deleteAdmin,
+  toggleAdminActive,
+};

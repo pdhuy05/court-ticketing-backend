@@ -39,6 +39,28 @@ const adminOnly = (req, res, next) => {
   next();
 };
 
+/**
+ * @param {string} permission - tên quyền cần kiểm tra
+ */
+const requirePermission = (permission) => (req, res, next) => {
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ success: false, message: "Chỉ admin mới có quyền truy cập" });
+  }
+
+  if (req.user.isSuperAdmin || req.user.adminPermissions == null) {
+    return next();
+  }
+
+  if (!req.user.adminPermissions.includes(permission)) {
+    return res.status(403).json({
+      success: false,
+      message: `Bạn không có quyền thực hiện thao tác này (thiếu quyền: ${permission})`,
+    });
+  }
+
+  next();
+};
+
 const staffOnly = (req, res, next) => {
   if (req.user.role !== "staff") {
     return res
@@ -76,6 +98,7 @@ const staffOnDuty = (req, res, next) => {
 module.exports = {
   authMiddleware,
   adminOnly,
+  requirePermission,
   staffOnly,
   counterStaff,
   staffOnDuty,
