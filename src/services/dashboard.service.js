@@ -621,12 +621,20 @@ const emitDashboardUpdate = async (reason = "updated") => {
   return data;
 };
 
-const emitDashboardUpdateSafe = async (reason = "updated") => {
-  try {
-    await emitDashboardUpdate(reason);
-  } catch (error) {
-    console.error(`Không thể cập nhật dashboard realtime: ${error.message}`);
-  }
+let _dashboardDebounceTimer = null;
+let _dashboardPendingReason = "updated";
+
+const emitDashboardUpdateSafe = (reason = "updated") => {
+  _dashboardPendingReason = reason;
+  if (_dashboardDebounceTimer) return;
+  _dashboardDebounceTimer = setTimeout(async () => {
+    _dashboardDebounceTimer = null;
+    try {
+      await emitDashboardUpdate(_dashboardPendingReason);
+    } catch (error) {
+      console.error(`Không thể cập nhật dashboard realtime: ${error.message}`);
+    }
+  }, 300);
 };
 
 const getTicketsOverview = async () => {

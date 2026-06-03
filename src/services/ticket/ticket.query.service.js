@@ -163,36 +163,39 @@ const getCounterDisplay = async (counterId) => {
     (relation) => relation.serviceId._id,
   );
 
-  const waitingTickets = await Ticket.find({
-    queueCounterId: counterId,
-    serviceId: { $in: serviceIds },
-    status: TicketStatus.WAITING,
-    isRecall: false,
-  })
-    .populate("serviceId", "name code prefixNumber")
-    .populate("queueCounterId", "number")
-    .sort({ createdAt: 1, number: 1 })
-    .limit(10);
-
-  const processingTickets = await Ticket.find({
-    counterId,
-    status: TicketStatus.PROCESSING,
-  })
-    .populate("serviceId", "name code prefixNumber")
-    .populate("queueCounterId", "number")
-    .sort({ processingAt: 1, createdAt: 1, number: 1 });
+  const [waitingTickets, processingTickets, recallTickets] = await Promise.all([
+    Ticket.find({
+      queueCounterId: counterId,
+      serviceId: { $in: serviceIds },
+      status: TicketStatus.WAITING,
+      isRecall: false,
+    })
+      .populate("serviceId", "name code prefixNumber")
+      .populate("queueCounterId", "number")
+      .sort({ createdAt: 1, number: 1 })
+      .limit(10)
+      .lean(),
+    Ticket.find({
+      counterId,
+      status: TicketStatus.PROCESSING,
+    })
+      .populate("serviceId", "name code prefixNumber")
+      .populate("queueCounterId", "number")
+      .sort({ processingAt: 1, createdAt: 1, number: 1 })
+      .lean(),
+    Ticket.find({
+      recallCounterId: counterId,
+      serviceId: { $in: serviceIds },
+      status: TicketStatus.WAITING,
+      isRecall: true,
+    })
+      .populate("serviceId", "name code prefixNumber")
+      .populate("queueCounterId", "number")
+      .sort({ recalledAt: 1 })
+      .lean(),
+  ]);
 
   const formatTicket = (ticket) => buildTicketPresentation(ticket, counter);
-
-  const recallTickets = await Ticket.find({
-    recallCounterId: counterId,
-    serviceId: { $in: serviceIds },
-    status: TicketStatus.WAITING,
-    isRecall: true,
-  })
-    .populate("serviceId", "name code prefixNumber")
-    .populate("queueCounterId", "number")
-    .sort({ recalledAt: 1 });
 
   return {
     counter: {
@@ -284,24 +287,28 @@ const getStaffDisplay = async (counterId, staffId = null) => {
   const accessScope = await getStaffServiceAccess(staffId, counterId);
   ensureStaffHasAccessibleServices(accessScope);
 
-  const waitingTickets = await Ticket.find({
-    queueCounterId: counterId,
-    serviceId: { $in: accessScope.allowedServiceIds },
-    status: TicketStatus.WAITING,
-    isRecall: false,
-  })
-    .populate("serviceId", "name code prefixNumber")
-    .populate("queueCounterId", "number")
-    .sort({ createdAt: 1, number: 1 });
-
-  const processingTickets = await Ticket.find({
-    counterId,
-    status: TicketStatus.PROCESSING,
-    serviceId: { $in: accessScope.allowedServiceIds },
-  })
-    .populate("serviceId", "name code prefixNumber")
-    .populate("queueCounterId", "number")
-    .sort({ processingAt: 1, updatedAt: 1 });
+  const [waitingTickets, processingTickets, recallTickets] = await Promise.all([
+    Ticket.find({
+      queueCounterId: counterId,
+      serviceId: { $in: accessScope.allowedServiceIds },
+      status: TicketStatus.WAITING,
+      isRecall: false,
+    })
+      .populate("serviceId", "name code prefixNumber")
+      .populate("queueCounterId", "number")
+      .sort({ createdAt: 1, number: 1 })
+      .lean(),
+    Ticket.find({
+      counterId,
+      status: TicketStatus.PROCESSING,
+      serviceId: { $in: accessScope.allowedServiceIds },
+    })
+      .populate("serviceId", "name code prefixNumber")
+      .populate("queueCounterId", "number")
+      .sort({ processingAt: 1, updatedAt: 1 })
+      .lean(),
+    getRecallList(counterId, staffId),
+  ]);
 
   const formatTicket = (ticket) => buildTicketPresentation(ticket, counter);
 
@@ -325,7 +332,7 @@ const getStaffDisplay = async (counterId, staffId = null) => {
     currentTicket: currentTicket ? formatTicket(currentTicket) : null,
     processingTickets: processingTickets.map(formatTicket),
     waitingTickets: waitingTickets.map(formatTicket),
-    recallTickets: await getRecallList(counterId, staffId),
+    recallTickets,
     totalWaiting: waitingTickets.length,
   };
 };

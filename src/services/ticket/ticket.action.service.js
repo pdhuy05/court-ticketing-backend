@@ -73,10 +73,9 @@ const ensureNoProcessingTicket = async (counterId, staffId = null) => {
     ? { staffId, status: TicketStatus.PROCESSING }
     : { counterId, status: TicketStatus.PROCESSING };
 
-  const existingProcessing = await Ticket.findOne(query).populate(
-    "serviceId",
-    "name code prefixNumber",
-  );
+  const existingProcessing = await Ticket.findOne(query)
+    .populate("serviceId", "name code prefixNumber")
+    .lean();
 
   if (existingProcessing) {
     const presentation = buildTicketPresentation(existingProcessing);
@@ -275,11 +274,13 @@ const createTicket = async ({ serviceId, name, phone, counterId = null }) => {
   ticket.qrData = qrData;
   await ticket.save();
 
-  const waitingCount = await Ticket.countDocuments({
-    status: TicketStatus.WAITING,
-    isRecall: false,
-  });
-  const lastIssuedByCounter = await getLastIssuedByCounter();
+  const [waitingCount, lastIssuedByCounter] = await Promise.all([
+    Ticket.countDocuments({
+      status: TicketStatus.WAITING,
+      isRecall: false,
+    }),
+    getLastIssuedByCounter(),
+  ]);
 
   emitWaitingRoomNewTicket({
     ticket,

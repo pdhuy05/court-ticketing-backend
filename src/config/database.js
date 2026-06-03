@@ -6,7 +6,11 @@ const StaffService = require("../models/staffService.model");
 
 const connectDB = async () => {
 try {
-await mongoose.connect(env.db);
+await mongoose.connect(env.db, {
+  maxPoolSize: 10,
+  serverSelectionTimeoutMS: 5000,
+  socketTimeoutMS: 45000,
+});
 await Ticket.syncIndexes();
 await CounterSequence.syncIndexes();
 await StaffService.syncIndexes();
