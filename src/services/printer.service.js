@@ -67,7 +67,7 @@ THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString("vi-VN")}
 
   async generateSVG(ticket, service, qrBuffer) {
     const width = 576;
-    const height = 1240;
+    const height = 1260;
     const logoWidth = 220;
     const logoHeight = 220;
 
@@ -112,46 +112,46 @@ THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString("vi-VN")}
         <text x="50%" y="370" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="22" fill="black">${timeStr}</text>
 
         <!-- TICKET NUMBER -->
-        <text x="50%" y="560" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="200" font-weight="bold" fill="black">${getDisplayTicketNumber(ticket)}</text>
+        <text x="50%" y="550" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="200" font-weight="bold" fill="black">${getDisplayTicketNumber(ticket)}</text>
 
         <!-- SERVICE NAME -->
-        <text x="50%" y="650" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="28" font-weight="bold" fill="black">- ${service?.name || "quầy"} -</text>
+        <text x="50%" y="600" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="28" font-weight="bold" fill="black">- ${service?.name || "quầy"} -</text>
 
         <!-- Dashed Line 1 -->
-        <line x1="60" y1="690" x2="${width - 60}" y2="690" stroke="black" stroke-width="2" stroke-dasharray="6,4"/>
+        <line x1="60" y1="645" x2="${width - 60}" y2="645" stroke="black" stroke-width="2" stroke-dasharray="6,4"/>
 
         <!-- QR TITLE -->
-        <text x="50%" y="745" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="24" font-weight="bold" fill="black">THÔNG TIN ĐƯƠNG SỰ</text>
+        <text x="50%" y="696" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="24" font-weight="bold" fill="black">THÔNG TIN ĐƯƠNG SỰ</text>
 
         <!-- QR CODE -->
         <image 
           x="${(width - 260) / 2}" 
-          y="775"
+          y="720"
           width="260" 
           height="260" 
           href="${qrBase64}"
         />
 
-        <!-- CUSTOMER NAME -->
-        <text x="50%" y="1075" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="24" font-weight="bold" fill="black">${ticket.name || "Đương sự"}</text>
-
         <!-- SCAN INSTRUCTION -->
-        <text x="50%" y="1110" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="20" fill="black">Quét mã để xem chi tiết</text>
+        <text x="50%" y="1010" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="20" fill="black">Quét mã để xem chi tiết</text>
 
         <!-- Dashed Line 2 -->
-        <line x1="60" y1="1150" x2="${width - 60}" y2="1150" stroke="black" stroke-width="2" stroke-dasharray="6,4"/>
+<line x1="60" y1="1040" x2="${width - 60}" y2="1040" stroke="black" stroke-width="2" stroke-dasharray="6,4"/>
 
-        <!-- FOOTER -->
-        <text x="50%" y="1205" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="26" font-weight="bold" fill="black">CẢM ƠN QUÝ ÔNG BÀ</text>
-        <text x="50%" y="1238" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="22" fill="black">Vui lòng chờ đến lượt</text>
+<!-- FOOTER -->
+<text x="50%" y="1085" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="23" font-weight="bold" fill="#222222">Thứ tự xử lý phụ thuộc vào tình trạng hồ sơ.</text>
+<text x="50%" y="1120" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="23" font-weight="bold" fill="#222222">Quý vị có thể không được gọi theo thứ tự số phiếu.</text>
+
+<line x1="60" y1="1140" x2="${width - 60}" y2="1140" stroke="#cccccc" stroke-width="1" stroke-dasharray="4,4"/>
+
+<text x="50%" y="1178" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="28" font-weight="bold" fill="black">CẢM ƠN QUÝ ÔNG BÀ</text>
       </svg>
     `;
   }
 
-  // Tờ nhỏ: chỉ hiển thị số thứ tự
   generateSmallSVG(ticket, service) {
     const width = 576;
-    const height = 400;
+    const height = 420;
 
     const timeStr = new Date().toLocaleString("vi-VN", {
       hour: "2-digit",
@@ -191,23 +191,34 @@ THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString("vi-VN")}
         </text>
 
         <!-- SERVICE NAME -->
-        <text x="50%" y="330" text-anchor="middle"
+        <text x="50%" y="320" text-anchor="middle"
           font-family="DejaVu Sans, Arial, sans-serif"
           font-size="26" font-weight="bold" fill="black">
           - ${service?.name || "quầy"} -
         </text>
 
         <!-- Tên đương sự -->
-        <text x="50%" y="380" text-anchor="middle"
+        <text x="50%" y="355" text-anchor="middle"
           font-family="DejaVu Sans, Arial, sans-serif"
           font-size="22" fill="black">
           ${ticket.name || ""}
         </text>
 
         <!-- Dashed Line Bottom -->
-        <line x1="40" y1="355" x2="${width - 40}" y2="355"
+        <line x1="40" y1="370" x2="${width - 40}" y2="370"
           stroke="black" stroke-width="2" stroke-dasharray="6,4"/>
 
+        <!-- NOTE -->
+        <text x="50%" y="390" text-anchor="middle"
+          font-family="DejaVu Sans, Arial, sans-serif"
+          font-size="17" font-weight="bold" fill="#555555">
+          Thứ tự xử lý phụ thuộc vào tình trạng hồ sơ.
+        </text>
+        <text x="50%" y="410" text-anchor="middle"
+          font-family="DejaVu Sans, Arial, sans-serif"
+          font-size="17" font-weight="bold" fill="#555555">
+          Quý vị có thể không được gọi theo thứ tự số phiếu.
+        </text>
       </svg>
     `;
   }

@@ -9,7 +9,8 @@ const {
   patchAutoResetEnabledSchema,
   patchAutoResetTimeSchema,
   patchTtsEnabledSchema,
-  patchSiteConfigSchema
+  patchSiteConfigSchema,
+  patchDisplayModeSchema,
 } = require('../../validations/admin-settings.validation');
 const SettingsController = require('../../controllers/admin/settings.controller');
 
@@ -21,7 +22,10 @@ adminRouter.patch('/auto-reset/time', authMiddleware, adminOnly, validate(patchA
 adminRouter.get('/site-config', authMiddleware, adminOnly, SettingsController.getSiteConfig);
 adminRouter.patch('/site-config', authMiddleware, adminOnly, validate(patchSiteConfigSchema), SettingsController.patchSiteConfig);
 adminRouter.post( '/upload-logo', authMiddleware, adminOnly, uploadLogo, SettingsController.uploadLogo );
+adminRouter.get('/display-mode', authMiddleware, adminOnly, SettingsController.getDisplayMode);
+adminRouter.patch('/display-mode', authMiddleware, adminOnly, validate(patchDisplayModeSchema), SettingsController.patchDisplayMode);
 
 publicRouter.get('/site-config', SettingsController.getSiteConfig);
+publicRouter.get('/display-mode', SettingsController.getDisplayMode);
 
 module.exports = { adminRouter, publicRouter };

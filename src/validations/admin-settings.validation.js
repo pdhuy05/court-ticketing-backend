@@ -61,4 +61,13 @@ module.exports = {
   patchAutoResetTimeSchema,
   patchTtsEnabledSchema,
   patchSiteConfigSchema,
+  patchDisplayModeSchema: Joi.object({
+    mode: Joi.string()
+      .valid('service', 'queue')
+      .required()
+      .messages({
+        'any.required': "Trường mode là bắt buộc",
+        'any.only': "mode phải là 'service' hoặc 'queue'",
+      }),
+  }),
 };

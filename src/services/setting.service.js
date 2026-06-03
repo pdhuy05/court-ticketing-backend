@@ -251,6 +251,42 @@ const seedShiftDefaults = async () => {
 };
 
 
+// ─── Display Mode ────────────────────────────────────────────────────────────
+const DISPLAY_MODE_KEY = 'display_mode';
+const DISPLAY_MODE_DEFAULT = 'service'; // 'service' | 'queue'
+
+const getDisplayMode = async () => {
+  const raw = await getSetting(DISPLAY_MODE_KEY, DISPLAY_MODE_DEFAULT);
+  return raw === 'queue' ? 'queue' : 'service';
+};
+
+const setDisplayMode = async (mode) => {
+  if (mode !== 'service' && mode !== 'queue') {
+    throw new Error("display_mode phải là 'service' hoặc 'queue'");
+  }
+  await setSetting(
+    DISPLAY_MODE_KEY,
+    mode,
+    "Chế độ hiển thị màn hình quầy: 'service' (theo yêu cầu) hoặc 'queue' (danh sách chờ)"
+  );
+  return mode;
+};
+
+const seedDisplayModeDefault = async () => {
+  await Setting.findOneAndUpdate(
+    { key: DISPLAY_MODE_KEY },
+    {
+      $setOnInsert: {
+        key: DISPLAY_MODE_KEY,
+        value: DISPLAY_MODE_DEFAULT,
+        description: "Chế độ hiển thị màn hình quầy: 'service' hoặc 'queue'",
+      },
+    },
+    { upsert: true, runValidators: true }
+  );
+};
+
+// ─── Site Config ─────────────────────────────────────────────────────────────
 const getSiteConfig = async () => {
   const keys = Object.keys(SITE_CONFIG_DEFAULTS);
   const docs = await Setting.find({ key: { $in: keys } }).lean();
@@ -333,4 +369,9 @@ module.exports = {
   SITE_WORKING_HOURS_KEY,
   SITE_ADDRESS_KEY,
   SITE_ANNOUNCEMENT_KEY,
+  // Display Mode
+  DISPLAY_MODE_KEY,
+  getDisplayMode,
+  setDisplayMode,
+  seedDisplayModeDefault,
 };

@@ -73,6 +73,25 @@ exports.patchSiteConfig = async (req, res) => {
   });
 };
 
+exports.getDisplayMode = async (req, res) => {
+  const mode = await settingService.getDisplayMode();
+  res.json({
+    success: true,
+    data: { display_mode: mode },
+  });
+};
+
+exports.patchDisplayMode = async (req, res) => {
+  const mode = await settingService.setDisplayMode(req.body.mode);
+  res.json({
+    success: true,
+    data: { display_mode: mode },
+    message: mode === 'service'
+      ? 'Màn hình quầy: Hiển thị theo Yêu Cầu (service mode)'
+      : 'Màn hình quầy: Hiển thị Danh Sách Chờ (queue mode)',
+  });
+};
+
 exports.uploadLogo = async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ success: false, message: 'Không có file được upload' });
