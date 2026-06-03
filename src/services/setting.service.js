@@ -369,7 +369,6 @@ module.exports = {
   SITE_WORKING_HOURS_KEY,
   SITE_ADDRESS_KEY,
   SITE_ANNOUNCEMENT_KEY,
-  // Display Mode
   DISPLAY_MODE_KEY,
   getDisplayMode,
   setDisplayMode,

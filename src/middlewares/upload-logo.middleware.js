@@ -12,11 +12,11 @@ if (!fs.existsSync(logoDir)) {
 const storage = multer.memoryStorage();
 
 const fileFilter = (_req, file, cb) => {
-  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/svg+xml'];
+  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
   if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error('Chỉ chấp nhận file ảnh: JPG, PNG, WEBP, SVG'), false);
+    cb(new Error('Chỉ chấp nhận file ảnh: JPG, PNG, WEBP'), false);
   }
 };
 
@@ -34,15 +34,6 @@ const uploadLogo = (req, res, next) => {
     try {
       const filename = `logo_${Date.now()}.webp`;
       const outputPath = path.join(logoDir, filename);
-      
-      if (req.file.mimetype === 'image/svg+xml') {
-        const svgFilename = `logo_${Date.now()}.svg`;
-        const svgPath = path.join(logoDir, svgFilename);
-        fs.writeFileSync(svgPath, req.file.buffer);
-        req.file.filename = svgFilename;
-        req.file.path = svgPath;
-        return next();
-      }
 
       await sharp(req.file.buffer)
         .resize(400, 400, {
