@@ -1,19 +1,18 @@
-const { exec } = require('child_process');
+const { exec, execFile } = require('child_process');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const logger = require('../utils/Logger');
 
-const TTS_TIMEOUT_MS = Number(process.env.TTS_TIMEOUT_MS || 15000);
+const TTS_TIMEOUT_MS = Number(process.env.TTS_TIMEOUT_MS || 20000);
 const TTS_ENABLED = process.env.TTS_ENABLED !== 'false';
 const TTS_LANG = process.env.TTS_LANG || 'vi';
 const TTS_NATIVE_FALLBACK_ENABLED = process.env.TTS_NATIVE_FALLBACK_ENABLED !== 'false';
 
 let speechQueue = Promise.resolve();
 
-const sanitizeText = (text = '') => String(text).replace(/"/g, '\\"').replace(/'/g, "\\'").trim();
-
+// ─── Download Google TTS ───────────────────────────────────────────────────
 const downloadGoogleTTS = (text, outputPath) => new Promise((resolve, reject) => {
   const encodedText = encodeURIComponent(text);
   const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=${TTS_LANG}&client=tw-ob`;
@@ -29,119 +28,122 @@ const downloadGoogleTTS = (text, outputPath) => new Promise((resolve, reject) =>
       reject(new Error(`Google TTS trả về status ${response.statusCode}`));
       return;
     }
-
     const fileStream = fs.createWriteStream(outputPath);
     response.pipe(fileStream);
-
-    fileStream.on('finish', () => {
-      fileStream.close();
-      resolve(outputPath);
-    });
-
-    fileStream.on('error', (error) => {
-      fs.unlink(outputPath, () => {});
-      reject(error);
-    });
+    fileStream.on('finish', () => { fileStream.close(); resolve(outputPath); });
+    fileStream.on('error', (err) => { fs.unlink(outputPath, () => {}); reject(err); });
   });
 
   request.on('error', reject);
-  request.on('timeout', () => {
-    request.destroy();
-    reject(new Error('Google TTS timeout'));
-  });
+  request.on('timeout', () => { request.destroy(); reject(new Error('Google TTS timeout')); });
 });
 
+// ─── Play audio (Windows dùng VBScript qua mshta — hoạt động trong session ẩn) ───
 const playAudio = (filePath) => new Promise((resolve, reject) => {
   const platform = os.platform();
-  let command;
 
-  switch (platform) {
-    case 'darwin':
-      command = `afplay "${filePath}"`;
-      break;
-
-    case 'win32': {
-      const winPath = filePath.replace(/\\/g, '/');
-      command = [
-        'powershell -NoProfile -Command "',
-        'Add-Type -AssemblyName PresentationCore;',
-        '$mp = New-Object System.Windows.Media.MediaPlayer;',
-        `$mp.Open([Uri]::new('${winPath}'));`,
-        '$mp.Play();',
-        '$t = 0; while (-not $mp.NaturalDuration.HasTimeSpan -and $t -lt 50) { Start-Sleep -Milliseconds 100; $t++ };',
-        'if ($mp.NaturalDuration.HasTimeSpan) {',
-        '  $ms = [int]$mp.NaturalDuration.TimeSpan.TotalMilliseconds + 300;',
-        '  Start-Sleep -Milliseconds $ms',
-        '} else { Start-Sleep -Seconds 6 };',
-        '$mp.Stop(); $mp.Close()"'
-      ].join(' ');
-      break;
-    }
-
-    case 'linux':
-      command = `aplay "${filePath}" 2>/dev/null || mpg123 "${filePath}" 2>/dev/null || ffplay -nodisp -autoexit "${filePath}" 2>/dev/null`;
-      break;
-
-    default:
-      reject(new Error(`Không hỗ trợ phát audio trên OS: ${platform}`));
-      return;
+  if (platform === 'darwin') {
+    exec(`afplay "${filePath}"`, { timeout: TTS_TIMEOUT_MS }, (err) => {
+      fs.unlink(filePath, () => {});
+      err ? reject(err) : resolve();
+    });
+    return;
   }
 
-  exec(command, { timeout: TTS_TIMEOUT_MS }, (error) => {
-    fs.unlink(filePath, () => {});
+  if (platform === 'linux') {
+    exec(
+      `aplay "${filePath}" 2>/dev/null || mpg123 "${filePath}" 2>/dev/null || ffplay -nodisp -autoexit "${filePath}" 2>/dev/null`,
+      { timeout: TTS_TIMEOUT_MS },
+      (err) => { fs.unlink(filePath, () => {}); err ? reject(err) : resolve(); }
+    );
+    return;
+  }
 
-    if (error) {
-      reject(error);
-    } else {
-      resolve();
-    }
-  });
+  if (platform === 'win32') {
+    // Ghi file .vbs ra disk → mshta.exe chạy nó
+    // VBScript dùng Windows Media Player COM object — hoạt động trong mọi loại session kể cả service/PM2
+    const winFilePath = filePath.replace(/\//g, '\\');
+    const vbsPath = filePath.replace(/\.mp3$/, '.vbs');
+
+    const vbsContent = [
+      'Set wmp = CreateObject("WMPlayer.OCX")',
+      `wmp.URL = "${winFilePath}"`,
+      'wmp.controls.play',
+      'Do While wmp.playState <> 1',   // 1 = Stopped
+      '  WScript.Sleep 200',
+      'Loop',
+      'wmp.close',
+    ].join('\r\n');
+
+    fs.writeFile(vbsPath, vbsContent, (writeErr) => {
+      if (writeErr) {
+        fs.unlink(filePath, () => {});
+        reject(writeErr);
+        return;
+      }
+
+      // mshta chạy VBScript trong UI context, có audio session đầy đủ
+      execFile('mshta.exe', [`vbscript:Execute("CreateObject(""Scripting.FileSystemObject"")") `], 
+        { timeout: 1 }, () => {}); // warm up mshta (bỏ qua lỗi)
+
+      exec(`cscript //NoLogo //B "${vbsPath}"`, { timeout: TTS_TIMEOUT_MS }, (err) => {
+        fs.unlink(filePath, () => {});
+        fs.unlink(vbsPath, () => {});
+        err ? reject(err) : resolve();
+      });
+    });
+    return;
+  }
+
+  reject(new Error(`Không hỗ trợ phát audio trên OS: ${platform}`));
 });
 
+// ─── Native fallback (System.Speech — tiếng Anh, dùng khi không có mạng) ───
 const speakNativeFallback = (text) => new Promise((resolve, reject) => {
   const platform = os.platform();
-  const escapedText = sanitizeText(text);
-  let command;
 
-  switch (platform) {
-    case 'win32':
-      command = `powershell -NoProfile -Command "` +
-        `Add-Type -AssemblyName System.Speech; ` +
-        `$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; ` +
-        `$s.Rate = -2; ` +
-        `$s.Speak('${escapedText.replace(/'/g, "''")}'); ` +
-        `$s.Dispose()"`;
-      break;
-    case 'darwin':
-      command = `say "${escapedText}"`;
-      break;
-    case 'linux':
-      command = `espeak "${escapedText}" 2>/dev/null`;
-      break;
-    default:
-      reject(new Error(`OS not supported: ${platform}`));
-      return;
+  if (platform === 'win32') {
+    // Ghi .vbs để dùng SAPI (Speech API) — đọc được trong session ẩn
+    const safeText = text.replace(/"/g, '').replace(/'/g, '');
+    const vbsPath = path.join(os.tmpdir(), `tts_sapi_${Date.now()}.vbs`);
+    const vbsContent = [
+      'Set sapi = CreateObject("SAPI.SpVoice")',
+      `sapi.Speak "${safeText}"`,
+    ].join('\r\n');
+
+    fs.writeFile(vbsPath, vbsContent, (writeErr) => {
+      if (writeErr) { reject(writeErr); return; }
+      exec(`cscript //NoLogo //B "${vbsPath}"`, { timeout: TTS_TIMEOUT_MS }, (err) => {
+        fs.unlink(vbsPath, () => {});
+        err ? reject(err) : resolve();
+      });
+    });
+    return;
   }
 
-  exec(command, { timeout: TTS_TIMEOUT_MS }, (error) => {
-    if (error) {
-      reject(error);
-    } else {
-      resolve();
-    }
+  if (platform === 'darwin') {
+    exec(`say "${text.replace(/"/g, '')}"`, { timeout: TTS_TIMEOUT_MS }, (err) => {
+      err ? reject(err) : resolve();
+    });
+    return;
+  }
+
+  exec(`espeak "${text.replace(/"/g, '')}" 2>/dev/null`, { timeout: TTS_TIMEOUT_MS }, (err) => {
+    err ? reject(err) : resolve();
   });
 });
 
+// ─── Core logic ───────────────────────────────────────────────────────────
 const runSpeakProcess = async (text) => {
   if (!TTS_ENABLED) {
     logger.info('TTS đang bị tắt qua cấu hình môi trường');
     return;
   }
-
   if (!text || text.trim() === '') {
     throw new Error('Văn bản trống, không thể đọc');
   }
 
+  // Thử Google TTS trước
   try {
     const tmpFile = path.join(os.tmpdir(), `tts_${Date.now()}.mp3`);
     await downloadGoogleTTS(text, tmpFile);
@@ -152,8 +154,9 @@ const runSpeakProcess = async (text) => {
     logger.warn(`Google TTS thất bại: ${googleError.message}. Thử fallback native...`);
   }
 
+  // Fallback native
   if (!TTS_NATIVE_FALLBACK_ENABLED) {
-    logger.error(`Google TTS thất bại và fallback native đang tắt qua TTS_NATIVE_FALLBACK_ENABLED=false`);
+    logger.error('Google TTS thất bại và fallback native đang tắt (TTS_NATIVE_FALLBACK_ENABLED=false)');
     return;
   }
 
@@ -169,19 +172,15 @@ const speak = (text) => {
   const task = speechQueue
     .catch(() => {})
     .then(() => runSpeakProcess(text));
-
   speechQueue = task.catch(() => {});
   return task;
 };
 
 const speakCallTicket = (displayNumber, serviceName) => {
   const message = `Mời ông bà số ${displayNumber} đến quầy ${serviceName}`;
-  return speak(message).catch((error) => {
-    logger.error(`Không thể đọc số: ${error.message}`);
+  return speak(message).catch((err) => {
+    logger.error(`Không thể đọc số: ${err.message}`);
   });
 };
 
-module.exports = {
-  speak,
-  speakCallTicket
-};
+module.exports = { speak, speakCallTicket };
