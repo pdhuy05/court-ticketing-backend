@@ -5,12 +5,10 @@ const path = require('path');
 const os = require('os');
 const logger = require('../utils/Logger');
 
-const TTS_TIMEOUT_MS = Number(process.env.TTS_TIMEOUT_MS || 10000);
+const TTS_TIMEOUT_MS = Number(process.env.TTS_TIMEOUT_MS || 15000);
 const TTS_ENABLED = process.env.TTS_ENABLED !== 'false';
 const TTS_LANG = process.env.TTS_LANG || 'vi';
-const TTS_NATIVE_FALLBACK_ENABLED = process.env.TTS_NATIVE_FALLBACK_ENABLED
-  ? process.env.TTS_NATIVE_FALLBACK_ENABLED === 'true'
-  : os.platform() !== 'win32';
+const TTS_NATIVE_FALLBACK_ENABLED = process.env.TTS_NATIVE_FALLBACK_ENABLED !== 'false';
 
 let speechQueue = Promise.resolve();
 
@@ -61,17 +59,29 @@ const playAudio = (filePath) => new Promise((resolve, reject) => {
     case 'darwin':
       command = `afplay "${filePath}"`;
       break;
-    // case 'win32':
-    //   command = `powershell -Command "Add-Type -AssemblyName PresentationCore; $mp = New-Object System.Windows.Media.MediaPlayer; $mp.Open([Uri]'${filePath}'); $mp.Play(); Start-Sleep -Seconds 5; $mp.Stop(); exit 0"`;
-    //   break;
 
-    case 'win32':
-      command = `powershell -Command "Add-Type -AssemblyName PresentationCore; $mp = New-Object System.Windows.Media.MediaPlayer; $mp.Open([Uri]'${filePath}'); $mp.Play(); Start-Sleep -Milliseconds 500; do { Start-Sleep -Milliseconds 200 } while ($mp.NaturalDuration.HasTimeSpan -eq $false -or $mp.Position -lt $mp.NaturalDuration.TimeSpan); $mp.Stop()"`;
+    case 'win32': {
+      const winPath = filePath.replace(/\\/g, '/');
+      command = [
+        'powershell -NoProfile -Command "',
+        'Add-Type -AssemblyName PresentationCore;',
+        '$mp = New-Object System.Windows.Media.MediaPlayer;',
+        `$mp.Open([Uri]::new('${winPath}'));`,
+        '$mp.Play();',
+        '$t = 0; while (-not $mp.NaturalDuration.HasTimeSpan -and $t -lt 50) { Start-Sleep -Milliseconds 100; $t++ };',
+        'if ($mp.NaturalDuration.HasTimeSpan) {',
+        '  $ms = [int]$mp.NaturalDuration.TimeSpan.TotalMilliseconds + 300;',
+        '  Start-Sleep -Milliseconds $ms',
+        '} else { Start-Sleep -Seconds 6 };',
+        '$mp.Stop(); $mp.Close()"'
+      ].join(' ');
       break;
+    }
 
     case 'linux':
       command = `aplay "${filePath}" 2>/dev/null || mpg123 "${filePath}" 2>/dev/null || ffplay -nodisp -autoexit "${filePath}" 2>/dev/null`;
       break;
+
     default:
       reject(new Error(`Không hỗ trợ phát audio trên OS: ${platform}`));
       return;
@@ -95,7 +105,12 @@ const speakNativeFallback = (text) => new Promise((resolve, reject) => {
 
   switch (platform) {
     case 'win32':
-      command = `powershell -Command "Add-Type -AssemblyName System.Speech; $synth = New-Object System.Speech.Synthesis.SpeechSynthesizer; $synth.Speak('${escapedText.replace(/'/g, "''")}')"`;
+      command = `powershell -NoProfile -Command "` +
+        `Add-Type -AssemblyName System.Speech; ` +
+        `$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; ` +
+        `$s.Rate = -2; ` +
+        `$s.Speak('${escapedText.replace(/'/g, "''")}'); ` +
+        `$s.Dispose()"`;
       break;
     case 'darwin':
       command = `say "${escapedText}"`;
@@ -134,12 +149,12 @@ const runSpeakProcess = async (text) => {
     logger.info(`Đã đọc (Google TTS): "${text}"`);
     return;
   } catch (googleError) {
-    if (!TTS_NATIVE_FALLBACK_ENABLED) {
-      logger.error(`Google TTS thất bại và fallback native đang tắt: ${googleError.message}`);
-      return;
-    }
+    logger.warn(`Google TTS thất bại: ${googleError.message}. Thử fallback native...`);
+  }
 
-    logger.warning(`Google TTS thất bại: ${googleError.message}. Thử fallback native...`);
+  if (!TTS_NATIVE_FALLBACK_ENABLED) {
+    logger.error(`Google TTS thất bại và fallback native đang tắt qua TTS_NATIVE_FALLBACK_ENABLED=false`);
+    return;
   }
 
   try {
