@@ -241,8 +241,11 @@ const runServiceScheduler = async () => {
   const now = new Date();
   const hhmm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   const results = [];
+  const allSchedule = schedules.find((s) => isAllServicesSchedule(s.serviceId));
+  const perServiceSchedules = schedules.filter((s) => !isAllServicesSchedule(s.serviceId));
+  const orderedSchedules = allSchedule ? [allSchedule, ...perServiceSchedules] : perServiceSchedules;
 
-  for (const schedule of schedules) {
+  for (const schedule of orderedSchedules) {
     const normalizedServiceId = normalizeScheduleServiceId(schedule.serviceId);
     const slots = resolveSlots(schedule);
     if (slots.length === 0) continue;
