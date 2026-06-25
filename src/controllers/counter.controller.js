@@ -1,5 +1,6 @@
 const CounterService = require("../services/counter.service");
 const asyncHandler = require("../utils/asyncHandler");
+const { log, AUDIT_ACTIONS } = require("../services/audit.service");
 
 exports.getAll = async (req, res) => {
   const counters = await CounterService.getAll();
@@ -28,6 +29,16 @@ exports.getActive = async (req, res) => {
 
 exports.create = async (req, res) => {
   const counter = await CounterService.create(req.body);
+
+  await log({
+    req,
+    action: AUDIT_ACTIONS.COUNTER_CREATE,
+    status: "success",
+    targetId: String(counter._id),
+    targetType: "counter",
+    detail: { name: counter.name, code: counter.code },
+  });
+
   res.status(201).json({
     success: true,
     data: counter,
@@ -37,6 +48,15 @@ exports.create = async (req, res) => {
 
 exports.update = async (req, res) => {
   const counter = await CounterService.update(req.params.id, req.body);
+
+  await log({
+    req,
+    action: AUDIT_ACTIONS.COUNTER_UPDATE,
+    status: "success",
+    targetId: String(req.params.id),
+    targetType: "counter",
+  });
+
   res.json({
     success: true,
     data: counter,
@@ -66,6 +86,15 @@ exports.removeService = async (req, res) => {
 
 exports.delete = async (req, res) => {
   const counter = await CounterService.delete(req.params.id);
+
+  await log({
+    req,
+    action: AUDIT_ACTIONS.COUNTER_DELETE,
+    status: "success",
+    targetId: String(req.params.id),
+    targetType: "counter",
+  });
+
   res.json({
     success: true,
     message: `Xóa phòng ${counter.name} và các quan hệ liên quan thành công`,
@@ -74,6 +103,16 @@ exports.delete = async (req, res) => {
 
 exports.toggleActive = async (req, res) => {
   const counter = await CounterService.toggleActive(req.params.id);
+
+  await log({
+    req,
+    action: AUDIT_ACTIONS.COUNTER_TOGGLE,
+    status: "success",
+    targetId: String(req.params.id),
+    targetType: "counter",
+    detail: { isActive: counter.isActive },
+  });
+
   res.json({
     success: true,
     data: counter,

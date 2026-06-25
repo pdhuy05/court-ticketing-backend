@@ -46,6 +46,11 @@ const ServiceSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  manualOverride: {
+    type: String,
+    enum: ['open', 'closed', null],
+    default: null
+  },
   inactiveLabel: {
     type: String,
     default: 'ĐANG THỬ NGHIỆM',

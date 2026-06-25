@@ -1,5 +1,6 @@
 const Service = require("../services/service.service");
 const asyncHandler = require("../utils/asyncHandler");
+const { log, AUDIT_ACTIONS } = require("../services/audit.service");
 
 exports.getAllService = async (req, res, next) => {
   const services = await Service.getAll();
@@ -28,6 +29,16 @@ exports.getServiceById = async (req, res, next) => {
 
 exports.createService = async (req, res, next) => {
   const service = await Service.create(req.body);
+
+  await log({
+    req,
+    action: AUDIT_ACTIONS.SERVICE_CREATE,
+    status: "success",
+    targetId: String(service._id),
+    targetType: "service",
+    detail: { name: service.name, code: service.code },
+  });
+
   res.status(201).json({
     success: true,
     data: service,
@@ -37,6 +48,15 @@ exports.createService = async (req, res, next) => {
 
 exports.updateService = async (req, res, next) => {
   const service = await Service.update(req.params.id, req.body);
+
+  await log({
+    req,
+    action: AUDIT_ACTIONS.SERVICE_UPDATE,
+    status: "success",
+    targetId: String(req.params.id),
+    targetType: "service",
+  });
+
   res.json({
     success: true,
     data: service,
@@ -46,6 +66,15 @@ exports.updateService = async (req, res, next) => {
 
 exports.deleteService = async (req, res, next) => {
   const service = await Service.remove(req.params.id);
+
+  await log({
+    req,
+    action: AUDIT_ACTIONS.SERVICE_DELETE,
+    status: "success",
+    targetId: String(req.params.id),
+    targetType: "service",
+  });
+
   res.json({
     success: true,
     message: "Xóa thành công",
@@ -95,6 +124,16 @@ exports.getStats = async (req, res, next) => {
 exports.toggleDoublePrint = async (req, res, next) => {
   const { doublePrint } = req.body;
   const service = await Service.toggleDoublePrint(req.params.id, doublePrint);
+
+  await log({
+    req,
+    action: AUDIT_ACTIONS.SERVICE_TOGGLE,
+    status: "success",
+    targetId: String(req.params.id),
+    targetType: "service",
+    detail: { isActive: doublePrint },
+  });
+
   res.json({
     success: true,
     data: service,

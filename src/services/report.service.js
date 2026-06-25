@@ -87,23 +87,23 @@ const buildTicketDetailSheet = async (workbook, tickets, startDate, endDate) => 
   const ws = workbook.addWorksheet('Chi tiết vé');
 
   ws.columns = [
-    { key: 'stt',            width: 6  },
-    { key: 'date',           width: 13 },
-    { key: 'ticketNumber',   width: 14 },
-    { key: 'service',        width: 22 },
-    { key: 'counter',        width: 18 },
-    { key: 'customerName',   width: 22 },
-    { key: 'phone',          width: 14 },
-    { key: 'status',         width: 14 },
-    { key: 'createdAt',      width: 20 },
-    { key: 'calledAt',       width: 20 },
-    { key: 'completedAt',    width: 20 },
-    { key: 'waitingDur',     width: 18 },
+    { key: 'stt', width: 6  },
+    { key: 'date', width: 13 },
+    { key: 'ticketNumber', width: 14 },
+    { key: 'service', width: 22 },
+    { key: 'counter', width: 18 },
+    { key: 'customerName', width: 22 },
+    { key: 'phone', width: 14 },
+    { key: 'status', width: 14 },
+    { key: 'createdAt', width: 20 },
+    { key: 'calledAt', width: 20 },
+    { key: 'completedAt', width: 20 },
+    { key: 'waitingDur', width: 18 },
     { key: 'processingDur',  width: 18 },
-    { key: 'totalDur',       width: 18 },
-    { key: 'skipCount',      width: 10 },
-    { key: 'staff',          width: 20 },
-    { key: 'note',           width: 28 },
+    { key: 'totalDur', width: 18 },
+    { key: 'skipCount', width: 10 },
+    { key: 'staff', width: 20 },
+    { key: 'note', width: 28 },
   ];
 
   addTitleRow(ws, `DANH SÁCH VÉ CHI TIẾT  (${startDate} → ${endDate})`, ws.columns.length);
@@ -151,15 +151,15 @@ const buildDailyStatsSheet = async (workbook, tickets, startDate, endDate) => {
   const ws = workbook.addWorksheet('Thống kê theo ngày');
 
   ws.columns = [
-    { key: 'date',        width: 14 },
-    { key: 'total',       width: 12 },
-    { key: 'completed',   width: 14 },
-    { key: 'skipped',     width: 12 },
-    { key: 'waiting',     width: 12 },
-    { key: 'processing',  width: 14 },
-    { key: 'avgWait',     width: 18 },
-    { key: 'avgProcess',  width: 18 },
-    { key: 'avgTotal',    width: 18 },
+    { key: 'date', width: 14 },
+    { key: 'total', width: 12 },
+    { key: 'completed', width: 14 },
+    { key: 'skipped', width: 12 },
+    { key: 'waiting', width: 12 },
+    { key: 'processing', width: 14 },
+    { key: 'avgWait', width: 18 },
+    { key: 'avgProcess', width: 18 },
+    { key: 'avgTotal', width: 18 },
   ];
 
   addTitleRow(ws, `THỐNG KÊ THEO NGÀY  (${startDate} → ${endDate})`, ws.columns.length);
@@ -226,16 +226,16 @@ const buildServiceStatsSheet = async (workbook, tickets, startDate, endDate) => 
   const ws = workbook.addWorksheet('Thống kê theo dịch vụ');
 
   ws.columns = [
-    { key: 'stt',         width: 6  },
-    { key: 'service',     width: 26 },
-    { key: 'total',       width: 12 },
-    { key: 'completed',   width: 14 },
-    { key: 'skipped',     width: 12 },
-    { key: 'waiting',     width: 12 },
-    { key: 'processing',  width: 14 },
-    { key: 'rate',        width: 16 },
-    { key: 'avgWait',     width: 18 },
-    { key: 'avgProcess',  width: 18 },
+    { key: 'stt', width: 6  },
+    { key: 'service', width: 26 },
+    { key: 'total', width: 12 },
+    { key: 'completed', width: 14 },
+    { key: 'skipped', width: 12 },
+    { key: 'waiting', width: 12 },
+    { key: 'processing', width: 14 },
+    { key: 'rate', width: 16 },
+    { key: 'avgWait', width: 18 },
+    { key: 'avgProcess', width: 18 },
   ];
 
   addTitleRow(ws, `THỐNG KÊ THEO DỊCH VỤ  (${startDate} → ${endDate})`, ws.columns.length);

@@ -2,9 +2,17 @@ const settingService = require('../../services/setting.service');
 const asyncHandler = require('../../utils/asyncHandler');
 const path = require('path');
 const fs = require('fs');
+const { log, AUDIT_ACTIONS } = require('../../services/audit.service');
 
 exports.patchTtsEnabled = async (req, res) => {
   const value = await settingService.setTtsEnabled(req.body.enabled);
+
+  await log({
+    req,
+    action: AUDIT_ACTIONS.SETTING_TTS_UPDATE,
+    status: "success",
+    detail: { enabled: value },
+  });
 
   res.json({
     success: true,
@@ -38,6 +46,13 @@ exports.getAutoResetSettings = async (req, res) => {
 exports.patchAutoResetEnabled = async (req, res) => {
   const value = await settingService.setAutoResetEnabled(req.body.enabled);
 
+  await log({
+    req,
+    action: AUDIT_ACTIONS.SETTING_AUTO_RESET_UPDATE,
+    status: "success",
+    detail: { enabled: value },
+  });
+
   res.json({
     success: true,
     data: {
@@ -49,6 +64,13 @@ exports.patchAutoResetEnabled = async (req, res) => {
 
 exports.patchAutoResetTime = async (req, res) => {
   const value = await settingService.setAutoResetTime(req.body.time);
+
+  await log({
+    req,
+    action: AUDIT_ACTIONS.SETTING_AUTO_RESET_UPDATE,
+    status: "success",
+    detail: { time: value },
+  });
 
   res.json({
     success: true,
@@ -66,6 +88,14 @@ exports.getSiteConfig = async (req, res) => {
 
 exports.patchSiteConfig = async (req, res) => {
   const data = await settingService.updateSiteConfig(req.body);
+
+  await log({
+    req,
+    action: AUDIT_ACTIONS.SETTING_SITE_CONFIG_UPDATE,
+    status: "success",
+    detail: req.body,
+  });
+
   res.json({
     success: true,
     data,
@@ -83,6 +113,14 @@ exports.getDisplayMode = async (req, res) => {
 
 exports.patchDisplayMode = async (req, res) => {
   const mode = await settingService.setDisplayMode(req.body.mode);
+
+  await log({
+    req,
+    action: AUDIT_ACTIONS.SETTING_DISPLAY_MODE_UPDATE,
+    status: "success",
+    detail: { mode },
+  });
+
   res.json({
     success: true,
     data: { display_mode: mode },
@@ -113,6 +151,13 @@ exports.uploadLogo = async (req, res) => {
   const logoUrl = `/api/public/logo/${req.file.filename}`;
 
   await settingService.updateSiteConfig({ logoUrl });
+
+  await log({
+    req,
+    action: AUDIT_ACTIONS.SETTING_LOGO_UPLOAD,
+    status: "success",
+    detail: { logoUrl },
+  });
 
   res.json({
     success: true,

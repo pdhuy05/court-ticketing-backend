@@ -67,7 +67,7 @@ exports.getActive = async () => {
   const services = await Service.find()
     .sort({ displayOrder: 1 })
     .select(
-      "code name description displayOrder icon backgroundColor prefixNumber isActive doublePrint inactiveLabel",
+      "code name description displayOrder icon backgroundColor prefixNumber isActive isOpen doublePrint inactiveLabel",
     );
 
   const servicesWithCounters = [];

@@ -1,4 +1,5 @@
 const Ticket = require("../../models/ticket.model");
+const Service = require("../../models/service.model");
 const { buildTicketPresentation } = require("./ticket.helpers");
 
 /**
@@ -42,7 +43,30 @@ const searchTickets = async (filters = {}) => {
   }
 
   if (ticketNumber) {
-    query.ticketNumber = { $regex: ticketNumber.trim(), $options: "i" };
+    const num = ticketNumber.trim();
+    // Nếu nhập dạng "2003" (prefix + 3 số) thì tách prefix tìm đúng service
+    const prefixedMatch = num.match(/^(\d+?)(\d{3})$/);
+    if (prefixedMatch && num.length > 3) {
+      const prefix = parseInt(prefixedMatch[1], 10);
+      const seq = prefixedMatch[2];
+      // Tìm các service có prefixNumber tương ứng
+      const matchedServices = await Service.find({ prefixNumber: prefix }).select("_id").lean();
+      const serviceIds = matchedServices.map((s) => s._id);
+      if (serviceIds.length > 0) {
+        query.$or = [
+          {
+            ticketNumber: { $regex: `^0*${parseInt(seq, 10)}$`, $options: "i" },
+            serviceId: { $in: serviceIds },
+          },
+          { ticketNumber: { $regex: num, $options: "i" } },
+        ];
+      } else {
+        // Không có service nào với prefix đó, fallback tìm thẳng
+        query.ticketNumber = { $regex: num, $options: "i" };
+      }
+    } else {
+      query.ticketNumber = { $regex: num, $options: "i" };
+    }
   }
 
   if (date) {

@@ -183,8 +183,6 @@ module.exports = {
   removeCounter
 };
 
-// ── QUẢN LÝ ADMIN ACCOUNTS ───────────────────────────────────────────────────
-
 const getAllAdmins = async () => {
   const admins = await User.find({ role: 'admin' }).select('-password -shiftHistory');
   return admins.map(a => typeof a.toObject === 'function' ? a.toObject() : { ...a });
@@ -204,9 +202,6 @@ const createAdmin = async (data) => {
 
   ensureStrongPassword(username, password);
 
-  // Nếu isSuperAdmin = true => adminPermissions = null (toàn quyền)
-  // Nếu adminPermissions được truyền vào (mảng) => dùng mảng đó
-  // Nếu không truyền gì => mặc định [] (không có quyền)
   let resolvedPermissions;
   if (isSuperAdmin) {
     resolvedPermissions = null;

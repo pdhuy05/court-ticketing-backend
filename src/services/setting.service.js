@@ -250,10 +250,8 @@ const seedShiftDefaults = async () => {
   );
 };
 
-
-// ─── Display Mode ────────────────────────────────────────────────────────────
 const DISPLAY_MODE_KEY = 'display_mode';
-const DISPLAY_MODE_DEFAULT = 'service'; // 'service' | 'queue'
+const DISPLAY_MODE_DEFAULT = 'service';
 
 const getDisplayMode = async () => {
   const raw = await getSetting(DISPLAY_MODE_KEY, DISPLAY_MODE_DEFAULT);
@@ -286,7 +284,6 @@ const seedDisplayModeDefault = async () => {
   );
 };
 
-// ─── Site Config ─────────────────────────────────────────────────────────────
 const getSiteConfig = async () => {
   const keys = Object.keys(SITE_CONFIG_DEFAULTS);
   const docs = await Setting.find({ key: { $in: keys } }).lean();

@@ -90,3 +90,17 @@ exports.toggleServiceSchedule = async (req, res) => {
 Object.keys(module.exports).forEach((key) => {
   module.exports[key] = asyncHandler(module.exports[key]);
 });
+
+exports.setServiceManualOverride = async (req, res) => {
+  const { serviceId } = req.params;
+  const { override } = req.body;
+
+  if (override === null || override === undefined || override === 'null') {
+    const data = await shiftService.clearManualOverride(serviceId);
+    return res.json({ success: true, data, message: 'Đã trả về chế độ tự động theo lịch' });
+  }
+
+  const data = await shiftService.setManualOverride(serviceId, override);
+  const msg = override === 'open' ? 'Đã mở dịch vụ ngay lập tức' : 'Đã đóng dịch vụ ngay lập tức';
+  return res.json({ success: true, data, message: msg });
+};

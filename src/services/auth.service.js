@@ -1,14 +1,12 @@
-const User = require("../models/user.model");
-const jwt = require("jsonwebtoken");
+const User    = require("../models/user.model");
 const ApiError = require("../utils/ApiError");
-const Counter = require("../models/counter.model");
+const Counter  = require("../models/counter.model");
 const { getStaffServiceAccess } = require("./staff-permission.service");
+const { issueTokens, refreshAccess, revokeToken, revokeAll } = require("./refreshToken.service");
+const { log, AUDIT_ACTIONS } = require("./audit.service");
 
 const toCounterSnapshot = (counter) => {
-  if (!counter) {
-    return null;
-  }
-
+  if (!counter) return null;
   return {
     _id: counter._id,
     id: counter._id,
@@ -22,6 +20,7 @@ const toCounterSnapshot = (counter) => {
 const buildUserProfile = async (user) => {
   const userObject =
     typeof user.toObject === "function" ? user.toObject() : { ...user };
+
   const counter =
     userObject.counterId && typeof userObject.counterId === "object"
       ? userObject.counterId
@@ -43,7 +42,6 @@ const buildUserProfile = async (user) => {
       userObject._id,
       counter?._id || userObject.counterId,
     );
-
     serviceAccess = {
       availableServices: access.availableServices,
       assignedServices: access.assignedServices,
@@ -64,68 +62,102 @@ const buildUserProfile = async (user) => {
     lastLoginAt: userObject.lastLoginAt || null,
     onDuty: userObject.onDuty,
     lastShiftStart: userObject.lastShiftStart || null,
-    lastShiftEnd: userObject.lastShiftEnd || null,
+    lastShiftEnd: userObject.lastShiftEnd   || null,
     createdAt: userObject.createdAt || null,
     updatedAt: userObject.updatedAt || null,
-    email: userObject.email || null,
-    phone: userObject.phone || null,
-    address: userObject.address || null,
-    isSuperAdmin: userObject.isSuperAdmin ?? false,
+    email: userObject.email    || null,
+    phone: userObject.phone    || null,
+    address: userObject.address  || null,
+    isSuperAdmin:  userObject.isSuperAdmin ?? false,
     adminPermissions: userObject.adminPermissions ?? null,
     ...serviceAccess,
   };
 };
 
-const login = async (username, password) => {
+const login = async (username, password, meta = {}) => {
   const user = await User.findOne({ username });
-  if (!user) throw new ApiError(401, "Tên đăng nhập không tồn tại");
+
+  if (!user) {
+    await log({
+      actor:  { username, role: "system" },
+      action: AUDIT_ACTIONS.LOGIN_FAILED,
+      status: "failed",
+      detail: { reason: "Tên đăng nhập không tồn tại", username },
+      ...meta,
+    });
+    throw new ApiError(401, "Tên đăng nhập không tồn tại");
+  }
 
   const isMatch = await user.comparePassword(password);
-  if (!isMatch) throw new ApiError(401, "Mật khẩu không đúng");
+  if (!isMatch) {
+    await log({
+      actor:  { id: user._id, username: user.username, role: user.role },
+      action: AUDIT_ACTIONS.LOGIN_FAILED,
+      status: "failed",
+      detail: { reason: "Mật khẩu không đúng" },
+      ...meta,
+    });
+    throw new ApiError(401, "Mật khẩu không đúng");
+  }
 
-  if (!user.isActive) throw new ApiError(403, "Tài khoản đã bị khóa");
+  if (!user.isActive) {
+    await log({
+      actor:  { id: user._id, username: user.username, role: user.role },
+      action: AUDIT_ACTIONS.LOGIN_FAILED,
+      status: "failed",
+      detail: { reason: "Tài khoản đã bị khóa" },
+      ...meta,
+    });
+    throw new ApiError(403, "Tài khoản đã bị khóa");
+  }
 
   if (user.role === "staff") {
     if (!user.counterId) {
-      throw new ApiError(
-        403,
-        "Tài khoản chưa được gán phòng. Vui lòng liên hệ quản trị viên.",
-      );
+      throw new ApiError(403, "Tài khoản chưa được gán phòng. Vui lòng liên hệ quản trị viên.");
     }
-
     const counter = await Counter.findById(user.counterId);
     if (!counter || !counter.isActive) {
-      throw new ApiError(
-        403,
-        "Phòng của bạn đã bị vô hiệu hóa. Vui lòng liên hệ quản trị viên.",
-      );
+      throw new ApiError(403, "Phòng của bạn đã bị vô hiệu hóa. Vui lòng liên hệ quản trị viên.");
     }
-
     const access = await getStaffServiceAccess(user._id, user.counterId);
-
     if (!access.assignedServices || access.assignedServices.length === 0) {
-      throw new ApiError(
-        403,
-        "Tài khoản không có quầy nào đang hoạt động. Vui lòng liên hệ quản trị viên để được cấp quyền quầy.",
-      );
+      throw new ApiError(403, "Tài khoản không có quầy nào đang hoạt động. Vui lòng liên hệ quản trị viên để được cấp quyền quầy.");
     }
   }
 
   user.lastLoginAt = new Date();
   await user.save({ timestamps: false });
 
-  const expiresIn = "8h";
+  const tokens = await issueTokens(user, meta);
 
-  const token = jwt.sign(
-    { id: user._id, role: user.role, username: user.username },
-    process.env.JWT_SECRET,
-    { expiresIn },
-  );
+  await log({
+    actor:  { id: user._id, username: user.username, role: user.role },
+    action: AUDIT_ACTIONS.LOGIN_SUCCESS,
+    status: "success",
+    detail: { role: user.role },
+    ...meta,
+  });
 
   return {
-    token,
+    ...tokens,
     user: await buildUserProfile(user),
   };
+};
+
+const logout = async (refreshTokenString, user, meta = {}) => {
+  if (refreshTokenString) {
+    await revokeToken(refreshTokenString, "logout");
+  }
+  await log({
+    actor:  { id: user?._id, username: user?.username, role: user?.role },
+    action: AUDIT_ACTIONS.LOGOUT,
+    status: "success",
+    ...meta,
+  });
+};
+
+const refreshToken = async (refreshTokenString, meta = {}) => {
+  return refreshAccess(refreshTokenString, meta);
 };
 
 const getMe = async (userId) => {
@@ -140,18 +172,20 @@ const getMe = async (userId) => {
   return buildUserProfile(user);
 };
 
-const updateMyProfile = async (userId, updates) => {
+const updateMyProfile = async (userId, updates, meta = {}) => {
   const user = await User.findById(userId);
   if (!user || !user.isActive) {
-    throw new ApiError(401, 'Tài khoản không tồn tại hoặc đã bị vô hiệu hóa');
+    throw new ApiError(401, "Tài khoản không tồn tại hoặc đã bị vô hiệu hóa");
   }
 
-  if (updates.newPassword) {
+  const passwordChanged = !!updates.newPassword;
+
+  if (passwordChanged) {
     if (!updates.currentPassword) {
-      throw new ApiError(400, 'Vui lòng nhập mật khẩu hiện tại để đổi mật khẩu');
+      throw new ApiError(400, "Vui lòng nhập mật khẩu hiện tại để đổi mật khẩu");
     }
     const isMatch = await user.comparePassword(updates.currentPassword);
-    if (!isMatch) throw new ApiError(400, 'Mật khẩu hiện tại không đúng');
+    if (!isMatch) throw new ApiError(400, "Mật khẩu hiện tại không đúng");
     user.password = updates.newPassword;
   }
 
@@ -162,11 +196,21 @@ const updateMyProfile = async (userId, updates) => {
 
   await user.save();
 
+  if (passwordChanged) {
+    await revokeAll(userId, "password_changed");
+    await log({
+      actor:  { id: user._id, username: user.username, role: user.role },
+      action: AUDIT_ACTIONS.PASSWORD_CHANGED,
+      status: "success",
+      ...meta,
+    });
+  }
+
   const freshUser = await User.findById(userId)
-    .select('-password')
-    .populate('counterId', 'code name number isActive');
+    .select("-password")
+    .populate("counterId", "code name number isActive");
 
   return buildUserProfile(freshUser);
 };
 
-module.exports = { getMe, login, updateMyProfile };
+module.exports = { getMe, login, logout, refreshToken, updateMyProfile };

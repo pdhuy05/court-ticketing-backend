@@ -148,7 +148,7 @@ const createAdminSchema = Joi.object({
   isSuperAdmin: Joi.boolean().default(false),
   adminPermissions: Joi.when('isSuperAdmin', {
     is: true,
-    then: Joi.any().strip(),          // bỏ qua khi là super admin
+    then: Joi.any().strip(),        
     otherwise: Joi.array()
       .items(Joi.string().valid(
         'dashboard','users','counter','services',

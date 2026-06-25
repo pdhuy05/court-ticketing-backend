@@ -90,6 +90,7 @@ const UserSchema = new mongoose.Schema(
         'reports',    
         'search',     
         'shift',       
+        'audit-logs',  
       ],
       default: null,
     },

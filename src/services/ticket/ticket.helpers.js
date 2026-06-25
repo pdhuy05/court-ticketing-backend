@@ -119,7 +119,8 @@ const buildTicketPresentation = (ticket, counter = null) => {
         phone: ticket.phone,
         status: ticket.status,
         serviceName: ticket.serviceId?.name,
-        createdAt: ticket.createdAt
+        createdAt: ticket.createdAt,
+        note: ticket.note || null,
     };
 };
 

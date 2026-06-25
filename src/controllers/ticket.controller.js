@@ -396,3 +396,35 @@ exports.getStaffDisplay = asyncHandler(async (req, res) => {
     },
   });
 });
+
+exports.updateNote = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { note } = req.body || {};
+  const staffCounterId = req.user?.counterId;
+
+  const Ticket = require('../models/ticket.model');
+  const ticket = await Ticket.findById(id);
+
+  if (!ticket) {
+    return res.status(404).json({ success: false, message: 'Không tìm thấy vé' });
+  }
+
+  const isOwned =
+    String(ticket.queueCounterId) === String(staffCounterId) ||
+    String(ticket.counterId) === String(staffCounterId);
+
+  if (!isOwned) {
+    return res.status(403).json({ success: false, message: 'Không có quyền ghi chú vé này' });
+  }
+
+  ticket.note = (note || '').trim() || null;
+  await ticket.save();
+
+  logger.info(`Ghi chú vé ${ticket.formattedNumber || ticket.ticketNumber}: "${ticket.note || '(xoá)'}"`);
+
+  res.json({
+    success: true,
+    data: { note: ticket.note },
+    message: ticket.note ? 'Đã lưu ghi chú' : 'Đã xoá ghi chú',
+  });
+});

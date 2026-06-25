@@ -12,7 +12,6 @@ const TTS_NATIVE_FALLBACK_ENABLED = process.env.TTS_NATIVE_FALLBACK_ENABLED !== 
 
 let speechQueue = Promise.resolve();
 
-// ─── Download Google TTS ───────────────────────────────────────────────────
 const downloadGoogleTTS = (text, outputPath) => new Promise((resolve, reject) => {
   const encodedText = encodeURIComponent(text);
   const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=${TTS_LANG}&client=tw-ob`;
@@ -38,7 +37,6 @@ const downloadGoogleTTS = (text, outputPath) => new Promise((resolve, reject) =>
   request.on('timeout', () => { request.destroy(); reject(new Error('Google TTS timeout')); });
 });
 
-// ─── Play audio (Windows dùng VBScript qua mshta — hoạt động trong session ẩn) ───
 const playAudio = (filePath) => new Promise((resolve, reject) => {
   const platform = os.platform();
 
@@ -60,8 +58,6 @@ const playAudio = (filePath) => new Promise((resolve, reject) => {
   }
 
   if (platform === 'win32') {
-    // Ghi file .vbs ra disk → mshta.exe chạy nó
-    // VBScript dùng Windows Media Player COM object — hoạt động trong mọi loại session kể cả service/PM2
     const winFilePath = filePath.replace(/\//g, '\\');
     const vbsPath = filePath.replace(/\.mp3$/, '.vbs');
 
@@ -69,7 +65,7 @@ const playAudio = (filePath) => new Promise((resolve, reject) => {
       'Set wmp = CreateObject("WMPlayer.OCX")',
       `wmp.URL = "${winFilePath}"`,
       'wmp.controls.play',
-      'Do While wmp.playState <> 1',   // 1 = Stopped
+      'Do While wmp.playState <> 1',  
       '  WScript.Sleep 200',
       'Loop',
       'wmp.close',
@@ -82,9 +78,8 @@ const playAudio = (filePath) => new Promise((resolve, reject) => {
         return;
       }
 
-      // mshta chạy VBScript trong UI context, có audio session đầy đủ
       execFile('mshta.exe', [`vbscript:Execute("CreateObject(""Scripting.FileSystemObject"")") `], 
-        { timeout: 1 }, () => {}); // warm up mshta (bỏ qua lỗi)
+        { timeout: 1 }, () => {}); 
 
       exec(`cscript //NoLogo //B "${vbsPath}"`, { timeout: TTS_TIMEOUT_MS }, (err) => {
         fs.unlink(filePath, () => {});
@@ -98,12 +93,10 @@ const playAudio = (filePath) => new Promise((resolve, reject) => {
   reject(new Error(`Không hỗ trợ phát audio trên OS: ${platform}`));
 });
 
-// ─── Native fallback (System.Speech — tiếng Anh, dùng khi không có mạng) ───
 const speakNativeFallback = (text) => new Promise((resolve, reject) => {
   const platform = os.platform();
 
   if (platform === 'win32') {
-    // Ghi .vbs để dùng SAPI (Speech API) — đọc được trong session ẩn
     const safeText = text.replace(/"/g, '').replace(/'/g, '');
     const vbsPath = path.join(os.tmpdir(), `tts_sapi_${Date.now()}.vbs`);
     const vbsContent = [
@@ -133,7 +126,6 @@ const speakNativeFallback = (text) => new Promise((resolve, reject) => {
   });
 });
 
-// ─── Core logic ───────────────────────────────────────────────────────────
 const runSpeakProcess = async (text) => {
   if (!TTS_ENABLED) {
     logger.info('TTS đang bị tắt qua cấu hình môi trường');
@@ -143,7 +135,6 @@ const runSpeakProcess = async (text) => {
     throw new Error('Văn bản trống, không thể đọc');
   }
 
-  // Thử Google TTS trước
   try {
     const tmpFile = path.join(os.tmpdir(), `tts_${Date.now()}.mp3`);
     await downloadGoogleTTS(text, tmpFile);
@@ -154,7 +145,6 @@ const runSpeakProcess = async (text) => {
     logger.warn(`Google TTS thất bại: ${googleError.message}. Thử fallback native...`);
   }
 
-  // Fallback native
   if (!TTS_NATIVE_FALLBACK_ENABLED) {
     logger.error('Google TTS thất bại và fallback native đang tắt (TTS_NATIVE_FALLBACK_ENABLED=false)');
     return;

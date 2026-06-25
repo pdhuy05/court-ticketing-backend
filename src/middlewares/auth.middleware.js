@@ -40,7 +40,7 @@ const adminOnly = (req, res, next) => {
 };
 
 /**
- * @param {string} permission - tên quyền cần kiểm tra
+ * @param {string} permission 
  */
 const requirePermission = (permission) => (req, res, next) => {
   if (req.user.role !== "admin") {

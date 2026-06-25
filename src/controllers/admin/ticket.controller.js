@@ -1,12 +1,20 @@
 const ticketService = require("../../services/ticket.service");
 const { searchTickets } = require("../../services/ticket/ticket.search.service");
 const asyncHandler = require("../../utils/asyncHandler");
+const { log, AUDIT_ACTIONS } = require("../../services/audit.service");
 
 exports.resetTicketsByDate = asyncHandler(async (req, res) => {
   const result = await ticketService.resetTicketsByDate(
     req.body?.date,
     req.user,
   );
+
+  await log({
+    req,
+    action: AUDIT_ACTIONS.TICKET_RESET_DAY,
+    status: "success",
+    detail: { date: result.date, resetCount: result.resetCount },
+  });
 
   res.json({
     success: true,
@@ -17,6 +25,13 @@ exports.resetTicketsByDate = asyncHandler(async (req, res) => {
 
 exports.resetAllTickets = asyncHandler(async (req, res) => {
   const result = await ticketService.resetAllTickets(req.user);
+
+  await log({
+    req,
+    action: AUDIT_ACTIONS.TICKET_RESET_ALL,
+    status: "success",
+    detail: { resetCount: result.resetCount },
+  });
 
   res.json({
     success: true,

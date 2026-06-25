@@ -1,5 +1,4 @@
 const express = require('express');
-
 const router = express.Router();
 const { authMiddleware, adminOnly } = require('../../middlewares/auth.middleware');
 const validate = require('../../middlewares/validate.middleware');
@@ -8,7 +7,8 @@ const {
   patchReminderMinutesSchema,
   adminEndShiftSchema,
   upsertServiceScheduleSchema,
-  toggleScheduleSchema
+  toggleScheduleSchema,
+  manualOverrideSchema,
 } = require('../../validations/shift.validation');
 const AdminShiftController = require('../../controllers/admin/shift.controller');
 
@@ -25,5 +25,6 @@ router.get('/service-schedules', authMiddleware, adminOnly, AdminShiftController
 router.post('/service-schedules', authMiddleware, adminOnly, validate(upsertServiceScheduleSchema), AdminShiftController.upsertServiceSchedule);
 router.delete('/service-schedules/:serviceId', authMiddleware, adminOnly, AdminShiftController.deleteServiceSchedule);
 router.patch('/service-schedules/:serviceId/toggle', authMiddleware, adminOnly, validate(toggleScheduleSchema), AdminShiftController.toggleServiceSchedule);
+router.patch('/service-override/:serviceId', authMiddleware, adminOnly, validate(manualOverrideSchema), AdminShiftController.setServiceManualOverride);
 
 module.exports = router;

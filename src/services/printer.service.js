@@ -207,18 +207,6 @@ THỜI GIAN: ${new Date(ticket.createdAt).toLocaleString("vi-VN")}
         <!-- Dashed Line Bottom -->
         <line x1="40" y1="370" x2="${width - 40}" y2="370"
           stroke="black" stroke-width="2" stroke-dasharray="6,4"/>
-
-        <!-- NOTE -->
-        <text x="50%" y="390" text-anchor="middle"
-          font-family="DejaVu Sans, Arial, sans-serif"
-          font-size="17" font-weight="bold" fill="#555555">
-          Thứ tự xử lý phụ thuộc vào tình trạng hồ sơ.
-        </text>
-        <text x="50%" y="410" text-anchor="middle"
-          font-family="DejaVu Sans, Arial, sans-serif"
-          font-size="17" font-weight="bold" fill="#555555">
-          Quý vị có thể không được gọi theo thứ tự số phiếu.
-        </text>
       </svg>
     `;
   }

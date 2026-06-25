@@ -822,7 +822,6 @@ const getTicketRatio = async () => {
 
   const ratios = await Promise.all(
     counters.map(async (counter) => {
-      // Tickets with COMPLETED or SKIPPED status have counterId set correctly
       const [completed, skipped] = await Promise.all([
         Ticket.countDocuments({
           counterId: counter._id,
@@ -834,8 +833,6 @@ const getTicketRatio = async () => {
         }),
       ]);
 
-      // Waiting tickets are NOT yet assigned a counterId — query via the
-      // services linked to this counter through ServiceCounter instead
       const serviceIds = await ServiceCounter.find({
         counterId: counter._id,
         isActive: true,
