@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const { emitDashboardUpdateSafe } = require("./dashboard.service");
+const { emitGlobal } = require("../utils/socketEmitter");
 const User = require("../models/user.model");
 const Ticket = require("../models/ticket.model");
 const Service = require("../models/service.model");
@@ -87,10 +88,15 @@ const isTimeInSlots = (hhmm, slots) => {
 
 const updateServicesOpenState = async (serviceId, isOpen, { skipOverride = false } = {}) => {
   if (isAllServicesSchedule(serviceId)) {
-    // When auto-schedule runs, skip services that have a manualOverride set
     const filter = skipOverride ? { manualOverride: null } : {};
     const result = await Service.updateMany(filter, { $set: { isOpen } });
     await emitDashboardUpdateSafe("service-schedule-updated");
+    emitGlobal("services-updated", {
+      reason: "service-schedule-updated",
+      serviceId: "ALL",
+      isOpen,
+      updatedAt: new Date().toISOString(),
+    });
     return {
       serviceId: "ALL",
       isOpen,
@@ -109,6 +115,12 @@ const updateServicesOpenState = async (serviceId, isOpen, { skipOverride = false
 
   if (!service) throw new ApiError(404, "Không tìm thấy quầy");
   await emitDashboardUpdateSafe("service-schedule-updated");
+  emitGlobal("services-updated", {
+    reason: "service-schedule-updated",
+    serviceId: String(service._id),
+    isOpen: service.isOpen,
+    updatedAt: new Date().toISOString(),
+  });
   return { serviceId: service._id, service, isOpen: service.isOpen, matchedCount: 1, modifiedCount: 1 };
 };
 
@@ -275,6 +287,12 @@ const setManualOverride = async (serviceId, override) => {
   if (serviceId === "ALL") {
     await Service.updateMany({}, { $set: { manualOverride: override, isOpen } });
     await emitDashboardUpdateSafe("service-schedule-updated");
+    emitGlobal("services-updated", {
+      reason: "manual-override",
+      serviceId: "ALL",
+      isOpen,
+      updatedAt: new Date().toISOString(),
+    });
     return { serviceId: "ALL", manualOverride: override, isOpen };
   }
 
@@ -287,6 +305,12 @@ const setManualOverride = async (serviceId, override) => {
 
   if (!service) throw new ApiError(404, "Không tìm thấy dịch vụ");
   await emitDashboardUpdateSafe("service-schedule-updated");
+  emitGlobal("services-updated", {
+    reason: "manual-override",
+    serviceId: String(service._id),
+    isOpen: service.isOpen,
+    updatedAt: new Date().toISOString(),
+  });
   return { serviceId: service._id, manualOverride: service.manualOverride, isOpen: service.isOpen };
 };
 
