@@ -10,6 +10,7 @@ const settingService = require("./src/services/setting.service");
 const User = require("./src/models/user.model");
 const logger = require("./src/utils/Logger");
 const { setIO } = require("./src/socket");
+const { printServerBanner, printSchedulerBanner } = require("./src/utils/banner");
 
 database();
 
@@ -176,40 +177,22 @@ io.on("connection", (socket) => {
 
 setIO(io);
 
+const SCHEDULER_LABELS = [
+  "Auto reset ticket",
+  "Auto mở ca staff & tự động mở/đóng quầy",
+  "Seed site config defaults",
+];
+
 server.listen(config.port, async () => {
   logger.success(`Socket.IO sẵn sàng tại ws://localhost:${config.port}`);
-  console.log(`
-\x1b[42m\x1b[30m ✓ \x1b[0m \x1b[36mServer\x1b[0m: Khởi động thành công!
-\x1b[90m  ├─ URL: \x1b[0m\x1b[33mhttp://localhost:${config.port}\x1b[0m
-\x1b[90m  ├─ Port: \x1b[0m${config.port}
-\x1b[90m  ├─ Time: \x1b[0m${new Date().toLocaleString()}
-\x1b[90m  └─ Developer: \x1b[0m\x1b[35m[HuyPham]\x1b[0m \x1b[35m[KhanhPhuong]\x1b[0m
-\x1b[90m  └─ Copyright: \x1b[0m\x1b[32m© 2026 Phạm Đình Huy & Trần Phương Khánh\x1b[0m
-`);
 
-  const schedulerResults = await Promise.allSettled([
+  printServerBanner(config.port);
+
+  const results = await Promise.allSettled([
     autoResetScheduler.start(),
     autoSchedulerService.start(),
     settingService.seedSiteConfigDefaults(),
   ]);
 
-  const labels = [
-    "Auto reset ticket",
-    "Auto mở ca staff & tự động mở/đóng quầy",
-    "Seed site config defaults",
-  ];
-
-  const lines = schedulerResults.map((result, i) => {
-    const isLast = i === schedulerResults.length - 1;
-    const prefix = isLast ? "  └─" : "  ├─";
-    if (result.status === "fulfilled") {
-      return `\x1b[90m${prefix}\x1b[0m \x1b[32m✓\x1b[0m ${labels[i]}`;
-    } else {
-      return `\x1b[90m${prefix}\x1b[0m \x1b[31m✗\x1b[0m ${labels[i]}: ${result.reason?.message}`;
-    }
-  });
-
-  console.log(
-    `\x1b[42m\x1b[30m ✓ \x1b[0m \x1b[36mSchedulers\x1b[0m:\n${lines.join("\n")}\n`,
-  );
+  printSchedulerBanner(results, SCHEDULER_LABELS);
 });

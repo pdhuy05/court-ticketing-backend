@@ -12,6 +12,7 @@ const {
   getDateString,
   getCurrentHHMM,
 } = require('../utils/dateTime.util');
+const { log: auditLog, AUDIT_ACTIONS } = require('./audit.service');
 
 let _intervalId = null;
 
@@ -54,8 +55,22 @@ const runAutoReset = async () => {
     logger.success(
       `Auto reset ticket hoàn tất cho ngày ${yesterday} (${result.resetCount} phòng)`,
     );
+
+    await auditLog({
+      actor: { username: "system", role: "system" },
+      action: AUDIT_ACTIONS.TICKET_AUTO_RESET,
+      status: "success",
+      detail: { date: yesterday, resetCount: result.resetCount, counterCount: result.counterCount },
+    });
   } catch (error) {
     logger.error(`Auto reset ticket thất bại: ${error.message}`);
+
+    await auditLog({
+      actor: { username: "system", role: "system" },
+      action: AUDIT_ACTIONS.TICKET_AUTO_RESET,
+      status: "failed",
+      detail: { reason: error.message },
+    });
   }
 };
 

@@ -55,6 +55,7 @@ exports.updateService = async (req, res, next) => {
     status: "success",
     targetId: String(req.params.id),
     targetType: "service",
+    detail: { name: service.name, code: service.code, changes: req.body },
   });
 
   res.json({
@@ -73,6 +74,7 @@ exports.deleteService = async (req, res, next) => {
     status: "success",
     targetId: String(req.params.id),
     targetType: "service",
+    detail: { name: service?.name, code: service?.code },
   });
 
   res.json({
@@ -86,6 +88,15 @@ exports.addCounters = async (req, res, next) => {
   const { counterIds } = req.body;
   const result = await Service.addCounters(req.params.id, counterIds);
 
+  await log({
+    req,
+    action: AUDIT_ACTIONS.SERVICE_COUNTER_ADD,
+    status: "success",
+    targetId: String(req.params.id),
+    targetType: "service",
+    detail: { name: result.service?.name, counterIds, addedCounters: result.addedCounters },
+  });
+
   res.json({
     success: true,
     data: result,
@@ -96,6 +107,15 @@ exports.addCounters = async (req, res, next) => {
 exports.removeCounter = async (req, res, next) => {
   const { counterId } = req.params;
   const result = await Service.removeCounter(req.params.id, counterId);
+
+  await log({
+    req,
+    action: AUDIT_ACTIONS.SERVICE_COUNTER_REMOVE,
+    status: "success",
+    targetId: String(req.params.id),
+    targetType: "service",
+    detail: { name: result.service?.name, counterId },
+  });
 
   res.json({
     success: true,
@@ -131,7 +151,7 @@ exports.toggleDoublePrint = async (req, res, next) => {
     status: "success",
     targetId: String(req.params.id),
     targetType: "service",
-    detail: { isActive: doublePrint },
+    detail: { name: service.name, doublePrint },
   });
 
   res.json({

@@ -8,6 +8,7 @@ const ServiceSchedule = require("../models/serviceSchedule.model");
 const { TicketStatus, ShiftAction } = require("../constants/enums");
 const ApiError = require("../utils/ApiError");
 const logger = require("../utils/Logger");
+const { log: auditLog, AUDIT_ACTIONS } = require("./audit.service");
 
 // ─── Staff helpers ────────────────────────────────────────────────────────────
 
@@ -33,7 +34,7 @@ const appendShiftLog = (staff, action, { reason = "", waitingTicketsCount = 0 } 
   staff.shiftHistory.push({ action, timestamp: new Date(), reason, waitingTicketsCount });
 };
 
-const updateShiftStatus = async (staff, action, { reason = "", waitingTicketsCount = 0 } = {}) => {
+const updateShiftStatus = async (staff, action, { reason = "", waitingTicketsCount = 0, actor = null, req = null } = {}) => {
   const now = new Date();
   staff.onDuty = action === ShiftAction.START;
   if (action === ShiftAction.START) {
@@ -44,6 +45,22 @@ const updateShiftStatus = async (staff, action, { reason = "", waitingTicketsCou
   appendShiftLog(staff, action, { reason, waitingTicketsCount });
   await staff.save();
   await emitDashboardUpdateSafe("shift-updated");
+
+  await auditLog({
+    req,
+    actor,
+    action: action === ShiftAction.START ? AUDIT_ACTIONS.STAFF_SHIFT_START : AUDIT_ACTIONS.STAFF_SHIFT_END,
+    status: "success",
+    targetId: String(staff._id),
+    targetType: "user",
+    detail: {
+      username: staff.username,
+      fullName: staff.fullName,
+      reason,
+      ...(action === ShiftAction.END ? { waitingTicketsCount } : {}),
+    },
+  });
+
   return { onDuty: staff.onDuty, lastShiftStart: staff.lastShiftStart, lastShiftEnd: staff.lastShiftEnd, waitingTicketsCount };
 };
 
@@ -130,7 +147,10 @@ const autoStartAllShifts = async () => {
   const offDutyStaff = await User.find({ role: "staff", isActive: true, onDuty: false });
   if (offDutyStaff.length === 0) return { startedCount: 0 };
   for (const staff of offDutyStaff) {
-    await updateShiftStatus(staff, ShiftAction.START, { reason: "Tự động mở ca theo lịch" });
+    await updateShiftStatus(staff, ShiftAction.START, {
+      reason: "Tự động mở ca theo lịch",
+      actor: { username: "system", role: "system" },
+    });
   }
   return { startedCount: offDutyStaff.length };
 };
@@ -273,7 +293,6 @@ const runServiceScheduler = async () => {
 
 const applyCurrentScheduleState = async () => {
   const result = await runServiceScheduler();
-  logger.info(`Đã khôi phục trạng thái isOpen cho ${result.processedCount} lịch quầy`);
 };
 
 // ─── Manual override ──────────────────────────────────────────────────────────
@@ -348,19 +367,19 @@ const clearManualOverride = async (serviceId) => {
 
 // ─── Staff shift admin ────────────────────────────────────────────────────────
 
-const adminStartShift = async (staffId) => {
+const adminStartShift = async (staffId, req = null) => {
   const staff = await findStaffById(staffId);
   if (staff.onDuty) throw new ApiError(400, "Nhân viên đang trong ca làm việc");
-  const result = await updateShiftStatus(staff, ShiftAction.START, { reason: "Admin mở ca thủ công" });
+  const result = await updateShiftStatus(staff, ShiftAction.START, { reason: "Admin mở ca thủ công", req });
   return { onDuty: result.onDuty, lastShiftStart: result.lastShiftStart };
 };
 
-const adminEndShift = async (staffId, { reason = "Admin kết thúc ca thủ công" } = {}) => {
+const adminEndShift = async (staffId, { reason = "Admin kết thúc ca thủ công" } = {}, req = null) => {
   const staff = await findStaffById(staffId);
   if (!staff.onDuty) throw new ApiError(400, "Nhân viên không đang trong ca làm việc");
   const waitingTicketsCount = staff.counterId
     ? await countActiveTicketsForStaff(staffId, staff.counterId) : 0;
-  const result = await updateShiftStatus(staff, ShiftAction.END, { reason, waitingTicketsCount });
+  const result = await updateShiftStatus(staff, ShiftAction.END, { reason, waitingTicketsCount, req });
   return { onDuty: result.onDuty, lastShiftEnd: result.lastShiftEnd, waitingTicketsCount };
 };
 

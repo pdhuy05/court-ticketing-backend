@@ -32,13 +32,19 @@ exports.createStaff = async (req, res) => {
 exports.updateStaff = async (req, res) => {
   const staff = await staffService.updateStaff(req.params.id, req.body);
 
+  const { password, ...safeChanges } = req.body;
+
   await log({
     req,
     action: AUDIT_ACTIONS.USER_UPDATE,
     status: "success",
     targetId: String(req.params.id),
     targetType: "user",
-    detail: { username: staff.username },
+    detail: {
+      username: staff.username,
+      changes: safeChanges,
+      passwordChanged: !!password,
+    },
   });
 
   res.json({ success: true, data: staff, message: "Cập nhật thành công" });
@@ -63,6 +69,16 @@ exports.deleteStaff = async (req, res) => {
 exports.assignCounter = async (req, res) => {
   const { counterId } = req.body;
   const staff = await staffService.assignCounter(req.params.id, counterId);
+
+  await log({
+    req,
+    action: AUDIT_ACTIONS.STAFF_COUNTER_ASSIGN,
+    status: "success",
+    targetId: String(req.params.id),
+    targetType: "user",
+    detail: { username: staff.username, counterId: String(counterId) },
+  });
+
   res.json({ success: true, data: staff, message: "Đã gán phòng thành công" });
 };
 
@@ -76,6 +92,16 @@ exports.assignServices = async (req, res) => {
     req.params.id,
     req.body.serviceIds || [],
   );
+
+  await log({
+    req,
+    action: AUDIT_ACTIONS.STAFF_SERVICES_ASSIGN,
+    status: "success",
+    targetId: String(req.params.id),
+    targetType: "user",
+    detail: { serviceIds: req.body.serviceIds || [] },
+  });
+
   res.json({
     success: true,
     data,
@@ -104,6 +130,16 @@ exports.toggleActive = async (req, res) => {
 
 exports.removeCounter = async (req, res) => {
   const staff = await staffService.removeCounter(req.params.id);
+
+  await log({
+    req,
+    action: AUDIT_ACTIONS.STAFF_COUNTER_REMOVE,
+    status: "success",
+    targetId: String(req.params.id),
+    targetType: "user",
+    detail: { username: staff.username },
+  });
+
   res.json({
     success: true,
     data: staff,
@@ -145,13 +181,19 @@ exports.createAdmin = async (req, res) => {
 exports.updateAdmin = async (req, res) => {
   const admin = await staffService.updateAdmin(req.params.id, req.body);
 
+  const { password, ...safeChanges } = req.body;
+
   await log({
     req,
     action: AUDIT_ACTIONS.USER_UPDATE,
     status: "success",
     targetId: String(req.params.id),
     targetType: "user",
-    detail: { username: admin.username },
+    detail: {
+      username: admin.username,
+      changes: safeChanges,
+      passwordChanged: !!password,
+    },
   });
 
   res.json({

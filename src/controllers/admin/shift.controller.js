@@ -49,14 +49,14 @@ exports.getStaffShiftHistory = async (req, res) => {
 
 exports.adminStartShift = async (req, res) => {
   const { staffId } = req.params;
-  const data = await shiftService.adminStartShift(staffId);
+  const data = await shiftService.adminStartShift(staffId, req);
   res.json({ success: true, data, message: "Đã mở ca cho nhân viên" });
 };
 
 exports.adminEndShift = async (req, res) => {
   const { staffId } = req.params;
   const { reason } = req.body;
-  const data = await shiftService.adminEndShift(staffId, { reason });
+  const data = await shiftService.adminEndShift(staffId, { reason }, req);
   res.json({ success: true, data, message: "Đã kết thúc ca cho nhân viên" });
 };
 

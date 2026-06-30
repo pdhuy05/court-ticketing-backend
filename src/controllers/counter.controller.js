@@ -55,6 +55,7 @@ exports.update = async (req, res) => {
     status: "success",
     targetId: String(req.params.id),
     targetType: "counter",
+    detail: { name: counter.name, code: counter.code, changes: req.body },
   });
 
   res.json({
@@ -67,6 +68,16 @@ exports.update = async (req, res) => {
 exports.addServices = async (req, res) => {
   const { serviceIds } = req.body;
   const counter = await CounterService.addServices(req.params.id, serviceIds);
+
+  await log({
+    req,
+    action: AUDIT_ACTIONS.COUNTER_SERVICE_ADD,
+    status: "success",
+    targetId: String(req.params.id),
+    targetType: "counter",
+    detail: { serviceIds, addedCount: counter.addedCount },
+  });
+
   res.json({
     success: true,
     data: counter,
@@ -77,6 +88,16 @@ exports.addServices = async (req, res) => {
 exports.removeService = async (req, res) => {
   const { serviceId } = req.params;
   const counter = await CounterService.removeService(req.params.id, serviceId);
+
+  await log({
+    req,
+    action: AUDIT_ACTIONS.COUNTER_SERVICE_REMOVE,
+    status: "success",
+    targetId: String(req.params.id),
+    targetType: "counter",
+    detail: { serviceId },
+  });
+
   res.json({
     success: true,
     data: counter,
@@ -93,6 +114,7 @@ exports.delete = async (req, res) => {
     status: "success",
     targetId: String(req.params.id),
     targetType: "counter",
+    detail: { name: counter?.name, code: counter?.code },
   });
 
   res.json({
@@ -110,7 +132,7 @@ exports.toggleActive = async (req, res) => {
     status: "success",
     targetId: String(req.params.id),
     targetType: "counter",
-    detail: { isActive: counter.isActive },
+    detail: { name: counter.name, isActive: counter.isActive },
   });
 
   res.json({
@@ -122,6 +144,16 @@ exports.toggleActive = async (req, res) => {
 
 exports.toggleTts = async (req, res) => {
   const counter = await CounterService.toggleTts(req.params.id);
+
+  await log({
+    req,
+    action: AUDIT_ACTIONS.COUNTER_TTS_TOGGLE,
+    status: "success",
+    targetId: String(req.params.id),
+    targetType: "counter",
+    detail: { name: counter.name, ttsEnabled: counter.ttsEnabled },
+  });
+
   res.json({
     success: true,
     data: counter,

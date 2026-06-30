@@ -18,12 +18,17 @@ const AUDIT_ACTIONS = {
   SERVICE_UPDATE:       "SERVICE_UPDATE",
   SERVICE_DELETE:       "SERVICE_DELETE",
   SERVICE_TOGGLE:       "SERVICE_TOGGLE",
+  SERVICE_COUNTER_ADD:    "SERVICE_COUNTER_ADD",
+  SERVICE_COUNTER_REMOVE: "SERVICE_COUNTER_REMOVE",
 
   // Counter
   COUNTER_CREATE:       "COUNTER_CREATE",
   COUNTER_UPDATE:       "COUNTER_UPDATE",
   COUNTER_DELETE:       "COUNTER_DELETE",
   COUNTER_TOGGLE:       "COUNTER_TOGGLE",
+  COUNTER_TTS_TOGGLE:        "COUNTER_TTS_TOGGLE",
+  COUNTER_SERVICE_ADD:       "COUNTER_SERVICE_ADD",
+  COUNTER_SERVICE_REMOVE:    "COUNTER_SERVICE_REMOVE",
 
   // User / Staff
   USER_CREATE:          "USER_CREATE",
@@ -31,6 +36,9 @@ const AUDIT_ACTIONS = {
   USER_DELETE:          "USER_DELETE",
   USER_TOGGLE:          "USER_TOGGLE",
   USER_PERMISSION_UPDATE: "USER_PERMISSION_UPDATE",
+  STAFF_COUNTER_ASSIGN:  "STAFF_COUNTER_ASSIGN",
+  STAFF_COUNTER_REMOVE:  "STAFF_COUNTER_REMOVE",
+  STAFF_SERVICES_ASSIGN: "STAFF_SERVICES_ASSIGN",
   STAFF_SHIFT_START:    "STAFF_SHIFT_START",
   STAFF_SHIFT_END:      "STAFF_SHIFT_END",
 
@@ -98,6 +106,7 @@ const log = async (opts) => {
 const getLogs = async (filter = {}) => {
   const {
     actorId,
+    actorUsername,
     action,
     status,
     dateFrom,
@@ -109,6 +118,7 @@ const getLogs = async (filter = {}) => {
   const query = {};
 
   if (actorId) query.actorId = actorId;
+  if (actorUsername) query.actorUsername = { $regex: actorUsername.trim(), $options: "i" };
   if (action) query.action  = action;
   if (status) query.status  = status;
 

@@ -7,6 +7,7 @@ const { authMiddleware, adminOnly, requirePermission } = require("../../middlewa
 const getAuditLogs = async (req, res) => {
   const {
     actorId,
+    actorUsername,
     action,
     status,
     dateFrom,
@@ -16,7 +17,7 @@ const getAuditLogs = async (req, res) => {
   } = req.query;
 
   const result = await getLogs({
-    actorId, action, status, dateFrom, dateTo,
+    actorId, actorUsername, action, status, dateFrom, dateTo,
     page:  Number(page),
     limit: Math.min(Number(limit), 200),
   });
