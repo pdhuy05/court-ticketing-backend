@@ -61,6 +61,15 @@ const requirePermission = (permission) => (req, res, next) => {
   next();
 };
 
+const superAdminOnly = (req, res, next) => {
+  if (req.user.role !== "admin" || !req.user.isSuperAdmin) {
+    return res
+      .status(403)
+      .json({ success: false, message: "Chỉ admin chính mới có quyền thực hiện thao tác này" });
+  }
+  next();
+};
+
 const staffOnly = (req, res, next) => {
   if (req.user.role !== "staff") {
     return res
@@ -98,6 +107,7 @@ const staffOnDuty = (req, res, next) => {
 module.exports = {
   authMiddleware,
   adminOnly,
+  superAdminOnly,
   requirePermission,
   staffOnly,
   counterStaff,

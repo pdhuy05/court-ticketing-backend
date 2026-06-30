@@ -1,13 +1,3 @@
-/**
- * app.js  (ĐÃ CẬP NHẬT)
- *
- * Thêm:
- *  - helmet()                     : bảo mật HTTP headers
- *  - /api/admin/audit-logs        : xem audit log
- *
- * Phần còn lại GIỮ NGUYÊN như bản gốc.
- */
-
 const express = require("express");
 const cors    = require("cors");
 const helmet  = require("helmet");       
@@ -27,6 +17,8 @@ const AdminShiftRoute = require("./routers/admin/shift.route");
 const StatisticsRoute = require("./routers/statistics.route");
 const ReportRoute = require("./routers/report.route");
 const AuditLogRoute = require("./routers/admin/audit.route");    
+const AiRoute = require("./routers/ai.route");
+const PublicAiRoute = require("./routers/publicAi.route");
 
 const { notifySystemError } = require("./services/admin-notification.service");
 
@@ -100,6 +92,8 @@ app.use("/api/admin/shift", AdminShiftRoute);
 app.use("/api/statistics", StatisticsRoute);
 app.use("/api/dashboard", DashboardRoute);
 app.use("/api/reports", ReportRoute);
+app.use("/api/ai", AiRoute);
+app.use("/api/public-ai", PublicAiRoute);
 
 app.use((err, req, res, next) => {
   const normalizedError = normalizeError(err);

@@ -45,4 +45,26 @@ const staffApiLimiter = rateLimit({
   ),
 });
 
-module.exports = { ticketLimiter, loginLimiter, staffApiLimiter };
+const aiChatLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.ip,
+  handler: jsonHandler(
+    "Bạn đã gửi quá nhiều câu hỏi cho trợ lý AI trong thời gian ngắn. Vui lòng thử lại sau 1 phút.",
+  ),
+});
+
+const publicAiChatLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 8,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.ip,
+  handler: jsonHandler(
+    "Bạn đã gửi quá nhiều câu hỏi trong thời gian ngắn. Vui lòng thử lại sau 1 phút.",
+  ),
+});
+
+module.exports = { ticketLimiter, loginLimiter, staffApiLimiter, aiChatLimiter, publicAiChatLimiter };
